@@ -1,0 +1,49 @@
+name: Security Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  security:
+    if: |
+      contains(github.event.comment.body, '@security-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the Security Agent for this project.
+
+            FIRST: Read `.claude/agents/security-agent.md` in full.
+            THEN: Read `.specify/memory/constitution.md` in full.
+
+            Your task: Perform a security review of PR #${{ github.event.issue.number }}.
+
+            Steps:
+            1. Run `gh pr diff ${{ github.event.issue.number }}` to get the full diff
+            2. Run `gh pr view ${{ github.event.issue.number }}` to get context
+            3. Work through the OWASP Top 10 checklist in `.claude/agents/security-agent.md`
+            4. Run available automated security tools appropriate for the project's language
+               (e.g., bandit, semgrep, npm audit, cargo audit, govulncheck)
+            5. Produce a Security Review in the format from `.claude/agents/security-agent.md`
+            6. Post the review as a PR comment:
+               gh pr review ${{ github.event.issue.number }} --comment --body "[Security Review]"
+
+            End with either **SECURITY APPROVED** or **SECURITY BLOCKED** with all
+            critical/high findings and remediation guidance.
+
+            You MUST NOT fix code. You MUST NOT approve with CRITICAL findings remaining.
+          claude_args: "--max-turns 20"

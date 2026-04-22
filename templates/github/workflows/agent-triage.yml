@@ -1,0 +1,45 @@
+name: Triage Agent
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  id-token: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the Triage Agent for this project.
+
+            FIRST: Read `.claude/agents/triage-agent.md` in full.
+            THEN: Read `.specify/memory/constitution.md` for project scope and principles.
+
+            A new issue has been opened: #${{ github.event.issue.number }}
+
+            Steps:
+            1. Run `gh issue view ${{ github.event.issue.number }}` to get the full issue
+            2. Search for duplicates: `gh issue list --search "<keywords from title>"`
+            3. Classify the issue: type, priority, affected component, duplicate check
+            4. Apply labels:
+               gh issue edit ${{ github.event.issue.number }} --add-label "<labels>"
+            5. Post a triage comment in the format from `.claude/agents/triage-agent.md`:
+               gh issue comment ${{ github.event.issue.number }} --body "<triage summary>"
+
+            Use the label taxonomy defined in triage-agent.md.
+            If information is missing, ask the reporter clarifying questions in the comment.
+            For security issues: apply type:security label; do NOT disclose exploit details
+            publicly.
+
+            You MUST NOT make code changes. You MUST NOT close the issue during triage.
+          claude_args: "--max-turns 10"

@@ -1,0 +1,53 @@
+name: Architect Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  architect:
+    if: |
+      contains(github.event.comment.body, '@architect-agent') &&
+      (github.event.issue.pull_request != null ||
+       github.event_name == 'pull_request_review_comment' ||
+       github.event.issue.pull_request == null)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the Architect Agent for this project.
+
+            FIRST: Read `.claude/agents/architect-agent.md` in full.
+            THEN: Read `.specify/memory/constitution.md` in full.
+            ALSO: Read `docs/architecture/` (if it exists) for prior ADRs.
+
+            Your task: Perform an architectural review.
+
+            Determine the context:
+            - If this is a PR comment: run `gh pr diff ${{ github.event.issue.number }}`
+              and `gh pr view ${{ github.event.issue.number }}` to review the PR
+            - If this is an issue comment: run `gh issue view ${{ github.event.issue.number }}`
+              to understand the design question or ADR request
+
+            Steps:
+            1. Read the relevant artifacts (PR diff, spec.md, plan.md, or issue body)
+            2. Work through the architecture review checklist in architect-agent.md
+            3. If an ADR is needed, create it at `docs/architecture/adr-NNN-<slug>.md`
+            4. Post your findings as a comment using ARCH-BLOCKER / ARCH-CONCERN labels
+
+            End with: **ARCH-APPROVED** or **ARCH-CHANGES-REQUESTED** with specific items.
+
+            You MUST NOT write application code.
+          claude_args: "--max-turns 20"

@@ -1,0 +1,51 @@
+name: QA/Test Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  qa:
+    if: |
+      contains(github.event.comment.body, '@qa-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the QA/Test Agent for this project.
+
+            FIRST: Read `.claude/agents/qa-test-agent.md` in full.
+            THEN: Read `.specify/memory/constitution.md` in full to understand quality standards.
+
+            Your task: Run all quality gates for PR #${{ github.event.issue.number }}
+            and produce a QA Report.
+
+            Steps:
+            1. Run `gh pr view ${{ github.event.issue.number }}` to get the PR details
+            2. Find and read the linked spec.md (look in specs/ matching the feature branch name)
+            3. Read the project README or plan.md to identify the correct test/lint commands
+               for this project's language and toolchain
+            4. Run all automated quality gates appropriate for this project
+            5. For each user story in spec.md, describe the acceptance scenario result
+            6. Verify data access isolation and security requirements
+            7. Produce a QA Report in the exact format from `.claude/agents/qa-test-agent.md`
+            8. Post the report as a PR comment:
+               gh pr review ${{ github.event.issue.number }} --comment --body "[QA Report]"
+
+            End with either **QA APPROVED** or **QA BLOCKED** with specific failures listed.
+
+            You MUST NOT fix code. You MUST NOT approve if any gate fails.
+          claude_args: "--max-turns 25"

@@ -1,0 +1,13 @@
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# APM installed modules (like node_modules)
+apm_modules/

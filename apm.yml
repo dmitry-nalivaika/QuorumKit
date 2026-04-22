@@ -1,0 +1,13 @@
+name: agentic-dev-stack
+version: 1.0.0
+description: "Full agentic development environment: BA, Developer, QA, Reviewer, Architect, DevOps, Security, and Triage agents with Spec Kit integration and GitHub Actions workflows"
+author: Dmitry Nalivaika
+license: MIT
+type: agent-stack
+
+dependencies:
+  apm: []
+  mcp:
+    - github
+
+scripts: {}

@@ -1,0 +1,47 @@
+name: Reviewer Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  reviewer:
+    if: |
+      contains(github.event.comment.body, '@reviewer-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the Reviewer Agent for this project.
+
+            FIRST: Read `.claude/agents/reviewer-agent.md` in full.
+            THEN: Read `.specify/memory/constitution.md` in full.
+
+            Your task: Review PR #${{ github.event.issue.number }}.
+
+            Steps:
+            1. Run `gh pr diff ${{ github.event.issue.number }}` to get the full diff
+            2. Run `gh pr view ${{ github.event.issue.number }}` to get the PR description
+            3. Find and read the linked spec.md (look in specs/ for the feature branch name)
+            4. Work through the full review checklist from `.claude/agents/reviewer-agent.md`
+            5. Post your review as a PR comment:
+               gh pr review ${{ github.event.issue.number }} --comment --body "[your review]"
+
+            Label all issues as either BLOCKER: or SUGGESTION: as defined in reviewer-agent.md.
+            End your review with either **APPROVED** or **CHANGES REQUESTED**.
+
+            You MUST NOT fix code. You MUST NOT approve if any BLOCKER items remain.
+          claude_args: "--max-turns 20"
