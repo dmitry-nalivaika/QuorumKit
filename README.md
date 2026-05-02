@@ -83,7 +83,8 @@ bash ~/agentic-dev-stack/scripts/init.sh --ai=both
 ```
 
 See [INIT.md](INIT.md) for detailed initialization instructions.  
-Adopting in an existing project? See [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md).
+Adopting in an existing project? See [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md).  
+Starting a dark factory project? See [DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.md).
 
 ## Directory Structure
 
@@ -93,7 +94,10 @@ Adopting in an existing project? See [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md).
 ├── CLAUDE.md                       # Claude Code context (this repo)
 ├── README.md                       # This file
 ├── INIT.md                         # Initialization guide
-├── BROWNFIELD_GUIDE.md             # Adopting in an existing project
+├── BROWNFIELD_GUIDE.md             # Adopting in an existing project (with conflict detection)
+├── DARK_FACTORY_GUIDE.md           # Dark factory / lights-out manufacturing guide
+├── CONTRIBUTING.md                 # Contributing to the APM library itself
+├── ENHANCEMENTS.md                 # Gap analysis and roadmap
 │
 ├── .apm/                           # APM package content (platform-agnostic)
 │   ├── agents/                     # Shared agent definitions (Claude + Copilot)
@@ -144,7 +148,8 @@ Adopting in an existing project? See [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md).
 │       └── pull_request_template.md
 │
 └── scripts/
-    └── init.sh                     # One-command project initializer (--ai=claude|copilot|both)
+    ├── init.sh                     # One-command project initializer (--ai=claude|copilot|both)
+    └── quality-check.sh            # Library quality gates (run on every PR to this repo)
 ```
 
 ## The Development Workflow
@@ -255,10 +260,37 @@ apm install
 
 Adding APM to an existing project? The `init.sh` script is safe to run on any repo — it never overwrites existing files. See **[BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md)** for:
 
+- **Conflict detection** — a diagnostic script to run _before_ `init.sh` that shows every existing agent, speckit install, workflow, and Copilot instruction that would be skipped, with per-conflict resolution guidance
 - Safe installation without disrupting existing CI
 - Gradual rollout phases (observe → assist → automate)
 - Legacy code exemption policy
 - Retroactive ADR process for undocumented past decisions
+
+## Dark Factory Projects
+
+See **[DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.md)** for a complete greenfield guide covering:
+
+- Dark factory constitution template (real-time SLOs, OT/IT boundary, SIL classification, IEC 62443)
+- Repository structure for edge + cloud + OT layers
+- Domain-specific spec considerations (latency SLOs, safety functions, data pipelines)
+- 5 foundational ADRs to write before any feature work
+- CI/CD pipeline with simulation and edge stages
+- IEC 62443 / OT security checklist additions
+
+## Contributing to This Library
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for:
+
+- Agent enhancement workflow (Issue → BA spec → PR → agent reviews)
+- Agent Consistency Checklist (no duplication, conditional rules, MUST language)
+- Adding a new agent (complete checklist)
+- Adding a domain guide
+- File map: what to change for common tasks
+- Quality gates: `bash scripts/quality-check.sh` (runs as CI on every PR)
+
+## What's Next
+
+See **[ENHANCEMENTS.md](ENHANCEMENTS.md)** for a deep gap analysis and prioritised roadmap — including proposed OT Integration Agent, Digital Twin Agent, Compliance Agent (IEC 62443 / SIL), Incident Agent, and 8 smaller enhancements ready to be opened as issues.
 
 ## Customization
 

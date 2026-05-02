@@ -16,6 +16,184 @@ that has not used AI agents before.
 
 ---
 
+## Step 0: Detect Conflicts Before You Install
+
+Run this diagnostic **before** `init.sh` to understand exactly what already exists
+in your project. This prevents surprises and tells you which conflicts need manual
+resolution.
+
+```zsh
+cd /path/to/your-existing-project
+
+# ── Agent definitions ──────────────────────────────────────────────────────
+echo "=== Existing agent files ==="
+ls .claude/agents/ 2>/dev/null && echo "  → Claude agents found" || echo "  → No .claude/agents/"
+ls .github/agents/ 2>/dev/null && echo "  → Copilot agents found" || echo "  → No .github/agents/"
+
+# ── github-speckit ─────────────────────────────────────────────────────────
+echo "=== github-speckit ==="
+[ -d .specify ] && echo "  → .specify/ directory EXISTS — speckit already installed" \
+               || echo "  → No .specify/ — speckit not yet installed"
+[ -f .specify/memory/constitution.md ] && echo "  → constitution.md EXISTS — will NOT be overwritten" \
+                                       || echo "  → No constitution yet"
+
+# ── GitHub workflows ────────────────────────────────────────────────────────
+echo "=== Existing GitHub Actions workflows ==="
+ls .github/workflows/ 2>/dev/null || echo "  → No workflows yet"
+
+# ── Copilot instructions ────────────────────────────────────────────────────
+echo "=== Copilot context files ==="
+[ -f .github/copilot-instructions.md ] \
+  && echo "  → copilot-instructions.md EXISTS — will NOT be overwritten" \
+  || echo "  → No copilot-instructions.md"
+ls .github/instructions/ 2>/dev/null && echo "  → Per-agent instructions found" || true
+
+# ── CLAUDE.md ───────────────────────────────────────────────────────────────
+echo "=== Claude context ==="
+[ -f CLAUDE.md ] && echo "  → CLAUDE.md EXISTS — will NOT be overwritten" \
+               || echo "  → No CLAUDE.md"
+
+# ── Community files ─────────────────────────────────────────────────────────
+echo "=== Community files ==="
+[ -f CONTRIBUTING.md ] && echo "  → CONTRIBUTING.md EXISTS" || echo "  → No CONTRIBUTING.md"
+[ -f SECURITY.md ]      && echo "  → SECURITY.md EXISTS"     || echo "  → No SECURITY.md"
+```
+
+### Reading the Conflict Report
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `.claude/agents/` or `.github/agents/` found | You have existing agent definitions | See [Existing Agents](#conflict-existing-agents) below |
+| `.specify/` already exists | github-speckit is already installed | See [Existing Speckit](#conflict-existing-speckit) below |
+| `copilot-instructions.md` exists | Custom Copilot context exists | See [Existing Copilot Instructions](#conflict-existing-copilot-instructions) below |
+| Existing `.github/workflows/` with `agent-*.yml` | Previous agent workflows exist | See [Existing Workflows](#conflict-existing-workflows) below |
+| `CLAUDE.md` exists | Custom Claude context exists | See [Existing CLAUDE.md](#conflict-existing-claudemd) below |
+
+---
+
+### Conflict: Existing Agents {#conflict-existing-agents}
+
+`init.sh` **skips** existing agent files — your custom agents are safe.
+
+After running `init.sh`, compare manually:
+
+```zsh
+APM=/path/to/agentic-dev-stack
+
+# Show diff between your current agent and the new version
+for agent in ba-product-agent developer-agent qa-test-agent reviewer-agent \
+             architect-agent devops-agent security-agent triage-agent; do
+  echo ""
+  echo "══ $agent ══"
+  diff ".claude/agents/$agent.md" "$APM/.apm/agents/$agent.md" | head -30 \
+    && echo "(no diff)" || true
+done
+```
+
+**Resolution options:**
+
+| Situation | Resolution |
+|-----------|-----------|
+| Your version has domain-specific rules not in the new version | Keep your version — it has valuable customisation; cherry-pick specific new rules manually |
+| New version has significant improvements you want | Copy new version, then re-add your customisations at the bottom under `## Project-Specific Extensions` |
+| Both have the same rules but worded differently | Prefer the new version for consistency; update only the sections you intentionally customised |
+
+> **Best practice**: keep customisations in a clearly marked `## Project-Specific Extensions`
+> section at the bottom of each agent file. This makes future upgrades trivial — copy the
+> new base, paste your extensions section back in.
+
+---
+
+### Conflict: Existing Speckit {#conflict-existing-speckit}
+
+`init.sh` does not touch `.specify/` — speckit is run separately and is interactive.
+
+**If you already have github-speckit installed:**
+
+```zsh
+# Check the existing speckit version
+cat .specify/extensions.yml 2>/dev/null | grep version || echo "No version info"
+
+# Re-run speckit — it will detect existing config and ask before overwriting
+npx github-speckit@latest
+```
+
+Answer **"no"** to any "overwrite existing file?" prompt to preserve your constitution
+and custom templates.
+
+**If your existing constitution is complete:** you do not need to re-run speckit at
+all — the agents will read it as-is.
+
+**If your constitution is outdated or empty:** run `/speckit-constitution` in Claude
+Code (or describe it to Copilot) to update it section by section.
+
+---
+
+### Conflict: Existing Copilot Instructions {#conflict-existing-copilot-instructions}
+
+`init.sh` skips `copilot-instructions.md` if it exists. Compare manually:
+
+```zsh
+diff .github/copilot-instructions.md \
+     /path/to/agentic-dev-stack/templates/copilot-instructions.md
+```
+
+The APM template `copilot-instructions.md` adds:
+- A pointer to the agent definitions in `.github/agents/`
+- Standard activation phrases for each agent role
+
+**Resolution**: merge the two files. Add the agent pointer block from the template
+to the top of your existing file, then keep all your existing project context below.
+
+---
+
+### Conflict: Existing Workflows {#conflict-existing-workflows}
+
+`init.sh` skips any workflow file that already exists.
+
+Scenarios:
+1. **You have `agent-*.yml` from a previous version of APM** — compare and update
+   manually; the new versions are delegation-only (simpler).
+2. **You have a non-APM workflow with the same name** — rename yours first, then run
+   `init.sh`, then reconcile.
+3. **You have a `ci.yml` or `test.yml`** — no conflict; agent workflows are
+   independently triggered by PR comments.
+
+```zsh
+# See which workflows would be skipped
+for wf in /path/to/agentic-dev-stack/templates/github/workflows/*.yml; do
+  wf_name="$(basename "$wf")"
+  [ -f ".github/workflows/$wf_name" ] \
+    && echo "SKIP (exists): $wf_name" \
+    || echo "INSTALL:       $wf_name"
+done
+```
+
+---
+
+### Conflict: Existing CLAUDE.md {#conflict-existing-claudemd}
+
+`init.sh` skips `CLAUDE.md` if it exists. The APM template CLAUDE.md is minimal —
+it only adds `<!-- SPECKIT START/END -->` tags for constitution injection.
+
+Check whether your existing CLAUDE.md has the speckit tags:
+
+```zsh
+grep -q 'SPECKIT START' CLAUDE.md \
+  && echo "Speckit tags present — no action needed" \
+  || echo "Add speckit tags — see below"
+```
+
+If tags are missing, add them anywhere in your CLAUDE.md:
+
+```markdown
+<!-- SPECKIT START -->
+[speckit will inject constitution content here]
+<!-- SPECKIT END -->
+```
+
+---
+
 ## Step 1: Run the Initialiser
 
 ```bash
