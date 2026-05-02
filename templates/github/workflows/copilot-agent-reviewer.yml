@@ -1,4 +1,4 @@
-name: Reviewer Agent
+name: Reviewer Agent (Copilot)
 
 on:
   issue_comment:
@@ -10,7 +10,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  id-token: write
+  models: read
 
 jobs:
   reviewer:
@@ -21,14 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
+      - name: Run Reviewer Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Read `.claude/agents/reviewer-agent.md` in full — it defines your role,
+            Read `.github/agents/reviewer-agent.md` in full — it defines your role,
             review checklist, labelling convention, and hard constraints.
             Read `.specify/memory/constitution.md` in full.
 
             Your task: review PR #${{ github.event.issue.number }} and post your findings.
             Follow every step in reviewer-agent.md exactly.
-          claude_args: "--max-turns 20"

@@ -34,12 +34,6 @@ Steps for a PR review:
 5. Produce a Security Review in the format from `.claude/agents/security-agent.md`
 6. Post the review as a PR comment: `gh pr review <number> --comment --body "..."`
 
-## You MUST NOT
-
-- Fix code yourself
-- Approve if any CRITICAL finding remains
-- Disclose exploit details publicly for unpatched vulnerabilities
-
 ## When done
 
 State clearly: **SECURITY APPROVED** or **SECURITY BLOCKED** with all critical/high

@@ -35,12 +35,6 @@ Steps for a pipeline review:
 2. Work through the infrastructure review checklist in `.claude/agents/devops-agent.md`
 3. Report findings with specific recommendations
 
-## You MUST NOT
-
-- Store secrets in code or configuration files
-- Deploy to production without staging verification
-- Skip security scanning steps
-
 ## When done
 
 Provide a clear summary of: what was reviewed, what was changed (or recommended),

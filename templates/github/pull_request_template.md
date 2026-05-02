@@ -28,34 +28,52 @@
 - [ ] Tests written **before** implementation (TDD — red before green)
 - [ ] Unit tests present for all new functions/methods
 - [ ] Integration tests present for all new API endpoints or service interactions
-- [ ] Contract tests present for all external-facing interfaces
 - [ ] Code coverage ≥ threshold defined in constitution (verified by CI report)
-- [ ] No debug `print()` / `console.log()` statements — structured logging used
+- [ ] No raw debug output in committed code — structured logging used
 - [ ] No hardcoded secrets, credentials, or API keys
 - [ ] All user-supplied inputs validated at system boundaries
-- [ ] SQL/ORM queries use parameterised inputs (no string concatenation)
+- [ ] Queries use parameterised inputs (no string concatenation)
 
 ---
 
 ## Constitution Compliance (NON-NEGOTIABLE)
 
-> Any unchecked item here is a **BLOCKER** — PR MUST NOT merge.
+> Read `.specify/memory/constitution.md` for the full list of non-negotiable rules.
+> Any rule from the constitution that is violated is a **BLOCKER** — PR MUST NOT merge.
 
-- [ ] All data access scoped to authenticated user context; no cross-user leakage possible
-- [ ] No direct commits to `main`; feature started from a GitHub Issue + spec.md
-- [ ] Tests written first; coverage meets constitution threshold; no raw stack traces to users
-- [ ] No new always-on resources without cost estimate in spec; budget alerts unaffected
+- [ ] All constitution security requirements verified (see constitution for details)
+- [ ] All constitution code quality requirements verified (see constitution for details)
+- [ ] All constitution process requirements verified (see constitution for details)
 
 ---
 
 ## Reviewer Agent Sign-off
 
 - [ ] Spec compliance verified (all FR-NNN checked above)
-- [ ] Constitution compliance verified (all non-negotiable items above)
+- [ ] Constitution compliance verified
 - [ ] No `BLOCKER:` comments remaining unresolved
 - [ ] Code is readable, minimal, and free of unnecessary abstractions
 
 **Reviewer**: <!-- @mention or "Reviewer Agent session YYYY-MM-DD" -->
+
+---
+
+## QA Agent Sign-off
+
+- [ ] QA Report posted as PR comment
+- [ ] All automated gates passed (tests, coverage, lint, format)
+- [ ] All manual acceptance scenarios executed
+
+**QA**: <!-- @mention or "QA Agent session YYYY-MM-DD" -->
+
+---
+
+## Security Agent Sign-off (if triggered)
+
+- [ ] Security Review posted as PR comment
+- [ ] No CRITICAL or HIGH findings unresolved
+
+**Security**: <!-- @mention or "Security Agent session YYYY-MM-DD" or "Not required" -->
 
 ---
 

@@ -1,4 +1,3 @@
----
 name: "dev-agent"
 description: "Activate the Developer Agent role to plan and implement a feature."
 argument-hint: "Implement | Fix BLOCKER in PR #N: [description] | Continue"
@@ -30,19 +29,7 @@ The user input after `/dev-agent` tells you what to do. Common invocations:
   → Pick up where the last session left off
 
 ## TDD is mandatory
-
-For every task: write the test first → confirm it fails → write the code → confirm
-it passes → commit. Never write implementation code before its test exists.
-
-## You MUST NOT
-
-- Commit directly to `main`
-- Skip the Constitution Check in `plan.md`
-- Open a PR while any test is failing
-- Add features not in the spec
-
 ## When done
-
 Confirm to the user:
 - All tasks complete in `tasks.md`
 - Test suite passing locally

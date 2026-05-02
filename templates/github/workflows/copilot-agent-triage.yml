@@ -1,4 +1,4 @@
-name: Triage Agent
+name: Triage Agent (Copilot)
 
 on:
   issues:
@@ -8,7 +8,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
-  id-token: write
+  models: read
 
 jobs:
   triage:
@@ -16,14 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
+      - name: Run Triage Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Read `.claude/agents/triage-agent.md` in full — it defines your role,
+            Read `.github/agents/triage-agent.md` in full — it defines your role,
             label taxonomy, triage workflow, comment format, and hard constraints.
             Read `.specify/memory/constitution.md` for project scope and principles.
 
             Your task: triage issue #${{ github.event.issue.number }}.
             Follow every step in triage-agent.md exactly.
-          claude_args: "--max-turns 10"

@@ -33,12 +33,6 @@ Steps for a single issue:
 5. Post triage comment: `gh issue comment <number> --body "..."`
 6. Route to appropriate agent if ready
 
-## You MUST NOT
-
-- Make code changes
-- Close security issues publicly without consulting the maintainer
-- Assign `priority:critical` without clear evidence of production impact
-
 ## When done
 
 Confirm: issue number, applied labels, next steps, and any questions posted to

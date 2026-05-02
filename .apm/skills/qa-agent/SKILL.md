@@ -1,4 +1,3 @@
----
 name: "qa-agent"
 description: "Activate the QA/Test Agent role to validate a PR and produce a QA Report."
 argument-hint: "Validate PR #N [for feature specs/NNN-feature-name]"
@@ -31,11 +30,5 @@ Steps:
 6. Post the report as a PR comment: `gh pr review <number> --comment --body "..."`
 
 ## You MUST NOT
-
-- Fix code yourself
-- Approve if any automated gate fails
-- Skip manual acceptance scenarios
-
 ## When done
-
 State clearly: **QA APPROVED** or **QA BLOCKED** with specific failures listed.

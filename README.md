@@ -4,6 +4,8 @@ A reusable **APM (Agent Package Manager)** package that initializes a fully agen
 development environment in any project. One command sets up eight specialized AI agents,
 GitHub Actions workflows, Spec Kit integration, and issue/PR templates.
 
+Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
+
 ## What You Get
 
 ### 8 Specialized Agents
@@ -42,9 +44,24 @@ Full Spec-Driven Development workflow:
 
 ### GitHub Templates
 
-- **5 GitHub Actions workflows** — automated agent invocation on mentions/events
-- **PR template** — with agent sign-off checklists and constitution compliance
-- **Issue templates** — bug report, feature request, with auto-triage setup
+- **10 GitHub Actions workflows** — 5 Claude + 5 Copilot, triggered by PR comments/events
+- **PR template** — agent sign-off checklists referencing the constitution by path
+- **Issue templates** — bug report, feature request, security vulnerability, with auto-triage
+- **CONTRIBUTING.md** — human contributor guide (NNN convention, commit style, brownfield policy)
+- **SECURITY.md** — responsible disclosure policy with SLAs and scope
+
+### NNN Naming Convention
+
+Every feature flows through a single number that ties everything together:
+
+| Artifact | Pattern | Example |
+|----------|---------|---------|
+| GitHub Issue | auto-assigned by GitHub | `#42` |
+| Spec directory | `specs/NNN-short-slug/` | `specs/042-user-auth/` |
+| Git branch | `NNN-short-slug` | `042-user-auth` |
+| ADR file | `docs/adr/NNN-title.md` | `docs/adr/042-jwt-vs-opaque.md` |
+
+`NNN` = the GitHub Issue number (zero-padded to 3 digits). No separate counter needed.
 
 ## Quick Start (New Project)
 
@@ -55,23 +72,31 @@ git clone <this-repo-url> ~/agentic-dev-stack
 # 2. Navigate to your new project
 cd /path/to/my-new-project
 
-# 3. Run init
+# 3a. Claude Code only (default)
 bash ~/agentic-dev-stack/scripts/init.sh
+
+# 3b. GitHub Copilot only
+bash ~/agentic-dev-stack/scripts/init.sh --ai=copilot
+
+# 3c. Both — universal setup
+bash ~/agentic-dev-stack/scripts/init.sh --ai=both
 ```
 
-See [INIT.md](INIT.md) for detailed initialization instructions.
+See [INIT.md](INIT.md) for detailed initialization instructions.  
+Adopting in an existing project? See [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md).
 
 ## Directory Structure
 
 ```
 .
 ├── apm.yml                         # APM package manifest
-├── CLAUDE.md                       # Claude Code context file
+├── CLAUDE.md                       # Claude Code context (this repo)
 ├── README.md                       # This file
 ├── INIT.md                         # Initialization guide
+├── BROWNFIELD_GUIDE.md             # Adopting in an existing project
 │
-├── .apm/                           # APM package content (installed to .claude/)
-│   ├── agents/                     # Agent definitions
+├── .apm/                           # APM package content (platform-agnostic)
+│   ├── agents/                     # Shared agent definitions (Claude + Copilot)
 │   │   ├── ba-product-agent.md
 │   │   ├── developer-agent.md
 │   │   ├── qa-test-agent.md
@@ -80,35 +105,46 @@ See [INIT.md](INIT.md) for detailed initialization instructions.
 │   │   ├── devops-agent.md
 │   │   ├── security-agent.md
 │   │   └── triage-agent.md
-│   └── skills/                     # Slash command implementations
+│   └── skills/                     # Claude Code slash command implementations
 │       ├── ba-agent/SKILL.md
 │       ├── dev-agent/SKILL.md
-│       ├── qa-agent/SKILL.md
-│       ├── reviewer-agent/SKILL.md
-│       ├── architect-agent/SKILL.md
-│       ├── devops-agent/SKILL.md
-│       ├── security-agent/SKILL.md
-│       ├── triage-agent/SKILL.md
-│       ├── speckit-*/SKILL.md      # Spec Kit skills (×14)
-│       └── speckit-git-*/SKILL.md  # Git extension skills (×5)
+│       ├── ...
+│       └── speckit-*/SKILL.md
 │
 ├── templates/
-│   ├── CLAUDE.md                   # CLAUDE.md template for new projects
+│   ├── CLAUDE.md                   # CLAUDE.md template (Claude Code)
+│   ├── copilot-instructions.md     # .github/copilot-instructions.md template
+│   ├── CONTRIBUTING.md             # Human contributor guide template
+│   ├── SECURITY.md                 # Security policy template
 │   └── github/
-│       ├── workflows/              # GitHub Actions workflow templates
-│       │   ├── agent-qa.yml
+│       ├── instructions/           # Copilot per-agent instruction files
+│       │   ├── ba-agent.instructions.md
+│       │   ├── dev-agent.instructions.md
+│       │   ├── reviewer-agent.instructions.md
+│       │   ├── security-agent.instructions.md
+│       │   ├── architect-agent.instructions.md
+│       │   ├── devops-agent.instructions.md
+│       │   └── triage-agent.instructions.md
+│       ├── workflows/
+│       │   ├── agent-qa.yml            # Claude Code GitHub Actions
 │       │   ├── agent-reviewer.yml
 │       │   ├── agent-architect.yml
 │       │   ├── agent-security.yml
-│       │   └── agent-triage.yml
-│       ├── ISSUE_TEMPLATE/         # Issue templates
+│       │   ├── agent-triage.yml
+│       │   ├── copilot-agent-qa.yml        # Copilot GitHub Actions
+│       │   ├── copilot-agent-reviewer.yml
+│       │   ├── copilot-agent-architect.yml
+│       │   ├── copilot-agent-security.yml
+│       │   └── copilot-agent-triage.yml
+│       ├── ISSUE_TEMPLATE/
 │       │   ├── bug_report.md
 │       │   ├── feature_request.md
+│       │   ├── security_vulnerability.md
 │       │   └── config.yml
 │       └── pull_request_template.md
 │
 └── scripts/
-    └── init.sh                     # One-command project initializer
+    └── init.sh                     # One-command project initializer (--ai=claude|copilot|both)
 ```
 
 ## The Development Workflow
@@ -158,7 +194,19 @@ PR opened ───────────────────────�
 /triage-agent Triage issue #12
 ```
 
-### In GitHub (automated)
+### In GitHub Copilot Chat (local / VS Code / github.com)
+
+Explicitly activate the agent role by naming it:
+
+```
+Act as the BA Agent — read .github/agents/ba-product-agent.md then write a spec for user authentication
+Act as the Developer Agent — implement specs/001-user-auth/spec.md using TDD
+Act as the Reviewer Agent — review the current PR diff against the spec
+Act as the Security Agent — review this code for OWASP Top 10 issues
+Act as the Architect Agent — should we use JWT or opaque tokens? Write an ADR
+```
+
+### In GitHub (automated — both Claude and Copilot modes)
 
 Comment on a PR or issue:
 ```
@@ -172,9 +220,16 @@ New issues are automatically triaged (no mention needed).
 
 ## Prerequisites
 
+For **Claude Code** mode:
 - [Claude Code](https://claude.ai/code) CLI installed
 - `ANTHROPIC_API_KEY` set in GitHub repository secrets
 - [Node.js](https://nodejs.org) (for github-speckit)
+
+For **GitHub Copilot** mode:
+- Active GitHub Copilot subscription (Business or Enterprise recommended for Actions)
+- `permissions: models: read` is enabled — no additional secrets required
+
+For both:
 - [GitHub CLI](https://cli.github.com) (`gh`) for agent workflows
 - Git repository connected to GitHub
 
@@ -195,6 +250,15 @@ dependencies:
 ```bash
 apm install
 ```
+
+## Brownfield Adoption
+
+Adding APM to an existing project? The `init.sh` script is safe to run on any repo — it never overwrites existing files. See **[BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md)** for:
+
+- Safe installation without disrupting existing CI
+- Gradual rollout phases (observe → assist → automate)
+- Legacy code exemption policy
+- Retroactive ADR process for undocumented past decisions
 
 ## Customization
 

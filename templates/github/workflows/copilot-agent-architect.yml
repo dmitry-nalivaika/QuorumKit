@@ -1,4 +1,4 @@
-name: Architect Agent
+name: Architect Agent (Copilot)
 
 on:
   issue_comment:
@@ -10,7 +10,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  id-token: write
+  models: read
 
 jobs:
   architect:
@@ -23,15 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
+      - name: Run Architect Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Read `.claude/agents/architect-agent.md` in full — it defines your role,
+            Read `.github/agents/architect-agent.md` in full — it defines your role,
             ADR format, review checklist, blocker thresholds, and hard constraints.
             Read `.specify/memory/constitution.md` in full.
             Read `docs/architecture/` (if it exists) for prior ADRs.
 
             Your task: perform an architectural review for issue/PR #${{ github.event.issue.number }}.
             Follow every step in architect-agent.md exactly.
-          claude_args: "--max-turns 20"

@@ -33,12 +33,6 @@ Steps for a PR/Plan review:
 2. Work through the architecture review checklist in `.claude/agents/architect-agent.md`
 3. Post your findings as a comment using ARCH-BLOCKER / ARCH-CONCERN labels
 
-## You MUST NOT
-
-- Write application code
-- Override constitution principles without a formal amendment
-- Issue decisions without documenting them as ADRs
-
 ## When done
 
 State clearly: **ARCH-APPROVED** or **ARCH-CHANGES-REQUESTED** with specific items listed.

@@ -1,4 +1,4 @@
-name: QA/Test Agent
+name: QA/Test Agent (Copilot)
 
 on:
   issue_comment:
@@ -10,7 +10,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  id-token: write
+  models: read
 
 jobs:
   qa:
@@ -21,14 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
+      - name: Run QA Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Read `.claude/agents/qa-test-agent.md` in full — it defines your role,
+            Read `.github/agents/qa-test-agent.md` in full — it defines your role,
             quality gates, reporting format, and hard constraints.
             Read `.specify/memory/constitution.md` in full.
 
             Your task: validate PR #${{ github.event.issue.number }} and post a QA Report.
             Follow every step in qa-test-agent.md exactly.
-          claude_args: "--max-turns 25"

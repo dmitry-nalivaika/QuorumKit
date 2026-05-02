@@ -1,4 +1,3 @@
----
 name: "reviewer-agent"
 description: "Activate the Reviewer Agent role to review a PR against spec and constitution."
 argument-hint: "Review PR #N [for feature specs/NNN-feature-name]"
@@ -31,17 +30,5 @@ Steps:
 5. Post a review comment: `gh pr review <number> --comment --body "..."`
 
 ## Labelling
-
-Use exactly these prefixes in your review comment:
-- `BLOCKER:` — must be fixed before merge
-- `SUGGESTION:` — optional improvement, not required for merge
-
-## You MUST NOT
-
-- Fix code yourself
-- Approve a PR with unresolved BLOCKER items
-- Skip reading the full spec before reviewing
-
 ## When done
-
 State clearly: **APPROVED** or **CHANGES REQUESTED** with a list of all BLOCKERs.

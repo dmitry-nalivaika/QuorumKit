@@ -1,4 +1,3 @@
----
 name: "ba-agent"
 description: "Activate the BA/Product Agent role to write or refine feature specifications."
 argument-hint: "Feature description or 'clarify' to refine an existing spec"
@@ -25,14 +24,10 @@ the user to describe the feature they want specified.
 - If a spec already exists: run `/speckit-clarify` to refine it.
 
 ## You MUST NOT
-
-- Write code, SQL, or implementation plans
-- Reference specific technologies or frameworks in requirements
-- Leave the session without saving spec.md
-
 ## When done
-
 Confirm to the user:
 - The spec file path
 - Whether any clarification questions remain open
 - That the spec is ready for the Developer Agent (`/dev-agent`)
+
+- That `.specify/feature.json` has been updated to point to the new spec directory
