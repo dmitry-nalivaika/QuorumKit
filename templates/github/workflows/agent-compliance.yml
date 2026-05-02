@@ -1,0 +1,32 @@
+name: Compliance Agent (Claude)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  compliance-review:
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '@compliance-agent')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Compliance Agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read your agent definition at .claude/agents/compliance-agent.md in full.
+            Read the project constitution at .specify/memory/constitution.md to determine which standards apply.
+            Read docs/security/zones.md and docs/architecture/ ADRs if present.
+            Review PR #${{ github.event.issue.number }} against only the standards defined in the constitution.
+            Post your Compliance Review as a PR comment.

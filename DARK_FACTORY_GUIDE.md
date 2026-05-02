@@ -295,9 +295,155 @@ Ask the DevOps Agent:
 
 ---
 
+## Step 9: Simulation Test Harness
+
+Dark factory regression testing needs a simulation layer that replays asset behaviour
+without requiring physical hardware. Wire it into the `simulation-test` CI stage.
+
+### Local simulation with Docker Compose
+
+Create `docker-compose.sim.yml` at the project root:
+
+```yaml
+# docker-compose.sim.yml — local simulation for dark factory integration tests
+version: "3.9"
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883", "8883:8883"]
+    volumes:
+      - ./tests/simulation/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  opcua-simulator:
+    image: ghcr.io/node-opcua/node-opcua-simulator:latest   # or your own image
+    ports: ["4840:4840"]
+    environment:
+      - NODE_COUNT=50
+      - UPDATE_INTERVAL_MS=100
+
+  historian-db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_PASSWORD: sim_password
+      POSTGRES_DB: historian_sim
+    ports: ["5432:5432"]
+
+  digital-twin-sim:
+    build: ./tests/simulation/twin
+    depends_on: [opcua-simulator, historian-db]
+    environment:
+      - OPCUA_ENDPOINT=opc.tcp://opcua-simulator:4840
+      - HISTORIAN_DSN=postgresql://postgres:sim_password@historian-db/historian_sim
+```
+
+### Simulation test scenarios to implement
+
+Version-control simulation datasets in `tests/simulation/data/`:
+
+| Scenario | Dataset | What it validates |
+|----------|---------|------------------|
+| `nominal_operation.json` | 1h of normal sensor readings | Happy path, historian write throughput |
+| `sensor_fault.json` | Bad-quality tags, out-of-range values | Quality flag handling, alert generation |
+| `edge_offline.json` | 60s gap in OT data | Offline buffering, reconnect, backfill |
+| `high_throughput.json` | 10× normal message rate | Backpressure, no data loss under load |
+| `schema_migration.json` | Messages with new/missing fields | Schema evolution backward compatibility |
+
+### Wiring simulation into CI
+
+```yaml
+# In your .github/workflows/ci.yml — add after staging-deploy:
+  simulation-test:
+    runs-on: ubuntu-latest
+    needs: [staging-deploy]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start simulation stack
+        run: docker compose -f docker-compose.sim.yml up -d
+      - name: Wait for services
+        run: sleep 15
+      - name: Run simulation tests
+        run: <your test command against the simulation stack>
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.sim.yml down
+```
+
+Ask the Digital Twin Agent to verify simulation coverage:
+```
+/digital-twin-agent Review simulation test coverage for specs/NNN-feature
+```
+
+---
+
+## Step 10: Multi-Site and Multi-Tenant Architecture
+
+A dark factory platform often manages multiple factory sites. Plan for this from
+the start — retrofitting multi-tenancy is expensive.
+
+### Data isolation patterns
+
+| Pattern | When to use | Trade-off |
+|---------|------------|-----------|
+| **Database per site** | Strong isolation needed; site data never co-mingled | Higher operational cost; schema migrations run N times |
+| **Schema per site** (PostgreSQL) | Same DB server; logical isolation | Medium complexity; simpler ops |
+| **Row-level tenant column** | Many small sites; shared schema acceptable | Simplest ops; requires strict query discipline (`WHERE site_id = ?` on every query) |
+| **Separate edge + shared cloud** | Edge is always site-specific; cloud aggregates | Recommended default for dark factory |
+
+### Site-specific configuration
+
+Use feature flags or site configuration files, not code branches:
+
+```
+config/
+  sites/
+    site-001-munich.yaml     # Site-specific overrides (PLC addresses, line count, etc.)
+    site-002-poznan.yaml
+  default.yaml               # Base configuration all sites inherit
+```
+
+Never use `if site == "munich"` in application code — externalise all site
+differences into configuration.
+
+### Deployment ring model
+
+Deploy changes progressively to reduce blast radius:
+
+```
+canary site (1 site, ~5% of fleet)
+    ↓ monitor 24h — no incidents
+pilot group (5–10% of sites)
+    ↓ monitor 72h — no incidents
+full fleet rollout
+```
+
+Define the ring model in the constitution:
+```yaml
+# In constitution.md — deployment rings
+deployment_rings:
+  canary: ["site-001-munich"]
+  pilot: ["site-002-poznan", "site-003-warsaw"]
+  full: all
+  hold_period_hours: 24    # minimum time at each ring before advancing
+```
+
+### Cross-site aggregation
+
+For analytics that span sites (OEE comparison, fleet-wide anomaly detection):
+
+- Aggregate at cloud level only — never expose raw data from one site to another site's API
+- Use a separate `aggregation` service that has read access to all sites
+- Per-site dashboards use `WHERE site_id = ?`; fleet dashboards go through the aggregation service
+
+Ask the Architect Agent:
+```
+/architect-agent Write ADR: multi-site data isolation and aggregation strategy
+```
+
+---
+
 ## Checklist: Dark Factory Project Ready to Build
 
-- [ ] `init.sh` run; agents and skills installed
+- [ ] `init.sh` run; agents and skills installed (including dark-factory agents: OT Integration, Digital Twin, Compliance, Incident)
 - [ ] `github-speckit` initialized; `.specify/` directory created
 - [ ] Dark factory constitution written (Step 2 above)
 - [ ] Repository structure created (Step 3 above)
@@ -305,5 +451,8 @@ Ask the DevOps Agent:
 - [ ] `ANTHROPIC_API_KEY` or Copilot licence active
 - [ ] Branch protection enabled on `main`
 - [ ] CI pipeline scaffolded by DevOps Agent (Step 6 above)
+- [ ] `docker-compose.sim.yml` created; simulation test scenarios defined (Step 9 above)
+- [ ] Simulation test stage wired into CI
+- [ ] Multi-site isolation strategy decided and documented as ADR (Step 10 above, if multi-site)
 - [ ] OT/IT zone model documented at `docs/security/zones.md`
 - [ ] Team has read this guide and the project constitution

@@ -1,0 +1,31 @@
+name: Digital Twin Agent (Copilot)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  digital-twin-review:
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '@digital-twin-agent')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Digital Twin Agent
+        uses: github/copilot-code-action@v1
+        with:
+          prompt: |
+            Read your agent definition at .github/agents/digital-twin-agent.md in full.
+            Read the project constitution at .specify/memory/constitution.md.
+            Review PR #${{ github.event.issue.number }} for digital twin model drift and consistency.
+            Post your Digital Twin Review as a PR comment.

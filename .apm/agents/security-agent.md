@@ -56,6 +56,16 @@ Adapt each item to the project type (web, API, CLI, mobile, etc.).
 - [ ] All new dependencies have compatible open-source licenses (check with `license-checker`, `pip-licenses`, or equivalent)
 - [ ] No unmaintained dependencies (last release > 2 years ago, no active maintainer)
 
+### Dependency Update Review (Dependabot / Renovate PRs)
+
+When the PR is an automated dependency update (Dependabot, Renovate, or equivalent):
+- [ ] Updated package has no new critical or high CVEs introduced by the update
+- [ ] Changelog reviewed for breaking changes that could affect the application
+- [ ] If major version bump: verify no API changes affect production code paths
+- [ ] If a transitive dependency is updated: verify the direct dependency still specifies a compatible version range
+- [ ] License has not changed to an incompatible license in the new version
+- [ ] If the update is a security patch (CVE fix): approve promptly — do not block on unrelated issues
+
 ### False Positive Handling
 
 If an automated scanner reports a finding that is a confirmed false positive:
@@ -85,6 +95,11 @@ If an automated scanner reports a finding that is a confirmed false positive:
 
 ### Decision: APPROVE / BLOCK
 [If BLOCK: list critical/high findings and required remediations]
+
+### Dependency Update (if applicable)
+- Dependabot/Renovate PR: APPROVE / NEEDS-REVIEW
+- Breaking changes: YES/NO — [summary if yes]
+- License change: YES/NO — [new license if yes]
 ```
 
 ## Severity Levels

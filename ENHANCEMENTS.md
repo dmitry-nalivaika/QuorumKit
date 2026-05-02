@@ -8,13 +8,20 @@
 
 ## Current State Summary
 
-The stack is solid in:
-- 8 universal agents with zero duplication
+The stack delivers:
+- **12 agents** — 8 universal software agents + 4 dark factory domain agents (OT Integration, Digital Twin, Compliance, Incident)
+- **13 skills** — 8 agent activation wrappers + `/onboard` wizard + 4 dark factory agent wrappers
+- **18 GitHub Actions workflows** — 9 Claude + 9 Copilot
 - Full Claude Code + GitHub Copilot parity
-- Spec-driven workflow (BA → Dev → QA → Review → Security → Architect)
+- Spec-driven workflow (BA → Dev → QA → Review → Security → Architect → domain agents)
+- BA Agent: user-facing AND data pipeline spec templates; `/speckit-checklist` quality gate at handoff
+- QA Agent: performance/latency SLO gate
+- Reviewer Agent: comprehensive migration checklist (reversible, idempotent, lock-free, zero-downtime strategy)
+- Security Agent: OWASP + dependency update review (Dependabot/Renovate PRs)
+- DevOps Agent: edge deployment checklist + cost gate with COST-BLOCKER/COST-WARN labels
 - Brownfield conflict detection and gradual rollout
-- Dark factory constitution template and domain guide
-- Quality gates CI on the library itself
+- Dark factory guide: simulation test harness (docker-compose.sim.yml + CI stage) + multi-site architecture guidance
+- Quality gates CI on the library itself (11 gates, now covers 12 agents + 13 skills + 18 workflows)
 
 ---
 
@@ -210,33 +217,48 @@ deploys if projected monthly spend exceeds limit by > 20%.
 
 ## Prioritised Roadmap
 
-### Priority 1 — Quick wins (1–3 issues, low effort)
+### ✅ Implemented — Priority 1 (Quick wins)
 
-| # | Enhancement | Effort | Opens as |
-|---|-------------|--------|----------|
-| 1 | QA Agent: performance test checklist | S | GitHub Issue |
-| 2 | BA Agent: data pipeline spec template | S | GitHub Issue |
-| 3 | Reviewer Agent: migration checklist additions | S | GitHub Issue |
-| 4 | Security Agent: dependency update review section | S | GitHub Issue |
-| 5 | DARK_FACTORY_GUIDE: simulation test harness docs | S | GitHub Issue |
+| # | Enhancement | Status |
+|---|-------------|--------|
+| 1 | QA Agent: performance test checklist | ✅ Done |
+| 2 | BA Agent: data pipeline spec template | ✅ Done |
+| 3 | Reviewer Agent: migration checklist additions | ✅ Done |
+| 4 | Security Agent: dependency update review section | ✅ Done |
+| 5 | DARK_FACTORY_GUIDE: simulation test harness | ✅ Done |
+| 10 | BA Agent: `/speckit-checklist` quality gate at handoff | ✅ Done |
 
-### Priority 2 — Medium effort (1–2 sprints)
+### ✅ Implemented — Priority 2 (Medium effort)
 
-| # | Enhancement | Effort | Opens as |
-|---|-------------|--------|----------|
-| 6 | DevOps Agent: edge deployment checklist | M | GitHub Issue |
-| 7 | DARK_FACTORY_GUIDE: multi-site guidance | M | GitHub Issue |
-| 8 | Onboarding skill (`/onboard`) | M | GitHub Issue |
-| 9 | DevOps Agent: cost gate | M | GitHub Issue |
+| # | Enhancement | Status |
+|---|-------------|--------|
+| 6 | DevOps Agent: edge deployment checklist | ✅ Done |
+| 7 | DARK_FACTORY_GUIDE: multi-site guidance | ✅ Done |
+| 8 | Onboarding skill (`/onboard`) | ✅ Done |
+| 9 | DevOps Agent: cost gate (COST-BLOCKER / COST-WARN) | ✅ Done |
 
-### Priority 3 — Significant features (spec required)
+### ✅ Implemented — Priority 3 (New agents)
 
-| # | Enhancement | Effort | Opens as |
-|---|-------------|--------|----------|
-| 10 | OT Integration Agent (new agent) | L | BA Agent spec → Issue |
-| 11 | Digital Twin Agent (new agent) | L | BA Agent spec → Issue |
-| 12 | Compliance Agent (new agent, IEC 62443 / SIL) | L | BA Agent spec → Issue |
-| 13 | Incident Agent (new agent) | L | BA Agent spec → Issue |
+| # | Enhancement | Status |
+|---|-------------|--------|
+| 10 | OT Integration Agent | ✅ Done |
+| 11 | Digital Twin Agent | ✅ Done |
+| 12 | Compliance Agent (IEC 62443 / ISA-95 / SIL) | ✅ Done |
+| 13 | Incident Agent | ✅ Done |
+
+### Next Horizon — Future Enhancements
+
+These are not yet implemented but are the natural next step:
+
+| # | Enhancement | Effort | Notes |
+|---|-------------|--------|-------|
+| 14 | Spec lint gate in quality-check.sh (validate spec sections present) | S | Add to `quality-check.sh` |
+| 15 | Markdown link validator in CI | S | Catch broken cross-doc links |
+| 16 | `infracost` integration in DevOps Agent | M | Automate cost estimation in PRs |
+| 17 | DTDL / RDF schema validator for Digital Twin Agent | M | Automated schema diff tool |
+| 18 | OPC-UA endpoint security scanner | M | Automated `SecurityMode=None` detection |
+| 19 | Incident severity auto-classification from issue body | M | NLP-based SEV-1/2/3 detection |
+| 20 | Deployment ring model enforcement in DevOps Agent | M | Block full-fleet deploy without canary soak |
 
 ---
 
@@ -251,17 +273,19 @@ deploys if projected monthly spend exceeds limit by > 20%.
 
 ## What "Best in the World" Looks Like
 
-The target state for this stack in the context of dark factory projects:
-
-| Dimension | Current | Target |
-|-----------|---------|--------|
-| Agent coverage | IT software only | IT + OT boundary + compliance + digital twin |
-| Real-time enforcement | Manual (constitution) | Automated benchmark gate in QA Agent |
-| Safety coverage | Documented policy | Compliance Agent with SIL classification check |
-| Edge deployment | Not addressed | Signed OTA workflow + offline test harness |
-| Incident response | Not addressed | Incident Agent with post-mortem spec generation |
-| Multi-site | Not addressed | Multi-tenant guidance + deployment ring model |
-| Onboarding | INIT.md only | `/onboard` guided wizard |
-| Cost control | Mentioned in constitution | Active cost gate in DevOps Agent |
-| Spec quality | Agent-enforced sections | Automated `/speckit-checklist` quality score |
-| Library CI | 11-gate quality check | Quality check + spec lint + markdown validation |
+| Dimension | Was | Now |
+|-----------|-----|-----|
+| Agent coverage | 8 IT software agents | 12 agents: IT + OT boundary + compliance + digital twin + incident |
+| Real-time enforcement | Manual (constitution) | QA Agent performance gate blocks if SLO benchmark missing |
+| Safety coverage | Documented policy | Compliance Agent: SIL classification check, human sign-off enforcement |
+| Edge deployment | Not addressed | DevOps Agent: signed OTA, offline test, resource limits, ring model |
+| Incident response | Not addressed | Incident Agent: 3-phase (mitigation → RCA → post-mortem), follow-up issues |
+| Multi-site | Not addressed | DARK_FACTORY_GUIDE: isolation patterns, config model, deployment rings |
+| Onboarding | INIT.md only | `/onboard` 7-step guided wizard |
+| Cost control | Mentioned in constitution | DevOps Agent: COST-BLOCKER at >20% over budget, COST-WARN at 80–100% |
+| Spec quality | Agent-enforced sections | BA Agent: `/speckit-checklist` required at handoff; 2 spec templates |
+| Data pipeline specs | UI/API-biased template | Template B: source, sink, schema, throughput, latency SLO, backpressure |
+| Dependency updates | Manual | Security Agent: Dependabot/Renovate PR review checklist |
+| DB migrations | Basic checklist | Reviewer Agent: reversible, idempotent, lock-free, zero-downtime strategy |
+| Simulation testing | Not addressed | DARK_FACTORY_GUIDE: docker-compose.sim.yml + 5 scenarios + CI stage |
+| Library CI | 8-agent quality check | 11-gate check covering 12 agents + 13 skills + 18 workflows |

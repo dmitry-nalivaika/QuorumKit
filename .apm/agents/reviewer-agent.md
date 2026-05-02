@@ -42,6 +42,11 @@ fixes yourself.
 - [ ] Migration is reversible (has a down/rollback step)
 - [ ] Migration does not drop data without an explicit approval in the spec
 - [ ] Migration is backward-compatible with the previous deployed version during rollout
+- [ ] No table locks that would cause downtime on large tables (e.g. `ALTER TABLE … ADD COLUMN` on millions of rows — must use a non-locking alternative or a multi-step migration)
+- [ ] Foreign key constraints not violated by the migration execution order
+- [ ] Migration is idempotent (safe to re-run if it fails mid-way)
+- [ ] Migration tested against a production-representative dataset in staging before production deploy
+- [ ] If migration takes > 60 seconds on staging data, a maintenance window or zero-downtime strategy is documented in the PR
 
 ### 4. Constitution — Architecture & Process (NON-NEGOTIABLE)
 - [ ] No direct commits to `main`

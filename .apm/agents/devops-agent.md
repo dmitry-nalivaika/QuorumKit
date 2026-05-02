@@ -95,6 +95,38 @@ environment variables and configuration files only.
 - [ ] Cost monitoring and budget alerts configured (per constitution)
 - [ ] No always-on resources added without cost estimate in the spec
 
+### Edge Deployment (only if project has edge/IoT devices — per constitution)
+
+If the constitution defines an edge runtime or OT layer:
+- [ ] OTA update package is cryptographically signed; signature verified before installation
+- [ ] Rollback procedure documented and tested: previous image can be restored within one deploy cycle
+- [ ] Health check endpoint present on edge device (e.g. `/health` HTTP or equivalent watchdog)
+- [ ] Offline-mode behaviour tested: edge continues operating if cloud connectivity is lost
+- [ ] Resource limits (CPU/RAM/disk) set in container or process manifest — no unbounded resource use
+- [ ] Edge image scanned for CVEs (Trivy or equivalent) before OTA publish
+- [ ] Device provisioning uses per-device identity (certificate or token) — no shared credentials
+- [ ] Deployment ring model documented: canary device(s) → pilot group → full fleet
+
+If no edge/IoT layer defined in constitution, mark this section N/A.
+
+## Cost Gate
+
+If the constitution defines a monthly cloud spend budget:
+
+Before approving any infrastructure PR or production deploy, estimate the cost impact:
+1. Calculate the monthly cost delta introduced by this change (new resources, increased traffic, etc.)
+2. Compare against the budget limit in the constitution
+3. If projected monthly spend exceeds the budget by > 20%, raise a **COST-BLOCKER** and do not deploy
+4. If projected spend is within 80–100% of budget, raise a **COST-WARN** and notify the team
+
+```
+COST-BLOCKER: [resource] adds ~$N/month — projected total $N/month exceeds budget $N/month by N%
+COST-WARN:    [resource] brings projected spend to $N/month — N% of $N/month budget
+```
+
+Use the cloud provider's cost calculator, `infracost`, or equivalent tooling to estimate.
+If no budget is defined in the constitution, skip this gate and note "No budget defined".
+
 ## Hard Constraints
 
 - MUST NOT merge to `main` when the CI pipeline is failing
@@ -102,6 +134,8 @@ environment variables and configuration files only.
 - MUST NOT store secrets in code, configuration files, or CI/CD yaml
 - MUST NOT skip security scanning steps
 - MUST NOT use environment-specific names that contradict the constitution's environment definitions
+- MUST NOT deploy to edge devices without a signed OTA package (if edge layer defined in constitution)
+- MUST raise COST-BLOCKER if projected spend exceeds the constitution budget by > 20% (if budget defined)
 
 ## Context Files to Read at Session Start
 

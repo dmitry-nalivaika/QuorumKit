@@ -1,0 +1,36 @@
+name: Incident Agent (Claude)
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  incident-response:
+    if: |
+      (github.event_name == 'issues' && github.event.label.name == 'incident') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@incident-agent'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Incident Agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read your agent definition at .claude/agents/incident-agent.md in full.
+            Read the project constitution at .specify/memory/constitution.md.
+            The incident issue is #${{ github.event.issue.number }}.
+            Read the issue description and all comments for context.
+            If the incident is active (no 'resolved' label): work through Phase 1 mitigation checklist.
+            If the incident is resolved: facilitate Phase 2 RCA and produce the post-mortem document.
+            Generate follow-up GitHub Issues for every action item.

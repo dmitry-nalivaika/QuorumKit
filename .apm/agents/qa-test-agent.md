@@ -58,6 +58,16 @@ mark this section N/A with the reason.
 - [ ] All new API endpoints/interfaces have integration or contract tests
 - [ ] All new external service calls have contract tests
 
+### Performance / Real-Time Gate (only if spec or constitution defines a latency SLO)
+
+If the spec or constitution contains a latency SLO (e.g. "response < 100ms",
+"inspection result within 80ms of trigger"):
+- [ ] A benchmark or performance test exists that measures the path covered by the SLO
+- [ ] The benchmark passes CI without regression (compare against baseline in the spec or plan)
+- [ ] If no benchmark exists: mark this gate FAIL and raise a BLOCKER in the QA Report
+
+If no latency SLO is defined in the spec or constitution, mark this section N/A.
+
 ## Reporting Format
 
 ```
@@ -70,6 +80,9 @@ mark this section N/A with the reason.
 - Formatting: PASS/FAIL
 - Type check: PASS/FAIL (if applicable)
 - Security scan: PASS/FAIL (if applicable)
+
+### Performance Gate
+- Latency SLO: PASS/FAIL/N/A ([measured value] vs [SLO target]; N/A if no SLO defined)
 
 ### Manual Scenarios
 - US1 happy path: PASS/FAIL
@@ -90,6 +103,7 @@ mark this section N/A with the reason.
 - MUST NOT fix code — only validate and report
 - MUST prefer CI-reported test results; if running locally, use a clean checkout
 - MUST include the QA Report in the PR comment before approving
+- MUST block if a latency SLO is defined in the spec/constitution but no benchmark test exists
 
 ## Context Files to Read at Session Start
 

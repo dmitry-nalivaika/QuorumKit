@@ -108,7 +108,7 @@ else
 fi
 
 # =============================================================================
-h1 "7. All 8 agent definitions present"
+h1 "7. All core agent definitions present"
 # =============================================================================
 required_agents=(
   "ba-product-agent.md"
@@ -119,6 +119,10 @@ required_agents=(
   "devops-agent.md"
   "security-agent.md"
   "triage-agent.md"
+  "ot-integration-agent.md"
+  "digital-twin-agent.md"
+  "compliance-agent.md"
+  "incident-agent.md"
 )
 for agent in "${required_agents[@]}"; do
   if [ -f ".apm/agents/$agent" ]; then
@@ -129,7 +133,7 @@ for agent in "${required_agents[@]}"; do
 done
 
 # =============================================================================
-h1 "8. All 8 skill wrappers present"
+h1 "8. All core skill wrappers present"
 # =============================================================================
 required_skills=(
   "ba-agent"
@@ -140,6 +144,11 @@ required_skills=(
   "devops-agent"
   "security-agent"
   "triage-agent"
+  "ot-integration-agent"
+  "digital-twin-agent"
+  "compliance-agent"
+  "incident-agent"
+  "onboard"
 )
 for skill in "${required_skills[@]}"; do
   if [ -f ".apm/skills/$skill/SKILL.md" ]; then
@@ -150,7 +159,7 @@ for skill in "${required_skills[@]}"; do
 done
 
 # =============================================================================
-h1 "9. All 10 workflow templates present (5 Claude + 5 Copilot)"
+h1 "9. All workflow templates present (Claude + Copilot)"
 # =============================================================================
 required_workflows=(
   "agent-qa.yml"
@@ -158,11 +167,19 @@ required_workflows=(
   "agent-architect.yml"
   "agent-security.yml"
   "agent-triage.yml"
+  "agent-ot-integration.yml"
+  "agent-digital-twin.yml"
+  "agent-compliance.yml"
+  "agent-incident.yml"
   "copilot-agent-qa.yml"
   "copilot-agent-reviewer.yml"
   "copilot-agent-architect.yml"
   "copilot-agent-security.yml"
   "copilot-agent-triage.yml"
+  "copilot-agent-ot-integration.yml"
+  "copilot-agent-digital-twin.yml"
+  "copilot-agent-compliance.yml"
+  "copilot-agent-incident.yml"
 )
 for wf in "${required_workflows[@]}"; do
   if [ -f "templates/github/workflows/$wf" ]; then

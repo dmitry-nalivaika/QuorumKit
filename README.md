@@ -8,18 +8,22 @@ Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 
 ## What You Get
 
-### 8 Specialized Agents
+### 8 Universal Agents + 4 Dark Factory Agents
 
 | Agent | Slash Command | GitHub Trigger | Role |
 |-------|--------------|----------------|------|
-| BA/Product | `/ba-agent` | — | Write & refine feature specs |
+| BA/Product | `/ba-agent` | — | Write & refine feature specs (user-facing + data pipeline templates) |
 | Developer | `/dev-agent` | — | Implement features (TDD) |
-| QA/Test | `/qa-agent` | `@qa-agent` in PR | Run quality gates, produce QA Report |
-| Reviewer | `/reviewer-agent` | `@reviewer-agent` in PR | Review PRs vs spec & constitution |
+| QA/Test | `/qa-agent` | `@qa-agent` in PR | Quality gates + acceptance scenarios + performance SLO check |
+| Reviewer | `/reviewer-agent` | `@reviewer-agent` in PR | Spec & constitution compliance, migration checklist |
 | Architect | `/architect-agent` | `@architect-agent` in PR/Issue | Design decisions & ADRs |
-| DevOps | `/devops-agent` | — | CI/CD & infrastructure |
-| Security | `/security-agent` | `@security-agent` in PR | OWASP security review |
+| DevOps | `/devops-agent` | — | CI/CD, edge deployment, cost gate |
+| Security | `/security-agent` | `@security-agent` in PR | OWASP + dependency update review |
 | Triage | `/triage-agent` | Auto on new issues | Classify & route GitHub Issues |
+| **OT Integration** | `/ot-integration-agent` | `@ot-integration-agent` in PR | IT/OT boundary: protocols, data fidelity, safe failure |
+| **Digital Twin** | `/digital-twin-agent` | `@digital-twin-agent` in PR | Twin model drift, historian schema, simulation coverage |
+| **Compliance** | `/compliance-agent` | `@compliance-agent` in PR | IEC 62443, ISA-95, SIL / functional safety |
+| **Incident** | `/incident-agent` | `@incident-agent` or `incident` label | Incident response, RCA, post-mortem, follow-up issues |
 
 ### Spec Kit Integration (via github-speckit)
 
@@ -44,7 +48,7 @@ Full Spec-Driven Development workflow:
 
 ### GitHub Templates
 
-- **10 GitHub Actions workflows** — 5 Claude + 5 Copilot, triggered by PR comments/events
+- **18 GitHub Actions workflows** — 9 Claude + 9 Copilot, triggered by PR comments/issue labels
 - **PR template** — agent sign-off checklists referencing the constitution by path
 - **Issue templates** — bug report, feature request, security vulnerability, with auto-triage
 - **CONTRIBUTING.md** — human contributor guide (NNN convention, commit style, brownfield policy)
