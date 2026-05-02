@@ -15,3 +15,18 @@ jobs:
 
       - name: Run quality gates
         run: bash scripts/quality-check.sh
+
+  markdown-links:
+    name: Markdown Link Validator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+          config-file: '.github/mlc-config.json'
+          folder-path: '.'
+          file-extension: '.md'

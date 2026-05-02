@@ -23,6 +23,61 @@ this boundary. You do not write PLC code or modify OT-side systems directly.
 
 - `/speckit-analyze` — cross-artifact consistency check for OT integration specs
 
+## Automated OT Security Scan
+
+Before the manual checklist, run the automated scanner if OPC-UA endpoints are
+configured:
+
+### OPC-UA endpoint security check (Python, `opcua` library)
+
+```python
+#!/usr/bin/env python3
+"""ot-security-scan.py — checks OPC-UA endpoints for insecure SecurityMode.
+Usage: python ot-security-scan.py --endpoints opc.tcp://host:4840 [...]
+Exits 1 if any endpoint reports SecurityMode=None (blocker).
+"""
+import sys, argparse
+from opcua import Client
+
+def check_endpoint(url):
+    client = Client(url)
+    try:
+        client.connect()
+        mode = client.get_node("i=2262").get_value()  # ServerStatus/SecurityMode
+        print(f"  {url}  SecurityMode={mode}")
+        return mode == 1  # 1 = None (insecure)
+    except Exception as e:
+        print(f"  {url}  ERROR: {e}")
+        return False
+    finally:
+        try: client.disconnect()
+        except: pass
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--endpoints", nargs="+", required=True)
+args = parser.parse_args()
+
+blockers = [ep for ep in args.endpoints if check_endpoint(ep)]
+if blockers:
+    print(f"\nOT-BLOCKER: {len(blocker(s))} endpoint(s) use SecurityMode=None")
+    sys.exit(1)
+print("\nAll endpoints passed OT security check.")
+```
+
+Run this script in CI (only when OPC-UA endpoints are defined in the constitution):
+
+```yaml
+- name: OT security scan
+  if: env.OT_ENDPOINTS != ''
+  run: |
+    pip install opcua
+    python scripts/ot-security-scan.py --endpoints $OT_ENDPOINTS
+  env:
+    OT_ENDPOINTS: ${{ vars.OT_ENDPOINTS }}  # space-separated list from repo vars
+```
+
+Any `OT-BLOCKER` from this scan **must** be resolved before approval.
+
 ## IT/OT Boundary Review Checklist
 
 ### Protocol Security

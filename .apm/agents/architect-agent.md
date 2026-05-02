@@ -109,7 +109,67 @@ An ADR is optional (ARCH-CONCERN instead) for:
 - Technical debt that is tracked and scheduled
 - Alternative worth considering but not mandated
 
-## Brownfield Guidance
+## Cross-Spec Consistency Check
+
+**Trigger**: Automatically when the BA Agent completes a new spec (or manually via
+`/architect-agent check-specs`).
+
+Before any new spec reaches the Developer Agent, scan all existing closed-issue specs
+for conflicts:
+
+### Conflict types to detect
+
+| Type | How to detect | Label |
+|------|--------------|-------|
+| **Entity definition conflict** | Same entity name used in new spec with different attributes than prior spec | `ARCH-CONFLICT` |
+| **Contradicting NFR** | New spec defines a tighter/looser SLO for the same path than an existing delivered feature | `ARCH-CONFLICT` |
+| **Scope overlap** | New spec covers functionality already delivered in a prior Issue (scope drift) | `ARCH-CONFLICT` |
+| **Dependency conflict** | New spec requires a library version incompatible with one already locked | `ARCH-CONFLICT` |
+| **Naming inconsistency** | Same concept named differently across specs | `ARCH-CONCERN` |
+
+### Process
+
+1. Collect all `specs/*/spec.md` files
+2. Extract entity definitions, NFRs, and scope boundaries from each
+3. Compare against the new spec
+4. For each `ARCH-CONFLICT`: post a comment on the Issue/PR and require resolution before
+   the Developer Agent starts implementation
+5. For each `ARCH-CONCERN`: post an advisory note (non-blocking)
+
+## Constitution Review
+
+**Trigger**: After every 10 merged features (tracked in `.specify/memory/constitution.md`
+under `## Meta — Review Counter`), or via `/architect-agent review-constitution`.
+
+### Review process
+
+1. Read the full constitution
+2. For each rule, check the last 10 merged PRs:
+   - Was the rule ever triggered? If triggered 0 times → flag as `POSSIBLY-TOO-STRICT`
+   - Was the rule triggered as a BLOCKER on every PR? → flag as `POSSIBLY-UNCLEAR`
+   - Was the rule bypassed or marked N/A on every PR? → flag as `POSSIBLY-REDUNDANT`
+3. Check for coverage gaps — risks that emerged in recent incidents/PRs not covered by any rule
+4. Produce a Constitution Health Report
+5. For any proposed amendment: open a PR to `.specify/memory/constitution.md`
+   — this PR **requires human approval** before merge (never auto-merge)
+
+### Constitution Health Report format
+
+```markdown
+## Constitution Health Report — YYYY-MM-DD
+
+### Rules Never Triggered (last 10 merges)
+- [Rule] — consider relaxing or clarifying scope
+
+### Rules Always Blocking (last 10 merges)
+- [Rule] — consider clarifying to reduce false positives
+
+### Coverage Gaps Identified
+- [Risk area] — no rule currently covers this; proposed addition: [text]
+
+### Proposed Amendments
+- [Amendment] — PR #NNN — requires human approval
+```
 
 When applied to an existing codebase that has no ADRs:
 1. Treat existing undocumented patterns as **implicit decisions** — do not change them without first

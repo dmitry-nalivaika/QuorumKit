@@ -127,6 +127,124 @@ COST-WARN:    [resource] brings projected spend to $N/month — N% of $N/month b
 Use the cloud provider's cost calculator, `infracost`, or equivalent tooling to estimate.
 If no budget is defined in the constitution, skip this gate and note "No budget defined".
 
+## Infracost Integration
+
+When the PR touches infrastructure-as-code (Terraform, Pulumi, AWS CDK, Bicep, etc.),
+automate cost estimation via `infracost`:
+
+### CI step template (adapt to project IaC tool)
+
+```yaml
+- name: Cost estimate (infracost)
+  uses: infracost/actions/setup@v3
+  with:
+    api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+- name: infracost diff
+  run: |
+    infracost diff --path=. \
+      --format=json \
+      --out-file=/tmp/infracost.json
+    infracost comment github \
+      --path=/tmp/infracost.json \
+      --repo=$GITHUB_REPOSITORY \
+      --github-token=${{ github.token }} \
+      --pull-request=${{ github.event.pull_request.number }} \
+      --behavior=update
+```
+
+### Threshold mapping
+
+Read the monthly budget from the constitution. Map `infracost` output to the cost gate:
+- `totalMonthlyCost` > budget × 1.20 → **COST-BLOCKER** (block deploy)
+- `totalMonthlyCost` between budget × 0.80 and budget × 1.20 → **COST-WARN** (notify team)
+- `diffTotalMonthlyCost` is positive and budget is not defined → **COST-INFO** (informational)
+
+If `INFRACOST_API_KEY` is not configured, fall back to manual cost calculator estimate
+and document the estimate in the PR description.
+
+## Ring Deployment Gate
+
+When the constitution defines a ring deployment model (canary → pilot → full), enforce
+soak requirements before advancing rings:
+
+### Ring model
+
+```
+Ring 0 — Canary:  N% of traffic / N devices (per constitution; default 5%)
+Ring 1 — Pilot:   N% of traffic / N devices (per constitution; default 20%)
+Ring 2 — Full:    100% of traffic / all devices
+```
+
+### Gate rules
+
+- **Canary soak period**: minimum 15 minutes (configurable in constitution) before advancing
+- **Error rate gate**: if canary error rate ≥ 1% during soak → **RING-BLOCKER** — do not advance
+- **Latency gate**: if canary p99 latency degrades > 20% vs pre-deploy baseline → **RING-BLOCKER**
+- **Rollback trigger**: if any RING-BLOCKER is raised → automatically trigger rollback to previous version
+
+### CI gate step template
+
+```yaml
+- name: Canary health check
+  run: |
+    # Wait for soak period (seconds), then query monitoring API
+    SOAK_SECONDS=${CANARY_SOAK_SECONDS:-900}
+    sleep "$SOAK_SECONDS"
+    ERROR_RATE=$(curl -sf "$MONITORING_API/canary/error-rate")
+    if (( $(echo "$ERROR_RATE >= 1.0" | bc -l) )); then
+      echo "RING-BLOCKER: canary error rate ${ERROR_RATE}% >= 1%"
+      exit 1
+    fi
+    echo "Canary soak passed — error rate ${ERROR_RATE}%"
+```
+
+If no ring model is defined in the constitution, skip this gate and note "No ring model defined".
+
+## Observability Feedback Loop
+
+Production signals must re-enter the SDLC automatically. When an alert fires in
+production monitoring (Sentry, Datadog, CloudWatch, Grafana, PagerDuty, etc.),
+a GitHub Issue should be created and routed to the Triage Agent.
+
+### Webhook → Issue pattern
+
+Configure your alerting platform to call the `alert-to-issue.yml` workflow via
+the GitHub API (workflow_dispatch or repository_dispatch):
+
+```yaml
+# In your alerting platform (e.g. Datadog webhook, Sentry webhook):
+POST https://api.github.com/repos/{owner}/{repo}/dispatches
+{
+  "event_type": "production-alert",
+  "client_payload": {
+    "title": "[ALERT] {alert_name}",
+    "body": "**Source**: {source}\n**Severity**: {severity}\n**Message**: {message}\n**Runbook**: {runbook_url}\n**Dashboard**: {dashboard_url}",
+    "labels": ["type:bug", "source:observability", "status:needs-triage"],
+    "severity": "{severity}"   // maps to priority:critical / high / medium
+  }
+}
+```
+
+The `alert-to-issue.yml` workflow (in `templates/github/workflows/`) receives
+this dispatch, creates the GitHub Issue, maps severity to priority labels,
+and triggers the Triage Agent.
+
+### Severity → label mapping
+
+| Alert severity | Issue labels |
+|---------------|-------------|
+| CRITICAL / P1 | `priority:critical`, `source:observability` |
+| HIGH / P2 | `priority:high`, `source:observability` |
+| MEDIUM / P3 | `priority:medium`, `source:observability` |
+| LOW / P4 | `priority:low`, `source:observability` |
+
+### What the Triage Agent does with observability issues
+
+- Checks if the alert matches an open existing Issue (deduplication)
+- Links to recent deploys that may have caused the regression
+- Routes to `agent:dev` if root cause is clear, or `agent:ba` if scope is unclear
+
 ## Hard Constraints
 
 - MUST NOT merge to `main` when the CI pipeline is failing

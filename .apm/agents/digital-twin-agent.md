@@ -51,6 +51,38 @@ production codebase. You do not write production control code.
 - [ ] Simulation dataset is version-controlled alongside the test suite
 - [ ] Digital twin simulation results compared against known-good baseline — test fails on regression
 
+### Automated Schema Diff
+
+When the PR modifies a twin schema file, run an automated diff to surface breaking changes
+before manual review:
+
+**Azure DTDL schemas** — use `dtdl-validator`:
+```bash
+pip install dtdl-validator
+dtdl-validator --directory ./models --recursive
+# For diff between old and new version:
+git stash && dtdl-validator --directory ./models > /tmp/old.txt
+git stash pop && dtdl-validator --directory ./models > /tmp/new.txt
+diff /tmp/old.txt /tmp/new.txt
+```
+
+**RDF / SHACL schemas** — use `pyshacl`:
+```bash
+pip install pyshacl
+pyshacl -s shapes.ttl -d new-model.ttl --format turtle
+```
+
+**Generic JSON Schema** — use `json-schema-diff`:
+```bash
+npx json-schema-diff old-schema.json new-schema.json
+```
+
+Classify the diff output:
+- Properties **added** → additive, safe → no blocker
+- Properties **removed or renamed** → **TWIN-BLOCKER** unless migration plan exists in spec
+- `@type` changes → **TWIN-BLOCKER** — requires new model version and migration
+- `@id` / namespace changes → **TWIN-BLOCKER** — breaking for all consumers
+
 ### Schema Evolution
 - [ ] New properties are additive (no existing property removed or renamed without a migration plan)
 - [ ] Migration plan documented in the spec if a breaking schema change is required

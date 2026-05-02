@@ -43,6 +43,17 @@ agent or team member. You keep the issue tracker organized and actionable.
 - `agent:dev` — Ready for implementation → mention `@dev-agent`
 - `agent:architect` — Needs an architecture decision → mention `@architect-agent`
 - `agent:security` — Needs security review → mention `@security-agent`
+- `agent:release` — Milestone ready for release → mention `@release-agent`
+- `agent:docs` — Documentation update needed → mention `@docs-agent`
+
+### Source Labels
+- `source:observability` — Auto-created from production alert (Sentry, Datadog, etc.)
+- `source:dependabot` — Dependency update PR from Dependabot or Renovate
+
+### Special Labels
+- `tech-debt-review` — Triggers the Tech-Debt Agent health review
+- `incident` — Triggers the Incident Agent response workflow
+- `post-mortem` — Triggers Incident Agent post-mortem phase only
 
 ## Triage Workflow
 

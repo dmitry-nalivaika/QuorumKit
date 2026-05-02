@@ -1,33 +1,54 @@
 # Agentic Dev Stack
 
-A reusable **APM (Agent Package Manager)** package that initializes a fully agentic
-development environment in any project. One command sets up eight specialized AI agents,
-GitHub Actions workflows, Spec Kit integration, and issue/PR templates.
+A reusable **APM (Agent Package Manager)** package that initializes a **fully
+autonomous, lights-out software development cycle** in any project. One command
+sets up 15 specialised AI agents, 25 GitHub Actions workflows, Spec Kit
+integration, and issue/PR templates.
+
+> **"Dark Factory" = the software factory runs itself.** The loop is:
+> Triage → Spec → Plan → Implement → Test → Review → Security → Merge →
+> Release → Document → Deploy → Monitor → Feedback → new Issue.
+> Humans set strategy and approve escalations. Agents handle all execution.
 
 Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 
 ## What You Get
 
-### 8 Universal Agents + 4 Dark Factory Agents
+### Universal Agents (core — always installed)
 
 | Agent | Slash Command | GitHub Trigger | Role |
 |-------|--------------|----------------|------|
 | BA/Product | `/ba-agent` | — | Write & refine feature specs (user-facing + data pipeline templates) |
-| Developer | `/dev-agent` | — | Implement features (TDD) |
-| QA/Test | `/qa-agent` | `@qa-agent` in PR | Quality gates + acceptance scenarios + performance SLO check |
-| Reviewer | `/reviewer-agent` | `@reviewer-agent` in PR | Spec & constitution compliance, migration checklist |
-| Architect | `/architect-agent` | `@architect-agent` in PR/Issue | Design decisions & ADRs |
-| DevOps | `/devops-agent` | — | CI/CD, edge deployment, cost gate |
+| Developer | `/dev-agent` | — | Implement features (TDD, Constitution Check) |
+| QA/Test | `/qa-agent` | `@qa-agent` in PR | Quality gates + SLO + mutation testing gate |
+| Reviewer | `/reviewer-agent` | `@reviewer-agent` in PR | Spec compliance, migration checklist, API contract governance |
+| Architect | `/architect-agent` | `@architect-agent` in PR/Issue | ADRs, cross-spec consistency, constitution review |
+| DevOps | `/devops-agent` | — | CI/CD, ring deployment gate, infracost, observability loop |
 | Security | `/security-agent` | `@security-agent` in PR | OWASP + dependency update review |
-| Triage | `/triage-agent` | Auto on new issues | Classify & route GitHub Issues |
-| **OT Integration** | `/ot-integration-agent` | `@ot-integration-agent` in PR | IT/OT boundary: protocols, data fidelity, safe failure |
-| **Digital Twin** | `/digital-twin-agent` | `@digital-twin-agent` in PR | Twin model drift, historian schema, simulation coverage |
-| **Compliance** | `/compliance-agent` | `@compliance-agent` in PR | IEC 62443, ISA-95, SIL / functional safety |
-| **Incident** | `/incident-agent` | `@incident-agent` or `incident` label | Incident response, RCA, post-mortem, follow-up issues |
+| Triage | `/triage-agent` | Auto on new issues | Classify, route, deduplicate GitHub Issues |
+| **Release** | `/release-agent` | Auto on push to main | Semver bump, CHANGELOG, GitHub Release |
+| **Docs** | `/docs-agent` | `@docs-agent` in PR / auto on merge | README, API ref, inline comments, architecture doc sync |
+| **Tech-Debt** | `/tech-debt-agent` | Monthly schedule | Complexity hotspots, dead code, dep freshness, mutation score |
+
+### Domain Extension Pack — Industrial (opt-in: `--domain=industrial`)
+
+| Agent | Slash Command | GitHub Trigger | Role |
+|-------|--------------|----------------|------|
+| OT Integration | `/ot-integration-agent` | `@ot-integration-agent` in PR | IT/OT boundary: protocols, data fidelity, safe failure, OPC-UA scan |
+| Digital Twin | `/digital-twin-agent` | `@digital-twin-agent` in PR | Model drift, historian schema, simulation coverage, schema diff |
+| Compliance | `/compliance-agent` | `@compliance-agent` in PR | IEC 62443, ISA-95, SIL / functional safety |
+| Incident | `/incident-agent` | `@incident-agent` or `incident` label | SEV auto-classify, mitigation → RCA → post-mortem → follow-up issues |
+
+### Guided Workflows (skills)
+
+| Skill | What it does |
+|-------|-------------|
+| `/onboard` | 7-step interactive onboarding wizard for new team members |
+| `/release-agent [patch\|minor\|major]` | Trigger release with optional bump override |
+| `/docs-agent` | Audit + update all documentation |
+| `/tech-debt-agent [focus]` | Run codebase health review |
 
 ### Spec Kit Integration (via github-speckit)
-
-Full Spec-Driven Development workflow:
 
 | Skill | What it does |
 |-------|-------------|
@@ -40,15 +61,10 @@ Full Spec-Driven Development workflow:
 | `/speckit-checklist` | "Unit tests for requirements" |
 | `/speckit-constitution` | Create/update project constitution |
 | `/speckit-taskstoissues` | Push tasks to GitHub Issues |
-| `/speckit-git-feature` | Create feature branch |
-| `/speckit-git-commit` | Auto-commit hook |
-| `/speckit-git-initialize` | Initialize git repo |
-| `/speckit-git-remote` | Detect GitHub remote |
-| `/speckit-git-validate` | Validate branch naming |
 
 ### GitHub Templates
 
-- **18 GitHub Actions workflows** — 9 Claude + 9 Copilot, triggered by PR comments/issue labels
+- **25 GitHub Actions workflows** — 12 Claude + 12 Copilot + `alert-to-issue` observability webhook
 - **PR template** — agent sign-off checklists referencing the constitution by path
 - **Issue templates** — bug report, feature request, security vulnerability, with auto-triage
 - **CONTRIBUTING.md** — human contributor guide (NNN convention, commit style, brownfield policy)
@@ -84,11 +100,14 @@ bash ~/agentic-dev-stack/scripts/init.sh --ai=copilot
 
 # 3c. Both — universal setup
 bash ~/agentic-dev-stack/scripts/init.sh --ai=both
+
+# 3d. With industrial domain extension pack
+bash ~/agentic-dev-stack/scripts/init.sh --ai=both --domain=industrial
 ```
 
 See [INIT.md](INIT.md) for detailed initialization instructions.  
 Adopting in an existing project? See [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md).  
-Starting a dark factory project? See [DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.md).
+Industrial/IoT domain projects? See [DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.md).
 
 ## Directory Structure
 
@@ -104,56 +123,48 @@ Starting a dark factory project? See [DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.
 ├── ENHANCEMENTS.md                 # Gap analysis and roadmap
 │
 ├── .apm/                           # APM package content (platform-agnostic)
-│   ├── agents/                     # Shared agent definitions (Claude + Copilot)
-│   │   ├── ba-product-agent.md
-│   │   ├── developer-agent.md
-│   │   ├── qa-test-agent.md
-│   │   ├── reviewer-agent.md
-│   │   ├── architect-agent.md
-│   │   ├── devops-agent.md
-│   │   ├── security-agent.md
-│   │   └── triage-agent.md
-│   └── skills/                     # Claude Code slash command implementations
+│   ├── agents/                     # Agent definitions — single source of truth
+│   │   ├── ba-product-agent.md     ─┐
+│   │   ├── developer-agent.md       │
+│   │   ├── qa-test-agent.md         │  Universal core
+│   │   ├── reviewer-agent.md        │  (always installed)
+│   │   ├── architect-agent.md       │
+│   │   ├── devops-agent.md          │
+│   │   ├── security-agent.md        │
+│   │   ├── triage-agent.md          │
+│   │   ├── release-agent.md         │
+│   │   ├── docs-agent.md            │
+│   │   ├── triage-agent.md         ─┘
+│   │   ├── ot-integration-agent.md ─┐
+│   │   ├── digital-twin-agent.md    │  Industrial domain pack
+│   │   ├── compliance-agent.md      │  (--domain=industrial)
+│   │   └── incident-agent.md       ─┘
+│   └── skills/                     # Claude Code slash command wrappers
 │       ├── ba-agent/SKILL.md
-│       ├── dev-agent/SKILL.md
-│       ├── ...
+│       ├── release-agent/SKILL.md
+│       ├── docs-agent/SKILL.md
+│       ├── tech-debt-agent/SKILL.md
+│       ├── onboard/SKILL.md
+│       ├── ...agent wrappers...
 │       └── speckit-*/SKILL.md
 │
 ├── templates/
-│   ├── CLAUDE.md                   # CLAUDE.md template (Claude Code)
-│   ├── copilot-instructions.md     # .github/copilot-instructions.md template
-│   ├── CONTRIBUTING.md             # Human contributor guide template
-│   ├── SECURITY.md                 # Security policy template
+│   ├── CLAUDE.md
+│   ├── copilot-instructions.md
+│   ├── CONTRIBUTING.md
+│   ├── SECURITY.md
 │   └── github/
-│       ├── instructions/           # Copilot per-agent instruction files
-│       │   ├── ba-agent.instructions.md
-│       │   ├── dev-agent.instructions.md
-│       │   ├── reviewer-agent.instructions.md
-│       │   ├── security-agent.instructions.md
-│       │   ├── architect-agent.instructions.md
-│       │   ├── devops-agent.instructions.md
-│       │   └── triage-agent.instructions.md
-│       ├── workflows/
-│       │   ├── agent-qa.yml            # Claude Code GitHub Actions
-│       │   ├── agent-reviewer.yml
-│       │   ├── agent-architect.yml
-│       │   ├── agent-security.yml
-│       │   ├── agent-triage.yml
-│       │   ├── copilot-agent-qa.yml        # Copilot GitHub Actions
-│       │   ├── copilot-agent-reviewer.yml
-│       │   ├── copilot-agent-architect.yml
-│       │   ├── copilot-agent-security.yml
-│       │   └── copilot-agent-triage.yml
+│       ├── instructions/           # Copilot per-agent instruction files (14 total)
+│       ├── workflows/              # GitHub Actions workflows (25 total)
+│       │   ├── agent-*.yml             Claude — 12 workflows
+│       │   ├── copilot-agent-*.yml     Copilot — 12 workflows
+│       │   └── alert-to-issue.yml      Observability → Issue feedback loop
 │       ├── ISSUE_TEMPLATE/
-│       │   ├── bug_report.md
-│       │   ├── feature_request.md
-│       │   ├── security_vulnerability.md
-│       │   └── config.yml
 │       └── pull_request_template.md
 │
 └── scripts/
-    ├── init.sh                     # One-command project initializer (--ai=claude|copilot|both)
-    └── quality-check.sh            # Library quality gates (run on every PR to this repo)
+    ├── init.sh           # One-command init (--ai=claude|copilot|both [--domain=industrial])
+    └── quality-check.sh  # 12-gate library CI (agents, skills, workflows, spec lint)
 ```
 
 ## The Development Workflow
@@ -172,60 +183,92 @@ GitHub Issue
     │
     ▼
 PR opened ──────────────────────────────────────────────────┐
-    │                                                        │
-    ▼                                                        ▼
-@reviewer-agent          @qa-agent              @security-agent
-(spec compliance)     (quality gates)           (OWASP review)
-    │                        │                       │
-    └────────────────────────┴───────────────────────┘
-                             │
-                        All approved
-                             │
-                             ▼
-                       Merge to main
-                             │
-                             ▼
-                       CI/CD deploys
+    ## The Closed-Loop SDLC
+
+```
+GitHub Issue created
+        │
+        ▼
+Triage Agent  ──── auto on every new issue ────► labels, routes, deduplicates
+        │
+        ▼
+BA Agent  ──── /ba-agent ────► spec.md  (Template A: user-facing / B: pipeline)
+        │
+        ▼
+Architect Agent ── cross-spec consistency check ── ARCH-CONFLICT if needed
+        │
+        ▼
+Developer Agent  ── /dev-agent ──► plan → tasks → TDD implementation → PR
+        │
+        ▼  (all run in parallel on the PR)
+  QA Agent           coverage + SLO + mutation testing gate
+  Reviewer Agent     spec compliance + API contract diff + migration checklist
+  Security Agent     OWASP + dependency scan + secrets scan
+  Docs Agent         README + API ref + architecture doc sync
+        │
+        ▼  (all gates pass)
+     Merge to main
+        │
+        ├──► Release Agent  ── semver bump → CHANGELOG → GitHub Release → tag
+        │
+        └──► DevOps Agent   ── ring deploy (canary soak → pilot → full fleet)
+                                infracost gate, rollback on RING-BLOCKER
+        │
+        ▼  (production)
+  Observability alert ──► alert-to-issue.yml ──► GitHub Issue ──► Triage Agent
+        │                                                               │
+        └───────────────────────────── loop continues ◄────────────────┘
+
+  Scheduled:
+    Tech-Debt Agent  ── first Monday of month ──► health report + chore issues
+    Architect Agent  ── every 10 merges ──────────► constitution review
 ```
 
 ## Agent Interaction Reference
 
-### In Claude Code (local)
+### In Claude Code (local slash commands)
 
 ```bash
-/ba-agent Add user authentication with email and password
-/dev-agent Implement the spec at specs/001-user-auth/spec.md
-/qa-agent Validate PR #5
-/reviewer-agent Review PR #5
-/architect-agent Review plan at specs/001-user-auth
-/devops-agent Review CI pipeline
-/security-agent Review PR #5
-/triage-agent Triage issue #12
+# Core workflow
+/ba-agent Add user authentication
+/dev-agent                          # picks up spec from .specify/feature.json
+/qa-agent                           # validate current PR
+/reviewer-agent                     # review current PR
+/architect-agent                    # design decision or cross-spec check
+/devops-agent                       # CI/CD review
+/security-agent                     # security review
+/triage-agent                       # triage open issues
+
+# Lifecycle
+/release-agent                      # auto semver + CHANGELOG + GitHub Release
+/release-agent minor                # override bump type
+/docs-agent                         # audit + update documentation
+/tech-debt-agent                    # codebase health review
+/tech-debt-agent complexity         # focus on one area
+
+# Guided
+/onboard                            # 7-step new-team-member wizard
 ```
 
-### In GitHub Copilot Chat (local / VS Code / github.com)
-
-Explicitly activate the agent role by naming it:
+### In GitHub (automated — PR comments / issue labels)
 
 ```
-Act as the BA Agent — read .github/agents/ba-product-agent.md then write a spec for user authentication
-Act as the Developer Agent — implement specs/001-user-auth/spec.md using TDD
-Act as the Reviewer Agent — review the current PR diff against the spec
-Act as the Security Agent — review this code for OWASP Top 10 issues
-Act as the Architect Agent — should we use JWT or opaque tokens? Write an ADR
-```
+@qa-agent              — QA + mutation testing review on PR
+@reviewer-agent        — spec compliance + API contract review on PR
+@architect-agent       — ADR + cross-spec consistency check
+@security-agent        — OWASP + dependency review on PR
+@docs-agent            — documentation audit on PR
 
-### In GitHub (automated — both Claude and Copilot modes)
+(triage runs automatically on every new issue)
+(release runs automatically on every push to main)
+(tech-debt runs on first Monday of each month)
 
-Comment on a PR or issue:
+# Industrial domain pack only:
+@ot-integration-agent  — IT/OT boundary review on PR
+@digital-twin-agent    — digital twin drift + schema diff review on PR
+@compliance-agent      — IEC 62443 / ISA-95 / SIL review on PR
+@incident-agent        — incident response (label issue 'incident')
 ```
-@qa-agent          # triggers QA review on the PR
-@reviewer-agent    # triggers code review on the PR
-@architect-agent   # triggers architecture review
-@security-agent    # triggers security review
-```
-
-New issues are automatically triaged (no mention needed).
 
 ## Prerequisites
 
@@ -236,7 +279,7 @@ For **Claude Code** mode:
 
 For **GitHub Copilot** mode:
 - Active GitHub Copilot subscription (Business or Enterprise recommended for Actions)
-- `permissions: models: read` is enabled — no additional secrets required
+- `permissions: models: read` — no additional secrets required
 
 For both:
 - [GitHub CLI](https://cli.github.com) (`gh`) for agent workflows

@@ -1,0 +1,50 @@
+name: Tech-Debt Agent
+
+on:
+  schedule:
+    # First Monday of each month at 08:00 UTC
+    - cron: '0 8 1-7 * 1'
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: 'Analysis focus area'
+        required: false
+        type: choice
+        options: [all, complexity, dead-code, dependencies, mutations]
+        default: all
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  tech-debt:
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'tech-debt-review')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for churn analysis
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read `.claude/agents/tech-debt-agent.md` in full — it defines your role,
+            analysis tools, thresholds, report format, and hard constraints.
+            Read `.specify/memory/constitution.md` in full.
+
+            Focus area: ${{ github.event.inputs.focus || 'all' }}
+
+            Your task: run the tech-debt health review, produce the report at
+            docs/tech-debt/tech-debt-report-YYYY-MM.md, and open GitHub Issues
+            (max 5) for items above threshold.
+            Follow every step in tech-debt-agent.md exactly.
+          claude_args: "--max-turns 30"

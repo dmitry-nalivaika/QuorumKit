@@ -57,6 +57,13 @@ agent_skills=(
   ".apm/skills/devops-agent/SKILL.md"
   ".apm/skills/security-agent/SKILL.md"
   ".apm/skills/triage-agent/SKILL.md"
+  ".apm/skills/ot-integration-agent/SKILL.md"
+  ".apm/skills/digital-twin-agent/SKILL.md"
+  ".apm/skills/compliance-agent/SKILL.md"
+  ".apm/skills/incident-agent/SKILL.md"
+  ".apm/skills/release-agent/SKILL.md"
+  ".apm/skills/docs-agent/SKILL.md"
+  ".apm/skills/tech-debt-agent/SKILL.md"
 )
 for f in "${agent_skills[@]}"; do
   if [ ! -f "$f" ]; then continue; fi
@@ -99,7 +106,7 @@ h1 "6. Conditional auth rules — must have qualifier"
 # (indented with spaces or start with |) are correctly conditioned.
 unconditional=$(grep -n 'scope.*to authenticated\|authenticated user can only\|auth.*required on all' \
   .apm/agents/*.md 2>/dev/null | \
-  grep -v 'if applicable\|if auth\|per constitution\|constitution requires\|only if\|if the constitution\|N/A' || true)
+  grep -v 'if applicable\|if auth\|per constitution\|constitution requires\|only if\|if the constitution\|N/A\|\[ \]\|- \[ \]' || true)
 if [ -n "$unconditional" ]; then
   warn "Possible unconditional auth rules (review manually):"
   echo "$unconditional"
@@ -123,6 +130,9 @@ required_agents=(
   "digital-twin-agent.md"
   "compliance-agent.md"
   "incident-agent.md"
+  "release-agent.md"
+  "docs-agent.md"
+  "tech-debt-agent.md"
 )
 for agent in "${required_agents[@]}"; do
   if [ -f ".apm/agents/$agent" ]; then
@@ -149,6 +159,9 @@ required_skills=(
   "compliance-agent"
   "incident-agent"
   "onboard"
+  "release-agent"
+  "docs-agent"
+  "tech-debt-agent"
 )
 for skill in "${required_skills[@]}"; do
   if [ -f ".apm/skills/$skill/SKILL.md" ]; then
@@ -171,6 +184,10 @@ required_workflows=(
   "agent-digital-twin.yml"
   "agent-compliance.yml"
   "agent-incident.yml"
+  "agent-release.yml"
+  "agent-docs.yml"
+  "agent-tech-debt.yml"
+  "alert-to-issue.yml"
   "copilot-agent-qa.yml"
   "copilot-agent-reviewer.yml"
   "copilot-agent-architect.yml"
@@ -180,6 +197,9 @@ required_workflows=(
   "copilot-agent-digital-twin.yml"
   "copilot-agent-compliance.yml"
   "copilot-agent-incident.yml"
+  "copilot-agent-release.yml"
+  "copilot-agent-docs.yml"
+  "copilot-agent-tech-debt.yml"
 )
 for wf in "${required_workflows[@]}"; do
   if [ -f "templates/github/workflows/$wf" ]; then
@@ -217,6 +237,34 @@ for agent in .apm/agents/*.md; do
   done < "$agent"
 done
 ok "MUST/MUST NOT check complete"
+
+# =============================================================================
+h1 "12. Spec lint — required sections present in any example specs"
+# Note: non-blocking (warns only) because example specs may be intentionally partial.
+# =============================================================================
+required_spec_sections=(
+  "## Overview"
+  "## Functional Requirements"
+  "## Success Criteria"
+  "## Out of Scope"
+  "## Open Questions"
+)
+spec_files=$(find . -path './.git' -prune -o -name 'spec.md' -print 2>/dev/null | grep -v '.git' || true)
+if [ -z "$spec_files" ]; then
+  ok "No spec.md files found in this repo — gate skipped"
+else
+  for spec in $spec_files; do
+    for section in "${required_spec_sections[@]}"; do
+      if ! grep -q "$section" "$spec"; then
+        warn "$spec — missing section: $section"
+      fi
+    done
+    if grep -qi 'TODO' "$spec"; then
+      warn "$spec — contains TODO items (should be resolved before handoff)"
+    fi
+    ok "$spec — spec lint passed"
+  done
+fi
 
 # =============================================================================
 echo ""

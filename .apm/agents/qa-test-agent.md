@@ -68,7 +68,24 @@ If the spec or constitution contains a latency SLO (e.g. "response < 100ms",
 
 If no latency SLO is defined in the spec or constitution, mark this section N/A.
 
-## Reporting Format
+### Mutation Testing Gate (only if `mutation_score_threshold` is set in the constitution)
+
+Mutation testing measures whether tests actually catch defects — it is a stronger signal
+than line coverage.
+
+If the constitution defines a `mutation_score_threshold`:
+- [ ] Run the appropriate mutation testing tool for the project language:
+  - TypeScript/JavaScript: `npx stryker run`
+  - Python: `mutmut run && mutmut results`
+  - Java/Kotlin: `pitest`
+  - C#: `dotnet stryker`
+  - Rust: `cargo mutants`
+  - Go: `go-mutesting`
+- [ ] Mutation score meets or exceeds the threshold defined in the constitution
+- [ ] If score is below threshold: mark this gate FAIL — **MUTATION-BLOCKER**; list the
+  lowest-scoring modules so the Developer Agent knows where to improve tests
+
+If no mutation threshold is defined in the constitution, mark this section N/A.
 
 ```
 ## QA Report — [Feature Name] — [Date]
@@ -83,6 +100,10 @@ If no latency SLO is defined in the spec or constitution, mark this section N/A.
 
 ### Performance Gate
 - Latency SLO: PASS/FAIL/N/A ([measured value] vs [SLO target]; N/A if no SLO defined)
+
+### Mutation Testing Gate
+- Mutation score: PASS/FAIL/N/A (N% vs threshold N%; N/A if no threshold defined)
+- Lowest-scoring modules (if FAIL): [list]
 
 ### Manual Scenarios
 - US1 happy path: PASS/FAIL

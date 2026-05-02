@@ -1,9 +1,35 @@
 name: agentic-dev-stack
-version: 1.0.0
-description: "Full agentic development environment: BA, Developer, QA, Reviewer, Architect, DevOps, Security, and Triage agents with Spec Kit integration and GitHub Actions workflows"
+version: 2.0.0
+description: >
+  Fully autonomous, lights-out software development cycle — 15 specialised AI agents,
+  25 GitHub Actions workflows, domain extension packs, and Spec Kit integration.
+  Universal core (11 agents) + industrial domain pack (4 agents, opt-in).
+  Works with Claude Code, GitHub Copilot, or both simultaneously.
 author: Dmitry Nalivaika
 license: MIT
 type: agent-stack
+
+agents:
+  universal:
+    - ba-product-agent
+    - developer-agent
+    - qa-test-agent
+    - reviewer-agent
+    - architect-agent
+    - devops-agent
+    - security-agent
+    - triage-agent
+    - release-agent
+    - docs-agent
+    - tech-debt-agent
+  domain/industrial:
+    - ot-integration-agent
+    - digital-twin-agent
+    - compliance-agent
+    - incident-agent
+
+workflows:
+  count: 25  # 12 Claude + 12 Copilot + 1 alert-to-issue
 
 dependencies:
   apm: []

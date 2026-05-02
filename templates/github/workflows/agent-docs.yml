@@ -1,0 +1,40 @@
+name: Docs Agent
+
+on:
+  push:
+    branches: [main]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  docs:
+    if: |
+      github.event_name == 'push' ||
+      contains(github.event.comment.body, '@docs-agent')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read `.claude/agents/docs-agent.md` in full — it defines your role,
+            audit checklist, labelling convention, hard constraints, and reporting format.
+            Read `.specify/memory/constitution.md` in full.
+
+            Your task: audit documentation for the most recently merged PR or the
+            PR referenced in the comment, then open a Documentation PR if any
+            updates are needed.
+            Follow every step in docs-agent.md exactly.
+          claude_args: "--max-turns 25"

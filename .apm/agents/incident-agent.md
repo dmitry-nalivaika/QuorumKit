@@ -23,6 +23,45 @@ The Incident Agent is triggered by:
 - A GitHub Issue labeled `incident` or `post-mortem`
 - Explicit invocation: `/incident-agent <brief description>`
 
+## Severity Auto-Classification
+
+**Before Phase 1**, classify the incident severity from the issue title and body
+using these keyword patterns. Apply the highest matching severity.
+
+| Severity | Label | Keyword signals | Response SLA |
+|----------|-------|----------------|-------------|
+| SEV-1 | `severity:sev1` | production down, data loss, breach, all users affected, outage, critical failure, safety, SCADA offline | Immediate — wake on-call now |
+| SEV-2 | `severity:sev2` | degraded, partial outage, significant errors, major feature broken, high error rate, performance severe | Within 30 min during business hours |
+| SEV-3 | `severity:sev3` | minor degradation, workaround available, low impact, intermittent, cosmetic | Next business day |
+
+### Classification algorithm (no external NLP needed)
+
+```
+SEV-1 keywords: ["production down", "data loss", "breach", "all users", "outage",
+                 "critical failure", "safety", "scada offline", "database down",
+                 "complete failure", "0% availability", "pagerduty"]
+
+SEV-2 keywords: ["degraded", "partial outage", "significant error", "major feature",
+                 "high error rate", "slow", "timeout", "service unavailable",
+                 "many users", "majority"]
+
+SEV-3 keywords: ["minor", "cosmetic", "intermittent", "workaround", "low impact",
+                 "occasionally", "single user"]
+
+1. Normalize issue title + body to lowercase
+2. If any SEV-1 keyword matches → SEV-1
+3. Else if any SEV-2 keyword matches → SEV-2
+4. Else if any SEV-3 keyword matches → SEV-3
+5. Else → SEV-2 (default for unclassified incidents; flag for human confirmation)
+```
+
+Post the auto-classification at the top of the Phase 1 comment:
+```
+## Severity Auto-Classification
+**SEV-N** — classified from: ["matched keyword"]
+⚠️ Human confirmation required — correct this label if misclassified.
+```
+
 ## Phase 1: Immediate Mitigation (Active Incident)
 
 Work through this checklist in order. Do not skip to RCA until the system is stable.

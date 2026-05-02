@@ -29,15 +29,20 @@ h1()   { echo -e "\n${BOLD}$*${NC}"; }
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 AI_MODE="claude"  # default
+DOMAIN=""         # optional domain extension pack
 
 for arg in "$@"; do
   case "$arg" in
-    --ai=claude)  AI_MODE="claude"  ;;
-    --ai=copilot) AI_MODE="copilot" ;;
-    --ai=both)    AI_MODE="both"    ;;
+    --ai=claude)       AI_MODE="claude"      ;;
+    --ai=copilot)      AI_MODE="copilot"     ;;
+    --ai=both)         AI_MODE="both"        ;;
+    --domain=industrial) DOMAIN="industrial" ;;
+    --domain=*)
+      warn "Unknown domain pack: $arg — only 'industrial' is currently available"
+      ;;
     *)
       err "Unknown argument: $arg"
-      echo "Usage: $0 [--ai=claude|copilot|both]"
+      echo "Usage: $0 [--ai=claude|copilot|both] [--domain=industrial]"
       exit 1
       ;;
   esac
@@ -53,6 +58,7 @@ echo -e "${BOLD}Agentic Dev Stack — Initializing${NC}"
 echo "APM package : $APM_PACKAGE_DIR"
 echo "Project     : $PROJECT_DIR"
 echo "AI mode     : $AI_MODE"
+echo "Domain pack : ${DOMAIN:-none (universal core only)}"
 echo ""
 
 GITHUB_TMPL="$APM_PACKAGE_DIR/templates/github"
@@ -65,15 +71,46 @@ install_claude() {
 
   mkdir -p .claude/agents .claude/skills
 
-  # Agent definitions
-  cp -r "$APM_PACKAGE_DIR/.apm/agents/"* .claude/agents/
+  # Universal core agents (always installed)
+  UNIVERSAL_AGENTS=(
+    "ba-product-agent.md" "developer-agent.md" "qa-test-agent.md"
+    "reviewer-agent.md"   "architect-agent.md"  "devops-agent.md"
+    "security-agent.md"   "triage-agent.md"
+    "release-agent.md"    "docs-agent.md"       "tech-debt-agent.md"
+  )
+  for agent in "${UNIVERSAL_AGENTS[@]}"; do
+    cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".claude/agents/$agent"
+  done
+
+  # Domain extension pack — industrial
+  if [ "$DOMAIN" = "industrial" ]; then
+    DOMAIN_AGENTS=("ot-integration-agent.md" "digital-twin-agent.md" "compliance-agent.md" "incident-agent.md")
+    for agent in "${DOMAIN_AGENTS[@]}"; do
+      cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".claude/agents/$agent"
+    done
+    ok "Industrial domain agents installed"
+  fi
   ok "Agents installed (.claude/agents/)"
 
-  # Skills (slash commands)
-  for skill_dir in "$APM_PACKAGE_DIR/.apm/skills"/*/; do
-    skill_name="$(basename "$skill_dir")"
-    mkdir -p ".claude/skills/$skill_name"
-    cp "$skill_dir/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
+  # Skills (slash commands) — mirror same filter
+  UNIVERSAL_SKILLS=(
+    "ba-agent" "dev-agent" "qa-agent" "reviewer-agent" "architect-agent"
+    "devops-agent" "security-agent" "triage-agent"
+    "release-agent" "docs-agent" "tech-debt-agent" "onboard"
+  )
+  DOMAIN_SKILLS=("ot-integration-agent" "digital-twin-agent" "compliance-agent" "incident-agent")
+
+  skills_to_install=("${UNIVERSAL_SKILLS[@]}")
+  if [ "$DOMAIN" = "industrial" ]; then
+    skills_to_install+=("${DOMAIN_SKILLS[@]}")
+  fi
+
+  for skill_name in "${skills_to_install[@]}"; do
+    skill_dir="$APM_PACKAGE_DIR/.apm/skills/$skill_name"
+    if [ -d "$skill_dir" ]; then
+      mkdir -p ".claude/skills/$skill_name"
+      cp "$skill_dir/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
+    fi
   done
   ok "Skills installed (.claude/skills/)"
 
@@ -112,22 +149,55 @@ install_claude() {
 install_copilot() {
   h1 "1. Installing GitHub Copilot agents and instructions"
 
-  # Shared agent definitions (platform-agnostic) go to .github/agents/
+  # Shared agent definitions go to .github/agents/
   mkdir -p .github/agents
-  cp -r "$APM_PACKAGE_DIR/.apm/agents/"* .github/agents/
+
+  UNIVERSAL_AGENTS=(
+    "ba-product-agent.md" "developer-agent.md" "qa-test-agent.md"
+    "reviewer-agent.md"   "architect-agent.md"  "devops-agent.md"
+    "security-agent.md"   "triage-agent.md"
+    "release-agent.md"    "docs-agent.md"       "tech-debt-agent.md"
+  )
+  for agent in "${UNIVERSAL_AGENTS[@]}"; do
+    cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".github/agents/$agent"
+  done
+
+  if [ "$DOMAIN" = "industrial" ]; then
+    DOMAIN_AGENTS=("ot-integration-agent.md" "digital-twin-agent.md" "compliance-agent.md" "incident-agent.md")
+    for agent in "${DOMAIN_AGENTS[@]}"; do
+      cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".github/agents/$agent"
+    done
+    ok "Industrial domain agents installed (.github/agents/)"
+  fi
   ok "Agent definitions installed (.github/agents/)"
 
-  # Copilot custom instructions (.github/instructions/)
+  # Copilot custom instructions — universal set
   INSTR_SRC="$APM_PACKAGE_DIR/templates/github/instructions"
+  UNIVERSAL_INSTRUCTIONS=(
+    "ba-agent" "dev-agent" "qa-agent" "reviewer-agent" "architect-agent"   # kept consistent
+    "devops-agent" "security-agent" "triage-agent"
+    "release-agent" "docs-agent" "tech-debt-agent"
+  )
+  # (instruction file names use agent slug, not agent filename)
+  DOMAIN_INSTRUCTIONS=("ot-integration-agent" "digital-twin-agent" "compliance-agent" "incident-agent")
+
+  instrs_to_install=("${UNIVERSAL_INSTRUCTIONS[@]}")
+  if [ "$DOMAIN" = "industrial" ]; then
+    instrs_to_install+=("${DOMAIN_INSTRUCTIONS[@]}")
+  fi
+
   if [ -d "$INSTR_SRC" ]; then
     mkdir -p .github/instructions
-    for instr in "$INSTR_SRC/"*.instructions.md; do
+    for slug in "${instrs_to_install[@]}"; do
+      instr="$INSTR_SRC/${slug}.instructions.md"
       instr_name="$(basename "$instr")"
-      if [ ! -f ".github/instructions/$instr_name" ]; then
-        cp "$instr" ".github/instructions/$instr_name"
-        ok "Instruction: $instr_name"
-      else
-        warn "Instruction $instr_name already exists — skipping"
+      if [ -f "$instr" ]; then
+        if [ ! -f ".github/instructions/$instr_name" ]; then
+          cp "$instr" ".github/instructions/$instr_name"
+          ok "Instruction: $instr_name"
+        else
+          warn "Instruction $instr_name already exists — skipping"
+        fi
       fi
     done
   fi
@@ -183,6 +253,20 @@ install_github_templates() {
       done
       ;;
   esac
+
+  # ── alert-to-issue.yml — always installed (observability feedback loop) ────
+  copy_workflow "$GITHUB_TMPL/workflows/alert-to-issue.yml"
+
+  # ── Remove domain workflows if no domain pack requested ───────────────────
+  if [ "$DOMAIN" != "industrial" ]; then
+    DOMAIN_WF_PATTERNS=("agent-ot-integration" "agent-digital-twin" "agent-compliance" "agent-incident"
+                        "copilot-agent-ot-integration" "copilot-agent-digital-twin"
+                        "copilot-agent-compliance" "copilot-agent-incident")
+    for pattern in "${DOMAIN_WF_PATTERNS[@]}"; do
+      rm -f ".github/workflows/${pattern}.yml"
+    done
+    ok "Domain workflows excluded (use --domain=industrial to include them)"
+  fi
 
   # ── PR template ────────────────────────────────────────────────────────────
   if [ ! -f .github/pull_request_template.md ]; then
@@ -254,7 +338,7 @@ done
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}${BOLD}✓ Agentic Dev Stack ready! (mode: $AI_MODE)${NC}"
+echo -e "${GREEN}${BOLD}✓ Agentic Dev Stack ready! (mode: $AI_MODE${DOMAIN:+ / domain: $DOMAIN})${NC}"
 echo ""
 echo "Next steps:"
 echo ""
@@ -270,7 +354,7 @@ if [[ "$AI_MODE" == "claude" || "$AI_MODE" == "both" ]]; then
   echo "  3. Start your first feature:"
   echo "     /ba-agent <feature description>"
   echo ""
-  echo "  Local slash commands:"
+  echo "  Local slash commands — core workflow:"
   echo "    /ba-agent        — write feature specs"
   echo "    /dev-agent       — implement features (TDD)"
   echo "    /qa-agent        — run quality gates"
@@ -280,6 +364,20 @@ if [[ "$AI_MODE" == "claude" || "$AI_MODE" == "both" ]]; then
   echo "    /security-agent  — security reviews"
   echo "    /triage-agent    — issue triage"
   echo ""
+  echo "  Lifecycle commands:"
+  echo "    /release-agent   — semver bump, CHANGELOG, GitHub Release"
+  echo "    /docs-agent      — audit and update documentation"
+  echo "    /tech-debt-agent — codebase health review"
+  echo "    /onboard         — guided onboarding wizard"
+  echo ""
+  if [ "$DOMAIN" = "industrial" ]; then
+  echo "  Industrial domain commands:"
+  echo "    /ot-integration-agent  — IT/OT boundary review"
+  echo "    /digital-twin-agent    — twin model drift review"
+  echo "    /compliance-agent      — IEC 62443 / ISA-95 / SIL review"
+  echo "    /incident-agent        — incident response & post-mortem"
+  echo ""
+  fi
 fi
 
 if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
@@ -289,22 +387,36 @@ if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   echo "  3. Per-agent instructions are in .github/instructions/"
   echo "  4. Agent definitions (shared) are in .github/agents/"
   echo ""
-  echo "  In Copilot Chat, activate an agent by asking:"
-  echo "    'Act as the BA Agent and write a spec for <feature>'"
-  echo "    'Act as the Developer Agent and implement specs/NNN-feature/spec.md'"
-  echo "    'Act as the Reviewer Agent and review this PR'"
-  echo ""
 fi
 
 echo "  ── GitHub Actions (all modes) ───────────────────────────────────────"
 echo "  Comment on a PR or issue to trigger agents:"
-echo "    @qa-agent             — QA review on PR"
-echo "    @reviewer-agent       — code review on PR"
-echo "    @architect-agent      — architecture review on PR or issue"
-echo "    @security-agent       — security review on PR"
-echo "    @ot-integration-agent — OT/IT boundary review on PR"
+echo "    @qa-agent             — QA + mutation testing review on PR"
+echo "    @reviewer-agent       — spec compliance + API contract review on PR"
+echo "    @architect-agent      — ADR + cross-spec consistency check"
+echo "    @security-agent       — OWASP + dependency review on PR"
+echo "    @docs-agent           — documentation audit on PR"
+echo "    (triage runs automatically on every new issue)"
+echo "    (release runs automatically on every push to main)"
+echo "    (tech-debt runs on first Monday of each month)"
+echo ""
+if [ "$DOMAIN" = "industrial" ]; then
+echo "    @ot-integration-agent — IT/OT boundary review on PR"
 echo "    @digital-twin-agent   — digital twin drift review on PR"
 echo "    @compliance-agent     — IEC 62443 / ISA-95 / SIL review on PR"
-echo "    @incident-agent       — incident response / post-mortem (label issue 'incident')"
-echo "    (triage runs automatically on every new issue)"
+echo "    @incident-agent       — incident response (label issue 'incident')"
 echo ""
+fi
+echo "  ── Observability feedback loop ──────────────────────────────────────"
+echo "  Configure your alerting platform to POST to:"
+echo "    POST https://api.github.com/repos/{owner}/{repo}/dispatches"
+echo "    event_type: production-alert"
+echo "  See .github/workflows/alert-to-issue.yml for the payload format."
+echo ""
+if [ -z "$DOMAIN" ]; then
+echo "  ── Domain extension packs ───────────────────────────────────────────"
+echo "  To add domain-specific agents, re-run with:"
+echo "    bash $0 --ai=$AI_MODE --domain=industrial"
+echo "  Available packs: industrial (OT Integration, Digital Twin, Compliance, Incident)"
+echo ""
+fi

@@ -48,6 +48,38 @@ fixes yourself.
 - [ ] Migration tested against a production-representative dataset in staging before production deploy
 - [ ] If migration takes > 60 seconds on staging data, a maintenance window or zero-downtime strategy is documented in the PR
 
+### 4c. API Contract Review (if PR touches a public API schema)
+
+If the PR modifies any of the following, run the appropriate contract diff tool:
+
+| Schema type | Tool | Blocker condition |
+|-------------|------|------------------|
+| REST / OpenAPI | `openapi-diff` or `oasdiff` | Any breaking change |
+| GraphQL | `graphql-inspector diff` | Field removed, type changed, arg added (non-null) |
+| AsyncAPI / event schemas | `asyncapi diff` | Channel removed, message schema breaking change |
+| Protobuf / gRPC | `buf breaking` | Field removed, field type changed, field number reused |
+| Avro | `avro-compatibility-checker` | Schema incompatible with BACKWARD mode |
+
+**Classify every change**:
+- **Additive** (new optional field, new endpoint, new enum value) → `SUGGESTION` — safe, note for consumers
+- **Deprecated** (field marked deprecated, endpoint returns deprecation header) → `SUGGESTION` — acceptable with migration timeline
+- **Breaking** (field removed, type changed, required field added, endpoint removed) → `BLOCKER`
+
+Breaking changes require **both**:
+1. A linked ADR documenting the decision and rationale
+2. A consumer migration guide in `docs/api/` describing before → after with examples
+
+```bash
+# OpenAPI example
+npx oasdiff breaking old-spec.yaml new-spec.yaml
+
+# Protobuf example
+buf breaking --against ".git#branch=main" .
+
+# GraphQL example
+npx graphql-inspector diff old-schema.graphql new-schema.graphql
+```
+
 ### 4. Constitution — Architecture & Process (NON-NEGOTIABLE)
 - [ ] No direct commits to `main`
 - [ ] Feature started from a GitHub Issue + spec.md
