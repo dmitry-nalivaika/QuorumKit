@@ -245,7 +245,7 @@ else
 fi
 
 # ── Copy guides ──────────────────────────────────────────────────────────────
-for guide in BROWNFIELD_GUIDE.md; do
+for guide in BROWNFIELD_GUIDE.md DARK_FACTORY_GUIDE.md ENHANCEMENTS.md; do
   if [ ! -f "$guide" ]; then
     cp "$APM_PACKAGE_DIR/$guide" "$guide"
     ok "$guide copied"

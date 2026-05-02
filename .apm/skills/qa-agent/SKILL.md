@@ -29,6 +29,5 @@ Steps:
 5. Produce a QA Report in the format defined in `.claude/agents/qa-test-agent.md`
 6. Post the report as a PR comment: `gh pr review <number> --comment --body "..."`
 
-## You MUST NOT
 ## When done
 State clearly: **QA APPROVED** or **QA BLOCKED** with specific failures listed.

@@ -23,7 +23,6 @@ the user to describe the feature they want specified.
 - If no spec exists yet for this feature: run `/speckit-specify` with the description.
 - If a spec already exists: run `/speckit-clarify` to refine it.
 
-## You MUST NOT
 ## When done
 Confirm to the user:
 - The spec file path
