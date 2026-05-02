@@ -278,7 +278,7 @@ function main() {
     .replace(/>/g, '\\u003e');
 
   const SENTINEL_START = '// ─── Agent Definitions (synced from .apm/agents/*.md + apm.yml) ─────────────';
-  const SENTINEL_END   = '// ─── SDLC Pipeline (for the About tab) ────────────────────────────────────';
+    const SENTINEL_END   = '// ─── SDLC Pipeline (for the About tab) ────────────────────────────────────';
 
   const startIdx = html.indexOf(SENTINEL_START);
   const endIdx   = html.indexOf(SENTINEL_END);
