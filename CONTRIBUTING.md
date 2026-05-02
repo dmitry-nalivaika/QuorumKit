@@ -15,11 +15,12 @@ framework for new domains (e.g. dark factory, fintech, healthcare).
    `.apm/agents/<agent>.md`. Skills, workflow prompts, and Copilot instruction
    files are thin wrappers that delegate to agent definitions. Never duplicate.
 2. **Universal agents** — no project-specific content in `.apm/agents/`. Domain
-   guidance belongs in dedicated guides (e.g. `DARK_FACTORY_GUIDE.md`).
+   guidance belongs in dedicated guides and domain extension packs, not in
+   universal agent definitions.
 3. **Conditional rules** — any rule that does not apply to all project types must
    be conditioned: `(if applicable per constitution)` or `(if auth required)`.
 4. **No regressions** — every change to an agent definition must be reviewed for
-   consistency against all 8 agents before merge.
+   consistency against all **15 agents** before merge.
 5. **Quality gates apply to this repo too** — the agents review their own changes.
 
 ---
@@ -29,7 +30,8 @@ framework for new domains (e.g. dark factory, fintech, healthcare).
 | You want to… | Do this |
 |---|---|
 | Improve an existing agent | [Agent Enhancement Workflow](#agent-enhancement-workflow) |
-| Add a new agent | [Adding a New Agent](#adding-a-new-agent) |
+| Add a new universal agent | [Adding a New Agent](#adding-a-new-agent) |
+| Add a domain extension pack | [Adding a Domain Pack](#adding-a-domain-pack) |
 | Improve a workflow or template | Open issue → BA Agent spec → PR |
 | Add a domain guide (e.g. fintech) | [Adding a Domain Guide](#adding-a-domain-guide) |
 | Report a bug in the library | Open a GitHub Issue using the Bug Report template |
@@ -94,7 +96,7 @@ The Reviewer Agent will apply the [Agent Consistency Checklist](#agent-consisten
 Or run it manually in Claude Code:
 
 ```
-/reviewer-agent Review my changes to .apm/agents/ for consistency across all 8 agents
+/reviewer-agent Review my changes to .apm/agents/ for consistency across all 15 agents
 ```
 
 ### 4. PR and review
@@ -140,7 +142,7 @@ The Reviewer Agent applies these automatically; you can also run them manually.
 - [ ] Any tool command is conditioned: `(if available)` or discovered from constitution
 - [ ] SLO/threshold values reference the constitution, not hardcoded numbers
 
-### Consistency Rules (across all 8 agents)
+### Consistency Rules (across all 15 agents)
 - [ ] NNN convention reference is consistent with `ba-product-agent.md`
 - [ ] Branch naming reference is consistent with `developer-agent.md`
 - [ ] Severity label format (`BLOCKER:`, `SUGGESTION:`, `ARCH-BLOCKER:`, etc.) matches
@@ -159,22 +161,45 @@ The Reviewer Agent applies these automatically; you can also run them manually.
 
 ## Adding a New Agent
 
-New agents are rare — exhaust enhancements to existing agents first. If genuinely
-needed:
+New agents are rare — exhaust enhancements to existing agents first. Decide whether
+the new agent is **universal** (applies to all software projects) or **domain-specific**
+(belongs in a domain extension pack). If genuinely needed:
 
-### Checklist for a new agent
+### Checklist for a new universal agent
 
 - [ ] Open a GitHub Issue and write a spec via BA Agent
 - [ ] Spec must justify why existing agents cannot cover this responsibility
 - [ ] Create `.apm/agents/<name>-agent.md` following the section order above
-- [ ] Create `.apm/skills/<name>-agent/SKILL.md` (activation wrapper only)
-- [ ] Create `templates/github/instructions/<name>-agent.instructions.md` (pointer only)
+- [ ] Create `.apm/skills/<name>-agent/SKILL.md` (activation wrapper only, ≤ 45 lines)
+- [ ] Create `templates/github/instructions/<name>-agent.instructions.md` (pointer only, ≤ 20 lines)
 - [ ] Create `templates/github/workflows/agent-<name>.yml` (Claude Actions)
 - [ ] Create `templates/github/workflows/copilot-agent-<name>.yml` (Copilot Actions)
-- [ ] Add the agent to `scripts/init.sh` install routines
-- [ ] Add the agent to `README.md` agent table
-- [ ] Add the slash command to `INIT.md` quick reference
+- [ ] Add agent to `UNIVERSAL_AGENTS` array in `scripts/init.sh` (both `install_claude` and `install_copilot`)
+- [ ] Add agent to `required_agents` array in `scripts/quality-check.sh`
+- [ ] Add skill to `UNIVERSAL_SKILLS` / `required_skills` arrays in both scripts
+- [ ] Add workflows to `required_workflows` in `scripts/quality-check.sh`
+- [ ] Add agent to `agents.universal` list in `apm.yml`
+- [ ] Add agent to `README.md` universal agent table
+- [ ] Add slash command to `INIT.md` quick reference
 - [ ] `@architect-agent` review required — structural change to the framework
+
+---
+
+## Adding a Domain Pack
+
+Domain extension packs add opt-in agents for a specific industry vertical.
+
+### Checklist for a new domain pack (`--domain=<pack>`)
+
+- [ ] Open a GitHub Issue with domain scope definition
+- [ ] Create all agent/skill/workflow files following the new-agent checklist above
+- [ ] Add a `--domain=<pack>` case to the argument parser in `scripts/init.sh`
+- [ ] Add domain agent arrays (`DOMAIN_AGENTS`, `DOMAIN_SKILLS`, `DOMAIN_WF_PATTERNS`) to both install functions
+- [ ] Add domain entry to `agents.domain/<pack>` in `apm.yml`
+- [ ] Create or update `<DOMAIN>_GUIDE.md` at repo root
+- [ ] Add domain pack to `README.md` domain table and Quick Start examples
+- [ ] Add domain pack to `ENHANCEMENTS.md` Phase 5/6 table
+- [ ] `@architect-agent` review required
 
 ---
 
@@ -209,10 +234,13 @@ touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
 | Change agent section order | `.apm/agents/<agent>.md` only |
 | Add a new slash command | `.apm/skills/<name>/SKILL.md` + update `INIT.md` |
 | Add a new GitHub Actions trigger | `templates/github/workflows/agent-<name>.yml` + `copilot-agent-<name>.yml` |
+| Add a new universal agent | See [Adding a New Agent](#adding-a-new-agent) |
+| Add a domain extension pack | See [Adding a Domain Pack](#adding-a-domain-pack) |
 | Change NNN convention | `ba-product-agent.md`, `developer-agent.md`, `qa-test-agent.md`, `reviewer-agent.md`, `INIT.md`, `templates/CONTRIBUTING.md`, `README.md` |
 | Add a new issue template | `templates/github/ISSUE_TEMPLATE/<name>.md` + update `config.yml` |
 | Update init.sh | `scripts/init.sh` → always run `bash -n scripts/init.sh` after |
 | Add a domain guide | New `<DOMAIN>_GUIDE.md` at root + entry in `README.md` |
+| Update agent/skill/workflow counts | `scripts/quality-check.sh` arrays + `apm.yml` + `README.md` + `CONTRIBUTING.md` |
 
 ---
 

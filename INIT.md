@@ -30,9 +30,10 @@ Install only the tools for the mode(s) you are using.
 mkdir -p /path/to/my-project && cd /path/to/my-project
 
 # 2. Run init — choose your AI mode
-bash ~/path/to/agentic-dev-stack/scripts/init.sh             # Claude only (default)
-bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=copilot  # Copilot only
-bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=both     # Both (universal)
+bash ~/path/to/agentic-dev-stack/scripts/init.sh                                # Claude only (default)
+bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=copilot                   # Copilot only
+bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=both                      # Both (universal)
+bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=both --domain=industrial  # Both + industrial pack
 ```
 
 The script is **idempotent** — it skips any file that already exists, making it
@@ -40,18 +41,22 @@ safe to re-run on existing projects.
 
 ### What each mode installs
 
-| Artifact | `--ai=claude` | `--ai=copilot` | `--ai=both` |
-|----------|:---:|:---:|:---:|
-| `.claude/agents/` — agent definitions | ✓ | — | ✓ |
-| `.claude/skills/` — slash commands | ✓ | — | ✓ |
-| `CLAUDE.md` | ✓ | — | ✓ |
-| `.github/agents/` — agent definitions | — | ✓ | ✓ |
-| `.github/copilot-instructions.md` | — | ✓ | ✓ |
-| `.github/instructions/*.instructions.md` | — | ✓ | ✓ |
-| `agent-*.yml` workflows (Claude Actions) | ✓ | — | ✓ |
-| `copilot-agent-*.yml` workflows | — | ✓ | ✓ |
-| PR template, issue templates | ✓ | ✓ | ✓ |
-| `github-speckit` initialisation | ✓ | — | ✓ |
+| Artifact | `--ai=claude` | `--ai=copilot` | `--ai=both` | `+--domain=industrial` |
+|----------|:---:|:---:|:---:|:---:|
+| `.claude/agents/` — 11 universal agents | ✓ | — | ✓ | ✓ |
+| `.claude/agents/` — 4 industrial agents | — | — | — | ✓ |
+| `.claude/skills/` — slash commands | ✓ | — | ✓ | ✓ |
+| `CLAUDE.md` | ✓ | — | ✓ | ✓ |
+| `.github/agents/` — agent definitions | — | ✓ | ✓ | ✓ |
+| `.github/copilot-instructions.md` | — | ✓ | ✓ | ✓ |
+| `.github/instructions/*.instructions.md` | — | ✓ | ✓ | ✓ |
+| `agent-*.yml` workflows — 11 universal | ✓ | — | ✓ | ✓ |
+| `agent-*.yml` workflows — 4 industrial | — | — | — | ✓ |
+| `copilot-agent-*.yml` — 11 universal | — | ✓ | ✓ | ✓ |
+| `copilot-agent-*.yml` — 4 industrial | — | — | — | ✓ |
+| `alert-to-issue.yml` (always) | ✓ | ✓ | ✓ | ✓ |
+| PR template, issue templates | ✓ | ✓ | ✓ | ✓ |
+| `github-speckit` initialisation | ✓ | — | ✓ | ✓ |
 
 ---
 
@@ -324,7 +329,23 @@ Push the branch and open a PR using the PR template. Link the spec and issue.
 
 ### 7. Merge
 
-Once all agents approve and CI passes, merge.
+Once all agents approve and CI passes, merge. The following then run automatically:
+
+- **Release Agent** — analyses commits since last tag, opens a Version Bump PR (semver + CHANGELOG)
+- **Docs Agent** — audits documentation changes, opens a Docs PR if anything needs updating
+- **Triage Agent** — any production alert fired via `alert-to-issue.yml` becomes a new routed Issue
+
+### Lifecycle commands (available any time)
+
+```
+/release-agent           ← calculate semver + open Version Bump PR
+/release-agent minor     ← override bump type (patch | minor | major)
+/docs-agent              ← audit and sync all documentation
+/docs-agent 42           ← audit docs impact of PR #42
+/tech-debt-agent         ← run full codebase health review
+/tech-debt-agent complexity   ← focus on one area
+/onboard                 ← guided 7-step onboarding wizard (for new team members)
+```
 
 ---
 
