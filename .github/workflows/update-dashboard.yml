@@ -1,0 +1,49 @@
+name: Update Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.apm/agents/**'
+      - 'apm.yml'
+      - 'dashboard/generate-dashboard.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate dashboard
+        run: node dashboard/generate-dashboard.js
+
+      - name: Check for changes
+        id: diff
+        run: |
+          git diff --quiet dashboard/index.html && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit updated dashboard
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "docs-agent[bot]"
+          git config user.email "docs-agent@users.noreply.github.com"
+          git add dashboard/index.html
+          git commit -m "chore(dashboard): auto-sync agent data from .apm/agents [skip ci]"
+          git push
+
+      - name: No changes
+        if: steps.diff.outputs.changed == 'false'
+        run: echo "✅ Dashboard is already up to date."

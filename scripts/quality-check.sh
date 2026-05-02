@@ -267,6 +267,25 @@ else
 fi
 
 # =============================================================================
+h1 "13. Dashboard files present"
+# =============================================================================
+if [ -f "dashboard/index.html" ]; then
+  ok "dashboard/index.html present"
+else
+  fail "Missing dashboard/index.html — run: node dashboard/generate-dashboard.js"
+fi
+if [ -f "dashboard/generate-dashboard.js" ]; then
+  ok "dashboard/generate-dashboard.js present"
+else
+  fail "Missing dashboard/generate-dashboard.js"
+fi
+if [ -f ".github/workflows/update-dashboard.yml" ]; then
+  ok ".github/workflows/update-dashboard.yml present"
+else
+  fail "Missing .github/workflows/update-dashboard.yml"
+fi
+
+# =============================================================================
 echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo -e "${GREEN}${BOLD}✓ All quality gates passed${NC}"

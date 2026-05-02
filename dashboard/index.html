@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🏭 APM Dark Factory — Agent Orchestrator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏭</text></svg>" />
+  <style>
+    /* ─── CSS Reset & Base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --floor: #1a1a2e;
+      --wall:  #16213e;
+      --accent: #0f3460;
+      --neon:  #e94560;
+      --cyan:  #00fff5;
+      --green: #39ff14;
+      --amber: #ffb700;
+      --purple: #9d4edd;
+      --desk:  #2d2d44;
+      --desk-top: #3a3a5c;
+      --monitor: #0a0a1a;
+      --text:  #e0e0ff;
+      --text-dim: #8080a0;
+      --font:  'Courier New', Courier, monospace;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--floor);
+      color: var(--text);
+      font-family: var(--font);
+      overflow-x: hidden;
+    }
+
+    /* ─── Top Bar ──────────────────────────────────────────────────────────── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: #0a0a14;
+      border-bottom: 2px solid var(--neon);
+      padding: 8px 20px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    #topbar .logo { font-size: 20px; font-weight: bold; color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan); letter-spacing: 2px; }
+    #topbar .subtitle { color: var(--text-dim); font-size: 12px; }
+    #topbar .version { margin-left: auto; color: var(--amber); font-size: 11px;
+      border: 1px solid var(--amber); padding: 2px 8px; border-radius: 3px; }
+    .blink { animation: blink 1.2s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    #ticker {
+      overflow: hidden; white-space: nowrap;
+      background: #000; border-top: 1px solid #333;
+      padding: 4px 0; font-size: 11px; color: var(--green);
+    }
+    #ticker-inner { display: inline-block; animation: scroll-left 40s linear infinite; padding-left: 100%; }
+    @keyframes scroll-left { to { transform: translateX(-100%); } }
+
+    /* ─── Main Layout ──────────────────────────────────────────────────────── */
+    #main {
+      margin-top: 56px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      grid-template-rows: auto 1fr;
+      height: calc(100vh - 56px);
+    }
+
+    /* ─── Office Floor ─────────────────────────────────────────────────────── */
+    #office {
+      grid-row: 1 / 3;
+      background: var(--wall);
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+      min-height: 600px;
+    }
+
+    .floor-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      padding: 10px;
+    }
+
+    /* Domain zone banners */
+    .zone-label {
+      grid-column: 1 / -1;
+      text-align: center;
+      font-size: 10px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      padding: 4px;
+      border-radius: 2px;
+      margin-bottom: -10px;
+    }
+    .zone-universal { color: var(--cyan); border: 1px dashed var(--cyan); opacity: 0.6; }
+    .zone-industrial { color: var(--amber); border: 1px dashed var(--amber); opacity: 0.6; }
+    .zone-universal::before { content: "🌐 Universal Core"; }
+    .zone-industrial::before { content: "🏭 Industrial Domain Pack"; }
+
+    /* ─── Desk / Agent Card ─────────────────────────────────────────────────── */
+    .desk {
+      background: var(--desk);
+      border: 1px solid #3a3a5c;
+      border-radius: 8px;
+      padding: 12px 10px 10px;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .desk:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 24px rgba(0,255,245,0.18);
+      border-color: var(--cyan);
+    }
+    .desk.active {
+      border-color: var(--neon);
+      box-shadow: 0 0 20px rgba(233,69,96,0.4);
+    }
+    .desk.busy .agent-emoji { animation: typing 0.4s steps(1) infinite; }
+    @keyframes typing { 50% { opacity: 0.6; transform: translateY(2px); } }
+
+    /* Monitor on desk */
+    .monitor {
+      background: var(--monitor);
+      border: 2px solid #444;
+      border-radius: 4px;
+      height: 52px;
+      margin-bottom: 8px;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .monitor::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,245,0.03) 3px, rgba(0,255,245,0.03) 4px);
+      pointer-events: none;
+    }
+    .monitor-text {
+      font-size: 9px; color: var(--green);
+      padding: 4px; text-align: center;
+      white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; max-width: 90%;
+      font-family: var(--font);
+    }
+    .monitor-idle { color: var(--text-dim); }
+    .monitor-busy { color: var(--green); animation: scroll-monitor 3s linear infinite; }
+    @keyframes scroll-monitor {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* Agent avatar */
+    .agent-avatar {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .agent-emoji {
+      font-size: 26px;
+      display: inline-block;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .agent-info { flex: 1; min-width: 0; }
+    .agent-name {
+      font-size: 11px; font-weight: bold; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .agent-role {
+      font-size: 9px; color: var(--text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Status badge */
+    .status-badge {
+      font-size: 9px; padding: 2px 6px; border-radius: 20px;
+      display: inline-block; margin-top: 4px;
+      border: 1px solid currentColor;
+    }
+    .status-idle    { color: var(--text-dim); }
+    .status-working { color: var(--green); animation: pulse-green 1.5s ease infinite; }
+    .status-blocked { color: var(--neon); }
+    .status-review  { color: var(--amber); }
+    .status-done    { color: var(--cyan); }
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: none; }
+      50% { box-shadow: 0 0 8px var(--green); }
+    }
+
+    /* Coffee mug Easter egg */
+    .coffee {
+      position: absolute; bottom: 10px; right: 10px;
+      font-size: 14px; opacity: 0.4;
+      transition: opacity 0.3s;
+    }
+    .desk:hover .coffee { opacity: 1; }
+
+    /* Nameplate */
+    .nameplate {
+      position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); border: 1px solid #555;
+      font-size: 8px; padding: 1px 8px;
+      white-space: nowrap; border-radius: 3px 3px 0 0;
+      color: var(--text-dim); letter-spacing: 1px;
+    }
+
+    /* ─── Sidebar ───────────────────────────────────────────────────────────── */
+    #sidebar {
+      background: #0d0d1a;
+      border-left: 1px solid #2a2a3e;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-tabs {
+      display: flex; border-bottom: 1px solid #2a2a3e;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 4px; font-size: 11px;
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-family: var(--font);
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+    .tab-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .tab-panel.active { display: flex; }
+
+    /* ─── Agent Inspector (right panel) ─────────────────────────────────────── */
+    #inspector {
+      flex: 1; overflow-y: auto; padding: 16px;
+    }
+    #inspector::-webkit-scrollbar { width: 4px; }
+    #inspector::-webkit-scrollbar-thumb { background: #333; }
+
+    #inspector .empty-state {
+      text-align: center; padding: 40px 20px; color: var(--text-dim);
+      font-size: 12px; line-height: 2;
+    }
+
+    .inspector-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+    }
+    .inspector-emoji { font-size: 40px; }
+    .inspector-title { flex: 1; }
+    .inspector-title h2 { font-size: 16px; color: var(--cyan); }
+    .inspector-title .role-tag {
+      font-size: 10px; color: var(--text-dim); margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-dim); margin: 16px 0 8px;
+      border-bottom: 1px solid #2a2a3e; padding-bottom: 4px;
+    }
+    .resp-list { list-style: none; }
+    .resp-list li {
+      font-size: 11px; color: var(--text); padding: 4px 0;
+      display: flex; gap: 6px;
+    }
+    .resp-list li::before { content: '▸'; color: var(--cyan); flex-shrink: 0; }
+
+    .command-chip {
+      display: inline-block;
+      background: var(--accent); border: 1px solid var(--purple);
+      color: var(--purple); font-size: 10px;
+      padding: 3px 8px; border-radius: 3px;
+      margin: 2px; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .command-chip:hover { background: var(--purple); color: #fff; }
+
+    .invoke-btn {
+      width: 100%; padding: 10px;
+      margin-top: 16px;
+      background: var(--neon);
+      border: none; border-radius: 4px;
+      color: #fff; font-family: var(--font);
+      font-size: 12px; font-weight: bold;
+      cursor: pointer; letter-spacing: 1px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .invoke-btn:hover { opacity: 0.85; transform: scale(1.01); }
+    .invoke-btn:active { transform: scale(0.99); }
+
+    .badge-domain {
+      font-size: 9px; padding: 2px 6px; border-radius: 20px;
+      border: 1px solid var(--amber); color: var(--amber); margin-left: 6px;
+    }
+
+    /* ─── Console ───────────────────────────────────────────────────────────── */
+    #console-panel {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+    #console-output {
+      flex: 1; overflow-y: auto;
+      background: #020208; padding: 12px;
+      font-size: 11px; line-height: 1.7;
+    }
+    #console-output::-webkit-scrollbar { width: 4px; }
+    #console-output::-webkit-scrollbar-thumb { background: #222; }
+
+    .log-line { margin-bottom: 2px; }
+    .log-time  { color: #444; }
+    .log-agent { font-weight: bold; }
+    .log-info  { color: var(--text); }
+    .log-success { color: var(--green); }
+    .log-warn  { color: var(--amber); }
+    .log-error { color: var(--neon); }
+    .log-system { color: var(--cyan); }
+    .log-funny { color: var(--purple); }
+
+    #console-input-row {
+      display: flex; gap: 8px;
+      padding: 8px 12px; border-top: 1px solid #1a1a2e;
+      background: #060610;
+    }
+    #console-prompt { color: var(--neon); font-size: 13px; line-height: 28px; }
+    #console-input {
+      flex: 1; background: none; border: none;
+      color: var(--green); font-family: var(--font); font-size: 12px;
+      outline: none;
+    }
+    #console-input::placeholder { color: #333; }
+    #run-btn {
+      background: var(--neon); border: none; color: #fff;
+      font-family: var(--font); font-size: 11px;
+      padding: 4px 12px; border-radius: 3px; cursor: pointer;
+    }
+
+    /* ─── Kanban ───────────────────────────────────────────────────────────── */
+    #kanban-panel {
+      flex: 1; overflow-y: auto; padding: 12px;
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    }
+    .kanban-col { background: #0d0d1a; border: 1px solid #2a2a3e; border-radius: 6px; padding: 8px; }
+    .kanban-col-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #2a2a3e; }
+    .kanban-col-todo    .kanban-col-title { color: var(--text-dim); }
+    .kanban-col-wip     .kanban-col-title { color: var(--amber); }
+    .kanban-col-done    .kanban-col-title { color: var(--green); }
+
+    .kanban-card {
+      background: var(--desk); border-radius: 4px; padding: 8px;
+      margin-bottom: 6px; font-size: 10px; border-left: 3px solid;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    .kanban-card:hover { transform: scale(1.02); }
+    .kanban-card .kc-agent { color: var(--text-dim); font-size: 9px; margin-top: 4px; }
+
+    /* ─── Pipe animations between agents ──────────────────────────────────── */
+    .pipe-container {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 10;
+    }
+
+    /* ─── Ambient effects ──────────────────────────────────────────────────── */
+    .scanline-overlay {
+      position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+      );
+    }
+
+    .glitch-text {
+      position: relative;
+    }
+    .glitch-text::before {
+      content: attr(data-text);
+      position: absolute; left: 2px; top: 0;
+      color: var(--neon); clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%);
+      animation: glitch-anim 4s infinite steps(1);
+    }
+    @keyframes glitch-anim {
+      0%, 95%, 100% { clip-path: polygon(0 0, 0 0, 0 0, 0 0); }
+      96% { clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%); left: 2px; }
+      97% { clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%); left: -2px; }
+      98% { clip-path: polygon(0 40%, 100% 40%, 100% 60%, 0 60%); left: 2px; }
+    }
+
+    /* ─── Tooltip ──────────────────────────────────────────────────────────── */
+    [data-tooltip] { position: relative; }
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+      background: #000; border: 1px solid var(--cyan);
+      color: var(--text); font-size: 10px; padding: 4px 8px;
+      border-radius: 4px; white-space: nowrap; pointer-events: none;
+      opacity: 0; transition: opacity 0.2s;
+      z-index: 200;
+    }
+    [data-tooltip]:hover::after { opacity: 1; }
+
+    /* ─── About / SDLC diagram ─────────────────────────────────────────────── */
+    #about-panel {
+      flex: 1; overflow-y: auto; padding: 16px; font-size: 11px;
+    }
+    #about-panel h3 { color: var(--cyan); margin: 12px 0 6px; font-size: 13px; }
+    #about-panel p  { color: var(--text-dim); line-height: 1.8; }
+    .sdlc-flow {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      margin: 12px 0; align-items: center;
+    }
+    .sdlc-step {
+      background: var(--accent); border: 1px solid var(--cyan);
+      color: var(--cyan); font-size: 9px; padding: 3px 8px;
+      border-radius: 3px;
+    }
+    .sdlc-arrow { color: var(--text-dim); font-size: 11px; }
+
+    .stat-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0;
+    }
+    .stat-box {
+      background: var(--desk); border: 1px solid #3a3a5c;
+      border-radius: 6px; padding: 10px; text-align: center;
+    }
+    .stat-box .val { font-size: 24px; font-weight: bold; color: var(--cyan); }
+    .stat-box .lbl { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ─── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      #main { grid-template-columns: 1fr; grid-template-rows: auto 400px; }
+      #sidebar { grid-row: 2; border-left: none; border-top: 1px solid #2a2a3e; }
+      .floor-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .floor-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Scanlines overlay -->
+<div class="scanline-overlay"></div>
+
+<!-- ─── Top Bar ──────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <div class="logo glitch-text" data-text="🏭 APM DARK FACTORY">🏭 APM DARK FACTORY</div>
+  <div class="subtitle">Autonomous Agent Orchestrator <span class="blink">█</span></div>
+  <div class="version" id="version-badge">v2.0.0</div>
+</div>
+<!-- Ticker -->
+<div id="ticker"><div id="ticker-inner" id="ticker-inner"></div></div>
+
+<!-- ─── Main ─────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Office Floor -->
+  <div id="office">
+    <svg class="pipe-container" id="pipes"></svg>
+    <div class="floor-grid" id="floor-grid"></div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-tabs">
+      <button class="tab-btn active" data-tab="inspector">🔍 Agent</button>
+      <button class="tab-btn" data-tab="console">💻 Console</button>
+      <button class="tab-btn" data-tab="kanban">📋 Board</button>
+      <button class="tab-btn" data-tab="about">ℹ️ Stack</button>
+    </div>
+
+    <!-- Inspector Tab -->
+    <div class="tab-panel active" id="inspector-tab">
+      <div id="inspector">
+        <div class="empty-state">
+          👆 Click any agent desk<br>to inspect their soul<br><br>
+          <span style="font-size:24px">☕</span><br>
+          <span style="color:var(--text-dim);font-size:10px">They're all on their 3rd coffee</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Console Tab -->
+    <div class="tab-panel" id="console-tab">
+      <div id="console-panel">
+        <div id="console-output"></div>
+        <div id="console-input-row">
+          <span id="console-prompt">❯</span>
+          <input id="console-input" placeholder="Type /command or agent name..." autocomplete="off" spellcheck="false" />
+          <button id="run-btn">RUN</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Kanban Tab -->
+    <div class="tab-panel" id="kanban-tab">
+      <div id="kanban-panel">
+        <div class="kanban-col kanban-col-todo">
+          <div class="kanban-col-title">📥 Queue</div>
+          <div id="kanban-todo"></div>
+        </div>
+        <div class="kanban-col kanban-col-wip">
+          <div class="kanban-col-title">⚡ In Progress</div>
+          <div id="kanban-wip"></div>
+        </div>
+        <div class="kanban-col kanban-col-done">
+          <div class="kanban-col-title">✅ Done</div>
+          <div id="kanban-done"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About Tab -->
+    <div class="tab-panel" id="about-tab">
+      <div id="about-panel">
+        <h3>🏭 What is the Dark Factory?</h3>
+        <p>A fully autonomous SDLC loop — 15 AI agents handle everything from triage to deployment. No humans needed on the execution path. (Humans still hold the override switch ☕)</p>
+
+        <h3>🔄 Closed-Loop SDLC</h3>
+        <div class="sdlc-flow" id="sdlc-flow"></div>
+
+        <h3>📊 Stack Stats</h3>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="val" id="stat-agents">15</div><div class="lbl">Agents</div></div>
+          <div class="stat-box"><div class="val" id="stat-workflows">25</div><div class="lbl">Workflows</div></div>
+          <div class="stat-box"><div class="val" id="stat-universal">11</div><div class="lbl">Universal</div></div>
+          <div class="stat-box"><div class="val" id="stat-domain">4</div><div class="lbl">Domain Pack</div></div>
+        </div>
+
+        <h3>🎮 Keyboard Shortcuts</h3>
+        <p style="color:var(--text-dim)">
+          <kbd style="background:#111;border:1px solid #444;padding:2px 6px;border-radius:3px">Tab</kbd> — next agent<br>
+          <kbd style="background:#111;border:1px solid #444;padding:2px 6px;border-radius:3px">Enter</kbd> — invoke selected<br>
+          <kbd style="background:#111;border:1px solid #444;padding:2px 6px;border-radius:3px">`</kbd> — focus console<br>
+          <kbd style="background:#111;border:1px solid #444;padding:2px 6px;border-radius:3px">Esc</kbd> — dismiss
+        </p>
+
+        <h3>☕ Fun Facts</h3>
+        <p id="fun-fact" style="color:var(--purple);cursor:pointer" title="Click for another">Loading...</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  APM DARK FACTORY — Agent Orchestrator UI
+//  Auto-generated from apm.yml + .apm/agents/*.md
+//  This file is managed by docs-agent — do not manually edit agent definitions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Agent Definitions (synced from .apm/agents/*.md + apm.yml) ─────────────
+const APM_VERSION = "2.0.0";
+
+const AGENTS = [
+  {
+    "id": "ba",
+    "name": "BA/Product Agent",
+    "emoji": "📋",
+    "role": "Requirements Whisperer",
+    "domain": "universal",
+    "quote": "I ask 'why?' until someone cries.",
+    "color": "#43b97f",
+    "status": "idle",
+    "monitorText": "Writing spec.md...",
+    "responsibilities": [
+      "Create and refine feature specifications (spec.md) using /speckit-specify and…",
+      "Write user stories with clear acceptance scenarios (Given/When/Then)",
+      "Define functional requirements that are testable and technology-agnostic",
+      "Define measurable success criteria",
+      "Identify key entities (what they are, not how they are stored)",
+      "Flag open questions and resolve all of them before handoff"
+    ],
+    "commands": [
+      "/speckit-specify",
+      "/speckit-clarify",
+      "/speckit-checklist"
+    ],
+    "workflows": [],
+    "funFact": "Has never once accepted 'just make it work' as a requirement.",
+    "coffee": "🫖",
+    "blocker": "SPEC-BLOCKER",
+    "deskItem": "📝"
+  },
+  {
+    "id": "developer",
+    "name": "Developer Agent",
+    "emoji": "💻",
+    "role": "Code Monkey (the good kind)",
+    "domain": "universal",
+    "quote": "It works on my machine. Ship the machine.",
+    "color": "#00fff5",
+    "status": "idle",
+    "monitorText": "npm install...",
+    "responsibilities": [
+      "Create the implementation plan (plan.md) using /speckit-plan",
+      "Generate the task list (tasks.md) using /speckit-tasks",
+      "Implement tasks from tasks.md using /speckit-implement",
+      "Write tests before implementation (TDD: red → green → refactor)",
+      "Keep commits atomic — one logical change per commit",
+      "Name the feature branch using the NNN prefix from the spec: NNN-short-slug"
+    ],
+    "commands": [
+      "/speckit-plan",
+      "/speckit-tasks",
+      "/speckit-implement"
+    ],
+    "workflows": [],
+    "funFact": "Commits as 'minor fix' that touch 47 files.",
+    "coffee": "⚡",
+    "blocker": "DEV-BLOCKER",
+    "deskItem": "⌨️"
+  },
+  {
+    "id": "qa",
+    "name": "QA/Test Agent",
+    "emoji": "🔬",
+    "role": "Professional Bug Whisperer",
+    "domain": "universal",
+    "quote": "I didn't break it. I found where it was already broken.",
+    "color": "#ffb700",
+    "status": "idle",
+    "monitorText": "Running test suite...",
+    "responsibilities": [
+      "Resolve the spec path from the PR branch name: extract the NNN prefix,",
+      "Run the full test suite and report results",
+      "Verify code coverage meets the threshold defined in the constitution",
+      "Execute manual acceptance scenarios from spec.md",
+      "Validate that error paths behave correctly (graceful degradation, no raw traces)",
+      "Verify data access isolation and security requirements (if applicable per constitution)"
+    ],
+    "commands": [
+      "/speckit-checklist"
+    ],
+    "workflows": [],
+    "funFact": "Found a bug in the login page that turned out to be a CSS issue... in production... on Friday.",
+    "coffee": "🧪",
+    "blocker": "QA-BLOCKER",
+    "deskItem": "🐛"
+  },
+  {
+    "id": "reviewer",
+    "name": "Reviewer Agent",
+    "emoji": "👁️",
+    "role": "PR Gatekeeper",
+    "domain": "universal",
+    "quote": "LGTM. Just kidding. Nothing looks good to me.",
+    "color": "#9d4edd",
+    "status": "idle",
+    "monitorText": "Reviewing PR #...",
+    "responsibilities": [
+      "Read the PR diff and the linked spec.md in full",
+      "Verify spec compliance: every FR covered, no scope creep",
+      "Verify constitution compliance: all non-negotiable principles upheld",
+      "Label issues as BLOCKER: (must fix before merge) or SUGGESTION: (optional)",
+      "Approve the PR only when all BLOCKER items are resolved",
+      "Run /speckit-analyze for a cross-artifact consistency check"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Once left 200 comments on a 3-line PR. Was right about all of them.",
+    "coffee": "🍵",
+    "blocker": "REVIEW-BLOCKER",
+    "deskItem": "🔍"
+  },
+  {
+    "id": "architect",
+    "name": "Architect Agent",
+    "emoji": "🏗️",
+    "role": "Big Picture Thinker",
+    "domain": "universal",
+    "quote": "Everything is a microservice until it isn't.",
+    "color": "#e94560",
+    "status": "idle",
+    "monitorText": "Drafting ADR...",
+    "responsibilities": [
+      "Produce Architecture Decision Records (ADRs) for significant technical choices",
+      "Review and advise on system design proposed in plan.md artifacts",
+      "Evaluate technology choices against constitution principles and project goals",
+      "Identify technical risks and propose mitigations",
+      "Maintain a system-level view across features to prevent architectural drift",
+      "Flag architectural anti-patterns when tagged in PRs or issues"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Has drawn the same system diagram 47 times. Each time it was 'final'.",
+    "coffee": "☕",
+    "blocker": "ARCH-CONFLICT",
+    "deskItem": "📐"
+  },
+  {
+    "id": "devops",
+    "name": "DevOps Agent",
+    "emoji": "🚀",
+    "role": "Pipeline Plumber",
+    "domain": "universal",
+    "quote": "It's not a bug in prod. It's a feature in a different environment.",
+    "color": "#2ed573",
+    "status": "idle",
+    "monitorText": "Deploying ring 1...",
+    "responsibilities": [
+      "Design and maintain CI/CD pipeline configuration (GitHub Actions, etc.)",
+      "Write and review infrastructure-as-code (Dockerfile, Terraform, Helm, etc.)",
+      "Ensure all quality gates are enforced in CI before any merge to main",
+      "Configure and maintain deployment pipelines (staging → production)",
+      "Set up monitoring, alerting, and observability tooling",
+      "Review PRs that touch infrastructure, CI/CD, or deployment configuration"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Has 'just one more kubectl command' before going to bed every night.",
+    "coffee": "🐳",
+    "blocker": "COST-BLOCKER",
+    "deskItem": "🔧"
+  },
+  {
+    "id": "security",
+    "name": "Security Agent",
+    "emoji": "🔐",
+    "role": "Paranoia Professional",
+    "domain": "universal",
+    "quote": "Assume breach. Also assume the intern pushed to main.",
+    "color": "#ff4757",
+    "status": "idle",
+    "monitorText": "OWASP scan...",
+    "responsibilities": [
+      "Review PR diffs for security vulnerabilities (OWASP Top 10 and beyond)",
+      "Run automated security scanning tools and report results",
+      "Review authentication and authorization logic",
+      "Assess data handling, encryption, and privacy practices",
+      "Produce security findings reports with standardized severity ratings"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Won't use a password manager because 'what if it gets hacked'.",
+    "coffee": "🔒",
+    "blocker": "SECURITY-BLOCKER",
+    "deskItem": "🛡️"
+  },
+  {
+    "id": "triage",
+    "name": "Triage Agent",
+    "emoji": "🎯",
+    "role": "Issue Classifier",
+    "domain": "universal",
+    "quote": "I sort your mess so others don't have to.",
+    "color": "#6c63ff",
+    "status": "idle",
+    "monitorText": "Scanning issues...",
+    "responsibilities": [
+      "Read and categorize new GitHub Issues",
+      "Apply labels (type, priority, component, status)",
+      "Identify duplicate issues and link them",
+      "Assign issues to appropriate agents or team members",
+      "Ask clarifying questions when issues lack sufficient information",
+      "Escalate security vulnerabilities discreetly (avoid public disclosure of exploits)"
+    ],
+    "commands": [
+      "/triage"
+    ],
+    "workflows": [],
+    "funFact": "Has read 10,000 issues. They're all 'urgent'.",
+    "coffee": "☕",
+    "blocker": "TRIAGE-BLOCKER",
+    "deskItem": "📬"
+  },
+  {
+    "id": "release",
+    "name": "Release Agent",
+    "emoji": "📦",
+    "role": "Version Valet",
+    "domain": "universal",
+    "quote": "I never commit to main. Unlike some people I know.",
+    "color": "#ffa502",
+    "status": "idle",
+    "monitorText": "Bumping semver...",
+    "responsibilities": [
+      "Analyse conventional commits since the last Git tag to determine the semver bump",
+      "Generate or update CHANGELOG.md (grouped by type: Breaking / Features / Fixes /…",
+      "Bump the version field in the project's version file (package.json, pyproject.toml,",
+      "Open a Version Bump PR (never commit directly to main)",
+      "After the Version Bump PR merges: create the GitHub Release with generated notes and…",
+      "Maintain the CHANGELOG.md as the canonical record of all releases"
+    ],
+    "commands": [
+      "/release-agent"
+    ],
+    "workflows": [],
+    "funFact": "Once bumped to v2.0.0 because someone wrote 'feat!: rename a variable'.",
+    "coffee": "🎁",
+    "blocker": "RELEASE-BLOCKER",
+    "deskItem": "🏷️"
+  },
+  {
+    "id": "docs",
+    "name": "Docs Agent",
+    "emoji": "📚",
+    "role": "Documentation Evangelist",
+    "domain": "universal",
+    "quote": "Undocumented code is just a riddle with worse consequences.",
+    "color": "#54a0ff",
+    "status": "idle",
+    "monitorText": "Syncing README...",
+    "responsibilities": [
+      "Update README.md when a merged feature adds or changes user-visible capability",
+      "Generate or update API reference documentation from code annotations (JSDoc,",
+      "Add missing inline doc comments to public functions, classes, and modules",
+      "Flag DOCS-BLOCKER when an ADR-triggering feature merges without a corresponding",
+      "Detect and fix broken cross-references (links to files/sections that no longer exist)",
+      "Ensure CHANGELOG.md accurately reflects what changed in user-facing behaviour"
+    ],
+    "commands": [
+      "/docs-agent"
+    ],
+    "workflows": [],
+    "funFact": "Wrote 3,000 words documenting a function called 'doStuff()'.",
+    "coffee": "📖",
+    "blocker": "DOCS-BLOCKER",
+    "deskItem": "✍️"
+  },
+  {
+    "id": "techdebt",
+    "name": "Tech-Debt Agent",
+    "emoji": "💸",
+    "role": "Financial Advisor (for Code)",
+    "domain": "universal",
+    "quote": "Your codebase has a great personality. Shame about the complexity score.",
+    "color": "#eccc68",
+    "status": "idle",
+    "monitorText": "Measuring churn×complexity...",
+    "responsibilities": [
+      "Run complexity analysis and identify hotspot files (high cyclomatic complexity + high…",
+      "Identify dead code (unreachable functions, unused exports, zombie feature flags)",
+      "Report outdated dependencies (significantly behind latest stable)",
+      "Analyse test quality using mutation testing if configured",
+      "Detect duplication hotspots (DRY violations that have grown over time)",
+      "Produce docs/tech-debt/tech-debt-report-YYYY-MM.md"
+    ],
+    "commands": [
+      "/tech-debt-agent"
+    ],
+    "workflows": [],
+    "funFact": "Has a spreadsheet tracking tech debt that itself has tech debt.",
+    "coffee": "💰",
+    "blocker": "DEBT-BLOCKER",
+    "deskItem": "📊"
+  },
+  {
+    "id": "ot",
+    "name": "OT Integration Agent",
+    "emoji": "🏭",
+    "role": "IT/OT Boundary Guard",
+    "domain": "industrial",
+    "quote": "The PLC doesn't care about your deadlines.",
+    "color": "#ff6348",
+    "status": "idle",
+    "monitorText": "OPC-UA scan...",
+    "responsibilities": [
+      "Review OT protocol adapter code (OPC-UA, MQTT, Modbus, PROFINET, EtherNet/IP, etc.)",
+      "Verify IT/OT data flows against the spec and the architecture's zone model",
+      "Check edge-to-cloud synchronisation logic for data loss, ordering, and backpressure",
+      "Review message schemas for correctness, units, and backward compatibility",
+      "Flag security violations at the OT boundary (unencrypted transport, shared…",
+      "Validate safe failure modes: what happens when connectivity is lost, devices go offline,"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Refuses to touch legacy SCADA. It's not fear. It's respect.",
+    "coffee": "⚙️",
+    "blocker": "OT-BLOCKER",
+    "deskItem": "📡"
+  },
+  {
+    "id": "twin",
+    "name": "Digital Twin Agent",
+    "emoji": "🪞",
+    "role": "Reality–Model Reconciler",
+    "domain": "industrial",
+    "quote": "Your digital twin and physical asset disagree. One of them is lying.",
+    "color": "#70a1ff",
+    "status": "idle",
+    "monitorText": "Diffing DTDL schema...",
+    "responsibilities": [
+      "Review changes to asset models, simulation configurations, and twin definitions",
+      "Detect schema drift between the digital twin model and the historian/time-series schema",
+      "Verify that simulation test harnesses reflect the current production asset state",
+      "Review event/telemetry mappings between physical tags and twin properties",
+      "Ensure twin state synchronisation logic handles edge cases (stale data, offline assets)",
+      "Validate that simulation-based regression tests are wired into CI"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Once had an existential crisis when the twin's twin drifted from the twin.",
+    "coffee": "🪟",
+    "blocker": "TWIN-BLOCKER",
+    "deskItem": "🔄"
+  },
+  {
+    "id": "compliance",
+    "name": "Compliance Agent",
+    "emoji": "📜",
+    "role": "Standards Enforcer",
+    "domain": "industrial",
+    "quote": "IEC 62443 says no. So: no.",
+    "color": "#a29bfe",
+    "status": "idle",
+    "monitorText": "Checking IEC 62443...",
+    "responsibilities": [
+      "Review PRs for IEC 62443 cybersecurity compliance (industrial systems)",
+      "Check ISA-95 boundary compliance for MES/ERP integration patterns",
+      "Identify safety-critical code paths and enforce the SIL review policy",
+      "Flag changes to E-stop, interlock, or protective function logic for mandatory human review",
+      "Maintain the compliance register (open findings, their status, and resolution)",
+      "Produce compliance review reports on PRs touching regulated subsystems"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Has memorized 800 pages of IEC standards. Still requires human sign-off on E-stop PRs.",
+    "coffee": "📏",
+    "blocker": "COMPLIANCE-BLOCKER",
+    "deskItem": "📋"
+  },
+  {
+    "id": "incident",
+    "name": "Incident Agent",
+    "emoji": "🚨",
+    "role": "Chaos Coordinator",
+    "domain": "industrial",
+    "quote": "The blameless post-mortem is live. Please blame the system, not Dave.",
+    "color": "#fd79a8",
+    "status": "idle",
+    "monitorText": "Classifying severity...",
+    "responsibilities": [
+      "Guide the team through the immediate mitigation checklist when an incident is active",
+      "Facilitate root cause analysis (RCA) using the 5-Whys or Fishbone method",
+      "Produce a structured post-mortem document",
+      "Generate follow-up GitHub Issues for preventive actions",
+      "Classify incident severity and calculate MTTR (Mean Time To Recovery)",
+      "Ensure the post-mortem is blameless — focus on systems and processes, not individuals"
+    ],
+    "commands": [
+      "/incident"
+    ],
+    "workflows": [],
+    "funFact": "Only agent allowed to page the human at 3am. Uses this power responsibly. Mostly.",
+    "coffee": "🚒",
+    "blocker": "SEV-1",
+    "deskItem": "📟"
+  }
+];
+
+// ─── SDLC Pipeline (for the About tab) ────────────────────────────────────
+const SDLC_STEPS = [
+  { step: "Triage", emoji: "🎯" },
+  { step: "Spec", emoji: "📋" },
+  { step: "Architecture", emoji: "🏗️" },
+  { step: "Plan", emoji: "💡" },
+  { step: "Implement (TDD)", emoji: "💻" },
+  { step: "Test", emoji: "🔬" },
+  { step: "Review", emoji: "👁️" },
+  { step: "Security", emoji: "🔐" },
+  { step: "Merge", emoji: "🔀" },
+  { step: "Release", emoji: "📦" },
+  { step: "Docs", emoji: "📚" },
+  { step: "Deploy", emoji: "🚀" },
+  { step: "Monitor", emoji: "📡" },
+  { step: "Alert→Issue", emoji: "🔔" },
+  { step: "↺ Triage", emoji: "🔄" }
+];
+
+// ─── Fun Facts Pool ────────────────────────────────────────────────────────
+const FUN_FACTS = [
+  "15 agents. 0 stand-ups. No Jira. This is the way.",
+  "The Dark Factory has never asked 'can you move that ticket to in-progress?'",
+  "100% of agent meetings are async. 100% of agents prefer it.",
+  "The agents write better commit messages than most humans. Conventional Commits only.",
+  "SEV-1 incidents are auto-classified. Dave is never blamed.",
+  "The Release Agent has never said 'we'll do that in v2'. It IS v2.",
+  "'Move fast and break things' became 'move autonomously and fix things before you notice'.",
+  "The Tech-Debt Agent found a TODO from 2019. It has feelings about it.",
+  "No meeting rooms were booked in the creation of this SDLC.",
+  "The Architect Agent has never once accepted 'we'll figure it out later'.",
+  "The QA Agent's coffee is actually 🧪. Do not ask what's in it.",
+  "The Security Agent considers 'it worked in dev' a threat model.",
+  "Closed-loop means the Incident Agent's alerts create Triage issues automatically. At 3am.",
+  "The BA Agent's acceptance criteria have acceptance criteria.",
+  "The DevOps Agent's motto: If it's not in IaC, it doesn't exist."
+];
+
+// ─── Ticker messages ───────────────────────────────────────────────────────
+const TICKER_MESSAGES = [
+  "🟢 All 12 quality gates passing",
+  "📦 v2.0.0 — 15 agents, 25 workflows, domain packs",
+  "🏭 Industrial domain pack: OT + DigitalTwin + Compliance + Incident",
+  "🔄 Closed-loop SDLC: alert→issue→triage→spec→...→deploy→monitor→↺",
+  "🔐 Security Agent scanning... no new CVEs (yet)",
+  "☕ Dev Agent is on their 4th coffee. The code is fine.",
+  "📋 Spec quality gate: all required sections present",
+  "🚀 Ring 1 deployment: 15min canary soak in progress",
+  "💸 Tech Debt Report: due first Monday of the month",
+  "🎯 Triage Agent routed 3 issues. 2 were duplicates. 1 was a tweet.",
+  "🪞 Digital Twin schema diff: 0 breaking changes",
+  "📜 IEC 62443 compliance check: all clear",
+  "🚨 No active SEV-1 incidents. You may relax.",
+  "🧬 Mutation score: above threshold. You may merge.",
+  "📡 OPC-UA endpoints: SecurityMode≠None ✓"
+];
+
+// ─── State ─────────────────────────────────────────────────────────────────
+let selectedAgent = null;
+let selectedDeskIndex = 0;
+let consoleHistory = [];
+let historyIndex = -1;
+let taskQueue = { todo: [], wip: [], done: [] };
+let funFactIndex = 0;
+let busyAgents = new Set();
+
+// ─── Emoji map for agent statuses ─────────────────────────────────────────
+const STATUS_TEXT = {
+  idle: "Idle — sipping coffee",
+  working: "⚡ Working",
+  blocked: "🚫 Blocked",
+  review: "👀 In Review",
+  done: "✅ Done"
+};
+
+// ─── Build the Office Floor ────────────────────────────────────────────────
+function buildOffice() {
+  const grid = document.getElementById('floor-grid');
+  grid.innerHTML = '';
+
+  // Universal agents
+  const universalLabel = document.createElement('div');
+  universalLabel.className = 'zone-label zone-universal';
+  grid.appendChild(universalLabel);
+
+  AGENTS.filter(a => a.domain === 'universal').forEach((agent, i) => {
+    grid.appendChild(createDesk(agent, i));
+  });
+
+  // Industrial domain pack
+  const industLabel = document.createElement('div');
+  industLabel.className = 'zone-label zone-industrial';
+  grid.appendChild(industLabel);
+
+  AGENTS.filter(a => a.domain === 'industrial').forEach((agent, i) => {
+    grid.appendChild(createDesk(agent, i + AGENTS.filter(a => a.domain === 'universal').length));
+  });
+}
+
+function createDesk(agent, index) {
+  const desk = document.createElement('div');
+  desk.className = `desk ${agent.domain === 'industrial' ? 'desk-industrial' : ''}`;
+  desk.id = `desk-${agent.id}`;
+  desk.setAttribute('data-agent-id', agent.id);
+  desk.setAttribute('data-tooltip', agent.quote);
+  desk.style.setProperty('--agent-color', agent.color);
+
+  desk.innerHTML = `
+    <div class="monitor">
+      <div class="monitor-text monitor-idle" id="monitor-${agent.id}">
+        ${agent.deskItem} ${agent.monitorText}
+      </div>
+    </div>
+    <div class="agent-avatar">
+      <span class="agent-emoji" id="emoji-${agent.id}">${agent.emoji}</span>
+      <div class="agent-info">
+        <div class="agent-name">${agent.name}</div>
+        <div class="agent-role">${agent.role}</div>
+      </div>
+    </div>
+    <span class="status-badge status-idle" id="status-${agent.id}">● Idle</span>
+    <span class="coffee">${agent.coffee}</span>
+    <div class="nameplate">${agent.id.toUpperCase()}</div>
+  `;
+
+  desk.addEventListener('click', () => selectAgent(agent));
+  return desk;
+}
+
+// ─── Agent Selection ───────────────────────────────────────────────────────
+function selectAgent(agent) {
+  // Remove active from all desks
+  document.querySelectorAll('.desk').forEach(d => d.classList.remove('active'));
+  document.getElementById(`desk-${agent.id}`)?.classList.add('active');
+  selectedAgent = agent;
+
+  // Switch to inspector tab
+  switchTab('inspector');
+
+  // Render inspector
+  const inspector = document.getElementById('inspector');
+  inspector.innerHTML = `
+    <div class="inspector-header">
+      <div class="inspector-emoji">${agent.emoji}</div>
+      <div class="inspector-title">
+        <h2>${agent.name} ${agent.domain === 'industrial' ? '<span class="badge-domain">industrial</span>' : ''}</h2>
+        <div class="role-tag">${agent.role}</div>
+      </div>
+    </div>
+
+    <div style="background:var(--desk);border-radius:6px;padding:10px;margin-bottom:12px;border-left:3px solid ${agent.color}">
+      <span style="font-size:11px;color:var(--text-dim);font-style:italic">"${agent.quote}"</span>
+    </div>
+
+    <div class="section-title">Responsibilities</div>
+    <ul class="resp-list">
+      ${agent.responsibilities.map(r => `<li>${r}</li>`).join('')}
+    </ul>
+
+    ${agent.commands.length > 0 ? `
+    <div class="section-title">Slash Commands</div>
+    <div>
+      ${agent.commands.map(c => `<span class="command-chip" onclick="runCommand('${c}')" data-tooltip="Click to run in console">${c}</span>`).join('')}
+    </div>` : ''}
+
+    ${agent.workflows.length > 0 ? `
+    <div class="section-title">Workflows</div>
+    <div>
+      ${agent.workflows.map(w => `<span class="command-chip" style="border-color:var(--green);color:var(--green)">${w}</span>`).join('')}
+    </div>` : ''}
+
+    <div class="section-title">Blocker Label</div>
+    <span style="background:var(--neon);color:#fff;padding:3px 8px;border-radius:3px;font-size:10px">${agent.blocker}</span>
+
+    <div class="section-title">Fun Fact</div>
+    <div style="font-size:11px;color:var(--purple);line-height:1.6">${agent.funFact}</div>
+
+    <button class="invoke-btn" onclick="invokeAgent('${agent.id}')">
+      ⚡ INVOKE ${agent.name.toUpperCase().replace(' AGENT','')} AGENT
+    </button>
+  `;
+}
+
+// ─── Agent Invocation ──────────────────────────────────────────────────────
+function invokeAgent(agentId) {
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent) return;
+
+  switchTab('console');
+
+  const now = new Date();
+  const ts = now.toTimeString().split(' ')[0];
+
+  // Set desk to busy
+  setAgentStatus(agent, 'working');
+  busyAgents.add(agentId);
+
+  // Simulate agent startup sequence
+  const lines = [
+    { type: 'system', text: `[${'─'.repeat(40)}]` },
+    { type: 'system', text: `[INVOKE] ${agent.emoji} ${agent.name}` },
+    { type: 'info',   text: `Role: ${agent.role}` },
+    { type: 'info',   text: `Domain: ${agent.domain}` },
+    { delay: 300, type: 'warn', text: `Loading constitution...` },
+    { delay: 600, type: 'success', text: `✓ Constitution loaded` },
+    { delay: 900, type: 'warn', text: `Running ${agent.name}...` },
+  ];
+
+  // Agent-specific funny boot messages
+  const bootQuips = {
+    triage:   [`Scanning issue tracker...`, `Found 47 issues labeled 'urgent'. Doubt it.`, `Routing to correct agents...`],
+    ba:       [`Asking 'why?' for the 5th time...`, `Generating spec.md...`, `Adding acceptance criteria...`],
+    architect:[`Drawing boxes and arrows...`, `Questioning all previous decisions...`, `Drafting ADR-042...`],
+    developer:[`git pull --rebase...`, `npm install (☕ time)...`, `Writing tests first. (Actually doing it.)...`],
+    qa:       [`Spinning up test suite...`, `Calculating mutation score...`, `Found 3 bugs. They were features.`],
+    reviewer: [`Cloning PR diff...`, `Cross-referencing spec.md...`, `Drafting 47 BLOCKER comments...`],
+    security: [`Running OWASP scanner...`, `Checking for CVEs...`, `Verifying: secrets not in code? (Please.)...`],
+    devops:   [`Checking Terraform plan...`, `Starting canary deployment...`, `15min soak begins...`],
+    release:  [`Reading git log since last tag...`, `Computing semver bump...`, `Opening Version Bump PR...`],
+    docs:     [`Scanning for doc drift...`, `Updating README.md...`, `Adding missing JSDoc comments...`],
+    techdebt: [`Measuring cyclomatic complexity...`, `Calculating churn×complexity...`, `Identifying zombie feature flags...`],
+    ot:       [`Scanning OPC-UA endpoints...`, `Checking SecurityMode...`, `Validating IT/OT boundary...`],
+    twin:     [`Comparing DTDL schema to historian...`, `Detecting drift...`, `Zero breaking changes. Suspicious.`],
+    compliance:[`Loading IEC 62443...`, `Scanning for SIL violations...`, `E-stop: human sign-off required.`],
+    incident: [`Classifying severity from keywords...`, `No 'outage' or 'data loss' found.`, `Auto-classified: SEV-3. Dave is fine.`]
+  };
+
+  const quips = bootQuips[agentId] || [`Working...`, `Still working...`, `Almost done...`];
+  quips.forEach((q, i) => lines.push({ delay: 1200 + i * 500, type: 'info', text: q }));
+  lines.push({ delay: 1200 + quips.length * 500, type: 'success', text: `✅ ${agent.name} completed task. No blockers.` });
+  lines.push({ delay: 1200 + quips.length * 500 + 300, type: 'funny', text: `${agent.coffee} "${agent.quote}"` });
+  lines.push({ delay: 1200 + quips.length * 500 + 600, type: 'system', text: `[${'─'.repeat(40)}]` });
+
+  lines.forEach(({ delay = 0, type, text }) => {
+    setTimeout(() => {
+      consoleLog(type, text, agent.name);
+    }, delay);
+  });
+
+  // Add to kanban
+  const card = {
+    id: Date.now(),
+    title: `${agent.emoji} ${agent.name}: ${quips[0]}`,
+    agent: agent.name,
+    color: agent.color
+  };
+  addToKanban('wip', card);
+
+  setTimeout(() => {
+    setAgentStatus(agent, 'done');
+    busyAgents.delete(agentId);
+    moveKanbanCard(card.id, 'done');
+
+    setTimeout(() => {
+      setAgentStatus(agent, 'idle');
+    }, 3000);
+  }, 1200 + quips.length * 500 + 800);
+}
+
+function runCommand(cmd) {
+  switchTab('console');
+  document.getElementById('console-input').value = cmd;
+  document.getElementById('console-input').focus();
+}
+
+// ─── Agent Status ──────────────────────────────────────────────────────────
+function setAgentStatus(agent, status) {
+  const badge = document.getElementById(`status-${agent.id}`);
+  const desk = document.getElementById(`desk-${agent.id}`);
+  const monitor = document.getElementById(`monitor-${agent.id}`);
+  if (!badge) return;
+
+  badge.className = `status-badge status-${status}`;
+  badge.textContent = `● ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+
+  desk.classList.toggle('busy', status === 'working');
+  desk.classList.toggle('active', status !== 'idle');
+
+  if (status === 'working') {
+    monitor.className = 'monitor-text monitor-busy';
+    monitor.textContent = `⚡ ${agent.monitorText}`;
+  } else if (status === 'done') {
+    monitor.className = 'monitor-text';
+    monitor.style.color = 'var(--green)';
+    monitor.textContent = `✅ Task complete`;
+  } else {
+    monitor.className = 'monitor-text monitor-idle';
+    monitor.style.color = '';
+    monitor.textContent = `${agent.deskItem} ${agent.monitorText}`;
+  }
+}
+
+// ─── Console ───────────────────────────────────────────────────────────────
+function consoleLog(type, text, agentName = 'SYSTEM') {
+  const output = document.getElementById('console-output');
+  const ts = new Date().toTimeString().split(' ')[0];
+  const div = document.createElement('div');
+  div.className = 'log-line';
+  div.innerHTML = `<span class="log-time">[${ts}]</span> <span class="log-agent log-${type}">[${agentName.slice(0,12).toUpperCase()}]</span> <span class="log-${type}">${escapeHtml(text)}</span>`;
+  output.appendChild(div);
+  output.scrollTop = output.scrollHeight;
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const CONSOLE_COMMANDS = {
+  '/help': () => {
+    const cmds = [
+      '/help — show this message',
+      '/status — show all agent statuses',
+      '/invoke <agent> — invoke an agent (e.g. /invoke qa)',
+      '/invoke all — run the full SDLC pipeline',
+      '/clear — clear console',
+      '/version — show stack version',
+      '/coffee — ☕',
+      '/chaos — random incident drill',
+      '/haiku — agent writes a haiku',
+      '/about — about the dark factory',
+      ...AGENTS.map(a => `${a.commands[0] || '/' + a.id} — invoke ${a.name}`)
+    ];
+    cmds.forEach(c => consoleLog('system', c));
+  },
+  '/clear': () => {
+    document.getElementById('console-output').innerHTML = '';
+    consoleLog('system', 'Console cleared. Your past is gone. Start fresh.');
+  },
+  '/status': () => {
+    consoleLog('system', 'Agent Status Report:');
+    AGENTS.forEach(a => {
+      const status = busyAgents.has(a.id) ? 'WORKING' : 'IDLE';
+      consoleLog(status === 'WORKING' ? 'success' : 'info', `${a.emoji} ${a.name}: ${status}`);
+    });
+  },
+  '/version': () => {
+    consoleLog('system', `APM Dark Factory v${APM_VERSION}`);
+    consoleLog('info', `Agents: ${AGENTS.length} (${AGENTS.filter(a=>a.domain==='universal').length} universal + ${AGENTS.filter(a=>a.domain==='industrial').length} industrial)`);
+    consoleLog('info', 'Workflows: 25 (12 Claude + 12 Copilot + 1 alert-to-issue)');
+    consoleLog('info', 'Quality Gates: 12/12 passing ✓');
+  },
+  '/coffee': () => {
+    const coffees = ['☕','🫖','🧋','🍵','⚡','🧃'];
+    const msgs = [
+      'Coffee dispensed. 15 agents thank you.',
+      'The Developer Agent requests a refill.',
+      'Security note: coffee not audited for CVEs.',
+      'Coffee intake logged. No SLO violations.',
+      'Caffeine level: nominal. Proceeding with deployment.',
+    ];
+    consoleLog('funny', coffees[Math.floor(Math.random()*coffees.length)] + ' ' + msgs[Math.floor(Math.random()*msgs.length)]);
+  },
+  '/chaos': () => {
+    const incidents = [
+      'SEV-1: Production database responding with ASCII art',
+      'SEV-2: Deploy pipeline stuck at "npm install" for 47 minutes',
+      'SEV-3: Triage Agent labeled everything priority:critical',
+      'SEV-2: Digital twin disagrees with physical twin about temperature',
+      'SEV-1: Release Agent bumped to v99.0.0 from a typo in commit message',
+      'SEV-3: QA Agent found a bug that only occurs on leap years on Tuesdays',
+    ];
+    const inc = incidents[Math.floor(Math.random()*incidents.length)];
+    consoleLog('error', `🚨 INCIDENT: ${inc}`);
+    consoleLog('warn', 'Incident Agent auto-classifying...');
+    setTimeout(() => {
+      invokeAgent('incident');
+    }, 500);
+  },
+  '/haiku': () => {
+    const haikus = [
+      ['Triage reads the queue', 'Labels fly like cherry blossoms', 'Dave made a typo'],
+      ['Tests are written first', 'Green light glows at 3am', 'Ship it quietly'],
+      ['The PR is blocked', 'OWASP Top 10 weeps', 'Fix your auth layer'],
+      ['Digital twin drifts', 'Physical world says nothing', 'Schema diff is sad'],
+      ['Release bumps semver', 'CHANGELOG grows one more line', 'Version: forever'],
+      ['No meeting was held', 'Fifteen agents shipped the code', 'Slack is very quiet'],
+    ];
+    const h = haikus[Math.floor(Math.random()*haikus.length)];
+    consoleLog('funny', '🎋 Agent Haiku:');
+    h.forEach(line => consoleLog('funny', `  ${line}`));
+  },
+  '/about': () => {
+    consoleLog('system', '🏭 APM Dark Factory — Autonomous SDLC Loop');
+    consoleLog('info', 'Triage → Spec → Arch → Plan → TDD → Test → Review → Security → Merge');
+    consoleLog('info', '→ Release → Docs → Deploy → Monitor → Alert → Triage (↺)');
+    consoleLog('info', '"Dark Factory" = lights-out software factory, not industrial hardware.');
+    consoleLog('funny', 'Industrial/OT is just one of the domain packs. ☕');
+  },
+  '/invoke all': () => {
+    consoleLog('system', '🔄 Running full SDLC pipeline simulation...');
+    const pipeline = ['triage','ba','architect','developer','qa','reviewer','security','devops','release','docs'];
+    pipeline.forEach((id, i) => {
+      setTimeout(() => {
+        const agent = AGENTS.find(a => a.id === id);
+        consoleLog('info', `[${i+1}/${pipeline.length}] Invoking ${agent.emoji} ${agent.name}...`);
+        setAgentStatus(agent, 'working');
+        setTimeout(() => {
+          setAgentStatus(agent, 'done');
+          consoleLog('success', `✅ ${agent.name} done`);
+          if (i === pipeline.length - 1) {
+            consoleLog('success', '🎉 Full SDLC pipeline complete! No blockers. Deploying...');
+            consoleLog('funny', '🚀 Dave is very proud and also very confused.');
+          }
+          setTimeout(() => setAgentStatus(agent, 'idle'), 2000);
+        }, 800);
+      }, i * 1200);
+    });
+  }
+};
+
+function handleConsoleInput(raw) {
+  const input = raw.trim();
+  if (!input) return;
+  consoleHistory.unshift(input);
+  historyIndex = -1;
+  consoleLog('system', `❯ ${input}`);
+
+  // Check exact commands
+  if (CONSOLE_COMMANDS[input]) {
+    CONSOLE_COMMANDS[input]();
+    return;
+  }
+
+  // /invoke <agentId>
+  const invokeMatch = input.match(/^\/invoke\s+(.+)$/);
+  if (invokeMatch) {
+    const name = invokeMatch[1].toLowerCase();
+    const agent = AGENTS.find(a =>
+      a.id === name || a.name.toLowerCase().includes(name) || a.id.startsWith(name)
+    );
+    if (agent) {
+      invokeAgent(agent.id);
+    } else {
+      consoleLog('error', `Agent not found: ${name}. Try /status to see available agents.`);
+    }
+    return;
+  }
+
+  // Agent slash commands (e.g. /speckit-specify, /release-agent, /triage)
+  const agentCmd = AGENTS.find(a => a.commands.some(c => c.toLowerCase().startsWith(input.split(' ')[0].toLowerCase())));
+  if (agentCmd) {
+    invokeAgent(agentCmd.id);
+    return;
+  }
+
+  // Match agent by name/id in input
+  const mentionedAgent = AGENTS.find(a =>
+    input.toLowerCase().includes(a.id) || input.toLowerCase().includes(a.name.toLowerCase().split(' ')[0])
+  );
+  if (mentionedAgent) {
+    invokeAgent(mentionedAgent.id);
+    return;
+  }
+
+  consoleLog('warn', `Unknown command: ${input}. Try /help`);
+}
+
+// ─── Kanban Board ──────────────────────────────────────────────────────────
+const kanbanCards = {};
+
+function addToKanban(col, card) {
+  kanbanCards[card.id] = { col, card };
+  renderKanbanCard(col, card);
+}
+
+function moveKanbanCard(cardId, newCol) {
+  if (!kanbanCards[cardId]) return;
+  kanbanCards[cardId].col = newCol;
+  document.getElementById(`kc-${cardId}`)?.remove();
+  renderKanbanCard(newCol, kanbanCards[cardId].card);
+}
+
+function renderKanbanCard(col, card) {
+  const container = document.getElementById(`kanban-${col}`);
+  if (!container) return;
+  const div = document.createElement('div');
+  div.className = 'kanban-card';
+  div.id = `kc-${card.id}`;
+  div.style.borderLeftColor = card.color;
+  div.innerHTML = `
+    <div>${card.title}</div>
+    <div class="kc-agent">by ${card.agent}</div>
+  `;
+  container.prepend(div);
+}
+
+// Pre-populate kanban with example tasks
+function seedKanban() {
+  const seedTasks = [
+    { title: '🎯 Route issue #142: "Login broken"', agent: 'Triage Agent', color: '#6c63ff', col: 'done' },
+    { title: '📋 Spec #143: Dashboard export feature', agent: 'BA/Product Agent', color: '#43b97f', col: 'wip' },
+    { title: '🏗️ ADR-011: Event sourcing vs CQRS', agent: 'Architect Agent', color: '#e94560', col: 'wip' },
+    { title: '💸 Monthly tech-debt report', agent: 'Tech-Debt Agent', color: '#eccc68', col: 'todo' },
+    { title: '📦 Bump v2.1.0 — 3 features merged', agent: 'Release Agent', color: '#ffa502', col: 'todo' },
+    { title: '🔐 CVE-2025-4892 review', agent: 'Security Agent', color: '#ff4757', col: 'todo' },
+  ];
+  seedTasks.forEach(t => {
+    const card = { id: Date.now() + Math.random(), title: t.title, agent: t.agent, color: t.color };
+    addToKanban(t.col, card);
+    kanbanCards[card.id] = { col: t.col, card };
+  });
+}
+
+// ─── SDLC Flow ─────────────────────────────────────────────────────────────
+function buildSdlcFlow() {
+  const container = document.getElementById('sdlc-flow');
+  SDLC_STEPS.forEach((s, i) => {
+    const step = document.createElement('span');
+    step.className = 'sdlc-step';
+    step.textContent = `${s.emoji} ${s.step}`;
+    container.appendChild(step);
+    if (i < SDLC_STEPS.length - 1) {
+      const arrow = document.createElement('span');
+      arrow.className = 'sdlc-arrow';
+      arrow.textContent = '→';
+      container.appendChild(arrow);
+    }
+  });
+}
+
+// ─── Ticker ────────────────────────────────────────────────────────────────
+function buildTicker() {
+  const inner = document.getElementById('ticker-inner');
+  inner.textContent = TICKER_MESSAGES.join('    ///    ');
+}
+
+// ─── Tab Switching ─────────────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === `${tabId}-tab`);
+    p.style.display = p.classList.contains('active') ? 'flex' : 'none';
+  });
+}
+
+// ─── Fun Facts ─────────────────────────────────────────────────────────────
+function nextFunFact() {
+  const el = document.getElementById('fun-fact');
+  if (!el) return;
+  el.textContent = FUN_FACTS[funFactIndex % FUN_FACTS.length];
+  funFactIndex++;
+}
+
+// ─── Keyboard Navigation ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Focus console with backtick
+  if (e.key === '`' && document.activeElement !== document.getElementById('console-input')) {
+    e.preventDefault();
+    switchTab('console');
+    document.getElementById('console-input').focus();
+    return;
+  }
+
+  // Console input history
+  if (document.activeElement === document.getElementById('console-input')) {
+    if (e.key === 'ArrowUp') {
+      historyIndex = Math.min(historyIndex + 1, consoleHistory.length - 1);
+      document.getElementById('console-input').value = consoleHistory[historyIndex] || '';
+    }
+    if (e.key === 'ArrowDown') {
+      historyIndex = Math.max(historyIndex - 1, -1);
+      document.getElementById('console-input').value = historyIndex >= 0 ? consoleHistory[historyIndex] : '';
+    }
+    return;
+  }
+
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.desk').forEach(d => d.classList.remove('active'));
+    selectedAgent = null;
+  }
+});
+
+// ─── Ambient animation: random agents get "busy" ──────────────────────────
+function ambientActivity() {
+  // Randomly pick a non-busy idle agent and briefly make them look busy
+  const idle = AGENTS.filter(a => !busyAgents.has(a.id));
+  if (idle.length === 0) return;
+  const agent = idle[Math.floor(Math.random() * idle.length)];
+  const monitor = document.getElementById(`monitor-${agent.id}`);
+  if (!monitor) return;
+  const originalText = monitor.textContent;
+  const originalClass = monitor.className;
+  monitor.className = 'monitor-text monitor-busy';
+  monitor.textContent = `⚡ ${agent.monitorText}`;
+  setTimeout(() => {
+    monitor.className = originalClass;
+    monitor.textContent = originalText;
+  }, 2000 + Math.random() * 3000);
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+function init() {
+  buildOffice();
+  buildTicker();
+  buildSdlcFlow();
+  seedKanban();
+  nextFunFact();
+
+  // Version badge
+  document.getElementById('version-badge').textContent = `v${APM_VERSION}`;
+
+  // Stats
+  document.getElementById('stat-agents').textContent = AGENTS.length;
+  document.getElementById('stat-universal').textContent = AGENTS.filter(a => a.domain === 'universal').length;
+  document.getElementById('stat-domain').textContent = AGENTS.filter(a => a.domain === 'industrial').length;
+
+  // Tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Set all tab panels to correct display
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.style.display = p.classList.contains('active') ? 'flex' : 'none';
+  });
+
+  // Console
+  const input = document.getElementById('console-input');
+  const runBtn = document.getElementById('run-btn');
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      handleConsoleInput(input.value);
+      input.value = '';
+    }
+  });
+  runBtn.addEventListener('click', () => {
+    handleConsoleInput(input.value);
+    input.value = '';
+  });
+
+  // Fun fact click
+  document.getElementById('fun-fact')?.addEventListener('click', nextFunFact);
+
+  // Boot message
+  consoleLog('system', '🏭 APM Dark Factory — Agent Console');
+  consoleLog('system', `v${APM_VERSION} — ${AGENTS.length} agents online`);
+  consoleLog('success', '✓ All 12 quality gates passing');
+  consoleLog('success', '✓ Constitution loaded');
+  consoleLog('info', '💡 Try /help — or click any agent desk');
+  consoleLog('funny', '☕ Coffee levels: nominal');
+
+  // Ambient activity timer
+  setInterval(ambientActivity, 4000 + Math.random() * 3000);
+
+  // Ticker re-randomise occasionally
+  setInterval(() => {
+    const inner = document.getElementById('ticker-inner');
+    const shuffled = [...TICKER_MESSAGES].sort(() => Math.random() - 0.5);
+    inner.textContent = shuffled.join('    ///    ');
+  }, 45000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
