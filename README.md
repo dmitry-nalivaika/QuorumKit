@@ -303,6 +303,27 @@ dependencies:
 apm install
 ```
 
+## Orchestrator Dashboard
+
+The **Orchestrator** turns the 15 agents from static definitions into a live, interactive
+control centre — a browser-based dashboard with real agent invocation, live log streaming,
+a Kanban board, and native terminal integration.
+
+```zsh
+# Start the orchestrator (from this repo root):
+bash dashboard/start.sh
+# → opens http://localhost:3131
+```
+
+1. Click **⚙** → enter your project's local path + GitHub URL + AI tool (Claude Code / Copilot / custom)
+2. Click **▶ Invoke** on any agent card to run it in the background
+3. Click **⬜ Terminal** to open an interactive native terminal for that agent
+4. Watch the **📋 Board** tab update in real time as agents move through Queue → In Progress → Done
+
+**Full guide:** [ORCHESTRATOR.md](ORCHESTRATOR.md) — architecture, all API endpoints,
+configuration reference, keyboard shortcuts, and a complete worked example (Todo API,
+zero to deployed).
+
 ## Brownfield Adoption
 
 Adding APM to an existing project? The `init.sh` script is safe to run on any repo — it never overwrites existing files. See **[BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md)** for:

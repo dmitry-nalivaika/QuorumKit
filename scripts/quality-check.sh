@@ -284,6 +284,16 @@ if [ -f ".github/workflows/update-dashboard.yml" ]; then
 else
   fail "Missing .github/workflows/update-dashboard.yml"
 fi
+if [ -f "dashboard/server.js" ]; then
+  ok "dashboard/server.js present"
+else
+  fail "Missing dashboard/server.js — orchestrator backend missing"
+fi
+if [ -f "ORCHESTRATOR.md" ]; then
+  ok "ORCHESTRATOR.md present"
+else
+  fail "Missing ORCHESTRATOR.md"
+fi
 
 # =============================================================================
 echo ""
