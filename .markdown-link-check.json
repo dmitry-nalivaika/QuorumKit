@@ -1,0 +1,11 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^https://www\\.npmjs\\.com" },
+    { "pattern": "node_modules" },
+    { "pattern": "^#conflict-existing-" }
+  ],
+  "aliveStatusCodes": [200, 206, 301, 302, 403],
+  "retryOn429": true,
+  "retryCount": 2,
+  "fallbackRetryDelay": "500ms"
+}

@@ -1,0 +1,9 @@
+{
+  "activeSpec": "specs/002-autonomous-agent-orchestration",
+  "issue": 2,
+  "slug": "002-autonomous-agent-orchestration",
+  "specFile": "specs/002-autonomous-agent-orchestration/spec.md",
+  "status": "ready-for-dev",
+  "openQuestions": 0,
+  "updatedAt": "2026-05-04"
+}
