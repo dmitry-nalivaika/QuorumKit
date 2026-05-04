@@ -29,6 +29,56 @@ const PORT = parseInt(args[args.indexOf('--port') + 1] || process.env.APM_PORT |
 const DASHBOARD_DIR = __dirname;
 const CONFIG_FILE   = path.join(DASHBOARD_DIR, '.apm-project.json');
 
+// ─── Shell PATH enrichment ────────────────────────────────────────────────────
+// When Node is launched by a script (not a login shell), $PATH is minimal.
+// Resolve the user's real interactive-shell PATH once at startup so spawned
+// processes can find claude, code, etc.
+let SHELL_PATH = process.env.PATH || '';
+try {
+  const shell = process.env.SHELL || '/bin/zsh';
+  const result = require('child_process').spawnSync(shell, ['-ilc', 'echo $PATH'], {
+    encoding: 'utf8', timeout: 3000, env: process.env,
+  });
+  if (result.stdout) {
+    // spawnSync with -i may emit PS1/banner lines; grab the last non-empty line
+    const lines = result.stdout.trim().split('\n').filter(Boolean);
+    const pathLine = lines[lines.length - 1];
+    if (pathLine && pathLine.includes('/')) SHELL_PATH = pathLine;
+  }
+} catch { /* keep existing PATH */ }
+
+// Common macOS tool locations to append if not already present
+const EXTRA_PATHS = [
+  '/usr/local/bin',
+  '/opt/homebrew/bin',
+  '/opt/homebrew/sbin',
+  path.join(os.homedir(), '.npm-global', 'bin'),
+  path.join(os.homedir(), '.local', 'bin'),
+  // VS Code CLI shim
+  '/Applications/Visual Studio Code.app/Contents/Resources/app/bin',
+  path.join(os.homedir(), 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin'),
+  // Claude Code common install paths
+  path.join(os.homedir(), '.claude', 'local'),
+  path.join(os.homedir(), '.npm', 'bin'),
+];
+const pathParts = new Set(SHELL_PATH.split(':').filter(Boolean));
+EXTRA_PATHS.forEach(p => pathParts.add(p));
+SHELL_PATH = [...pathParts].join(':');
+
+/** Resolve the absolute path of a CLI binary, checking known locations */
+function resolveBin(name) {
+  for (const dir of pathParts) {
+    const full = path.join(dir, name);
+    try { fs.accessSync(full, fs.constants.X_OK); return full; } catch { /* try next */ }
+  }
+  return name; // fallback — let the shell resolve it
+}
+
+/** Enriched env for all spawned processes */
+function spawnEnv() {
+  return { ...process.env, PATH: SHELL_PATH, FORCE_COLOR: '0' };
+}
+
 // ─── In-memory state ─────────────────────────────────────────────────────────
 /** @type {Map<string, {pid:number, proc:import('child_process').ChildProcess, agent:string, startedAt:number, status:'running'|'done'|'error', log:string[]}>} */
 const running = new Map(); // agentId → process info
@@ -124,12 +174,12 @@ end tell'`;
 /**
  * Build the AI agent invocation command string.
  * agentId is the APM short id; localPath is the project root.
+ *
+ * For `copilot` mode this returns a special sentinel object instead of a
+ * shell string, because VS Code must be opened via `open`/AppleScript, not
+ * spawned as a child process.
  */
 function buildAgentCmd(agentId, cfg, agentName) {
-  const skillPath = path.join(
-    DASHBOARD_DIR, '..', '.apm', 'skills',
-    agentId + '-agent', 'SKILL.md'
-  );
   // Normalise some IDs to skill folder names
   const idToSkill = {
     ba: 'ba', developer: 'dev', qa: 'qa', reviewer: 'reviewer',
@@ -141,39 +191,44 @@ function buildAgentCmd(agentId, cfg, agentName) {
   const skill = idToSkill[agentId] || agentId;
   const skillFile = path.join(DASHBOARD_DIR, '..', '.apm', 'skills', `${skill}-agent`, 'SKILL.md');
   const agentFile = path.join(DASHBOARD_DIR, '..', '.apm', 'agents',
-    skill === 'ba'         ? 'ba-product-agent.md'      :
-    skill === 'dev'        ? 'developer-agent.md'       :
-    skill === 'qa'         ? 'qa-test-agent.md'         :
-    skill === 'tech-debt'  ? 'tech-debt-agent.md'       :
-    skill === 'ot-integration'  ? 'ot-integration-agent.md'  :
-    skill === 'digital-twin'    ? 'digital-twin-agent.md'    :
-                             `${skill}-agent.md`
+    skill === 'ba'              ? 'ba-product-agent.md'       :
+    skill === 'dev'             ? 'developer-agent.md'        :
+    skill === 'qa'              ? 'qa-test-agent.md'          :
+    skill === 'tech-debt'       ? 'tech-debt-agent.md'        :
+    skill === 'ot-integration'  ? 'ot-integration-agent.md'   :
+    skill === 'digital-twin'    ? 'digital-twin-agent.md'     :
+                                  `${skill}-agent.md`
   );
 
   const workDir = cfg.localPath || '.';
+  const qWork   = workDir.replace(/"/g, '\\"');
+  const qSkill  = skillFile.replace(/"/g, '\\"');
 
   switch (cfg.aiTool) {
-    case 'claude':
-      // Claude Code: load the skill as a system prompt file
+    case 'claude': {
+      // Resolve the claude binary through the enriched PATH
+      const claudeBin = resolveBin('claude');
       return fs.existsSync(skillFile)
-        ? `claude --system-prompt "${skillFile.replace(/"/g,'\\"')}" --cwd "${workDir.replace(/"/g,'\\"')}"`
-        : `claude --cwd "${workDir.replace(/"/g,'\\"')}"`;
+        ? `"${claudeBin}" --system-prompt "${qSkill}" --cwd "${qWork}"`
+        : `"${claudeBin}" --cwd "${qWork}"`;
+    }
 
     case 'copilot':
-      // VS Code with Copilot — open the project folder (best we can do without deep extension API)
-      return `code "${workDir.replace(/"/g,'\\"')}"`;
+      // VS Code cannot be meaningfully spawned as a background process.
+      // Return a sentinel — the caller will handle it specially.
+      return { __copilot: true, workDir, skillFile, agentFile, agentName };
 
     case 'custom':
-      return cfg.customCmd
+      return (cfg.customCmd || 'bash')
         .replace('{agent}', agentId)
         .replace('{agentName}', agentName)
         .replace('{skill}', skillFile)
         .replace('{cwd}', workDir);
 
     default:
-      // Fallback: drop into a shell at the project root with the agent definition printed
+      // Shell mode: print the agent definition then drop into an interactive shell
       return fs.existsSync(agentFile)
-        ? `cat "${agentFile.replace(/"/g,'\\"')}" && echo "" && echo "═══ Agent console ready — type your instructions ═══" && bash`
+        ? `cat "${agentFile.replace(/"/g,'\\"')}" && printf '\\n═══ Agent console ready — type your instructions ═══\\n' && bash`
         : `echo "Agent: ${agentName}" && bash`;
   }
 }
@@ -265,11 +320,19 @@ async function handleRequest(req, res) {
     const { agentId, agentName } = body;
     if (!agentId) { json(res, 400, { error: 'agentId required' }); return; }
 
-    const cfg    = loadConfig();
-    const cmd    = buildAgentCmd(agentId, cfg, agentName || agentId);
-    const termCmd = buildTerminalCmd(cfg.terminalApp, cfg.localPath || os.homedir(), cmd, `APM — ${agentName}`);
+    const cfg = loadConfig();
+    const cmd = buildAgentCmd(agentId, cfg, agentName || agentId);
 
-    exec(termCmd, (err) => {
+    // Copilot mode: write context file + open VS Code (no terminal needed)
+    if (cmd && typeof cmd === 'object' && cmd.__copilot) {
+      broadcast('log', { agentId, level: 'info', msg: `Opening VS Code for ${agentName}…` });
+      broadcast('agentStatus', { agentId, status: 'running' });
+      await handleCopilotInvoke(agentId, agentName || agentId, cmd);
+      json(res, 200, { ok: true, mode: 'copilot' }); return;
+    }
+
+    const termCmd = buildTerminalCmd(cfg.terminalApp, cfg.localPath || os.homedir(), cmd, `APM — ${agentName}`);
+    exec(termCmd, { env: spawnEnv() }, (err) => {
       if (err) {
         broadcast('log', { agentId, level: 'error', msg: `Failed to open terminal: ${err.message}` });
       } else {
@@ -304,6 +367,83 @@ async function handleRequest(req, res) {
   res.writeHead(404); res.end('Not found');
 }
 
+// ─── Copilot invoke (open VS Code + write context file) ──────────────────────
+/**
+ * For GitHub Copilot, we can't pipe output from VS Code.
+ * Instead we:
+ *  1. Write a temporary .copilot-agent-context.md into the project root
+ *     containing the agent's SKILL.md + a ready-to-paste Copilot Chat prompt
+ *  2. Open VS Code at the project folder (via `open -a` or the `code` shim)
+ *  3. Broadcast instructions to the console telling the user what to do next
+ */
+async function handleCopilotInvoke(agentId, agentName, sentinel) {
+  const { workDir, skillFile, agentFile } = sentinel;
+
+  // Build context content
+  const skill   = fs.existsSync(skillFile)   ? fs.readFileSync(skillFile, 'utf8')   : '';
+  const agentDef = fs.existsSync(agentFile)  ? fs.readFileSync(agentFile, 'utf8')  : '';
+  const contextPath = path.join(workDir, '.copilot-agent-context.md');
+
+  const contextContent = [
+    `# APM Agent Context — ${agentName}`,
+    `> Auto-generated by APM Orchestrator. Paste the prompt below into Copilot Chat.`,
+    '',
+    `## Copilot Chat prompt`,
+    '```',
+    `@workspace You are acting as the ${agentName}. Follow the role definition below exactly.`,
+    ``,
+    skill || agentDef || `Agent: ${agentName}`,
+    '```',
+    '',
+    '---',
+    '## Full Agent Definition',
+    agentDef || '_agent file not found_',
+    '',
+    '## Skill / Instruction',
+    skill || '_skill file not found_',
+  ].join('\n');
+
+  try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }
+
+  // Try to find `code` binary
+  const codeBin = resolveBin('code');
+  const canUseCode = codeBin !== 'code' || process.env.PATH?.includes('Visual Studio Code');
+
+  // Open VS Code — try the binary first, fall back to `open -a`
+  let opened = false;
+  if (canUseCode) {
+    try {
+      require('child_process').spawnSync(codeBin, [workDir], {
+        detached: true, stdio: 'ignore', env: spawnEnv(),
+      });
+      opened = true;
+    } catch { /* fall through */ }
+  }
+  if (!opened) {
+    try {
+      require('child_process').spawnSync('open', ['-a', 'Visual Studio Code', workDir], {
+        detached: true, stdio: 'ignore',
+      });
+      opened = true;
+    } catch { /* fall through */ }
+  }
+
+  // Broadcast instructions to the console
+  const rel = path.relative(workDir, contextPath);
+  broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
+  broadcast('log', { agentId, level: 'success', msg: opened ? '✓ VS Code opened' : '⚠ Could not auto-open VS Code — open it manually' });
+  broadcast('log', { agentId, level: 'info',    msg: `Context file written: ${rel}` });
+  broadcast('log', { agentId, level: 'system',  msg: '─'.repeat(52) });
+  broadcast('log', { agentId, level: 'info',    msg: '1. Open Copilot Chat in VS Code  (⌃⌘I  or  View → Copilot Chat)' });
+  broadcast('log', { agentId, level: 'info',    msg: `2. Open the file: ${rel}` });
+  broadcast('log', { agentId, level: 'info',    msg: '3. Copy the prompt block and paste it into Copilot Chat' });
+  broadcast('log', { agentId, level: 'info',    msg: '4. Continue the conversation — Copilot will act as the agent' });
+  broadcast('log', { agentId, level: 'system',  msg: '─'.repeat(52) });
+  broadcast('agentStatus', { agentId, status: 'done' });
+  broadcast('kanban', { action: 'add', col: 'done',
+    card: { id: ++seq, agentId, title: `${agentName}: context ready`, agent: agentName } });
+}
+
 // ─── Agent invocation ─────────────────────────────────────────────────────────
 async function invokeAgent(agentId, agentName, cfg, mode) {
   // If already running, return current status
@@ -317,15 +457,23 @@ async function invokeAgent(agentId, agentName, cfg, mode) {
   }
 
   const cmd = buildAgentCmd(agentId, cfg, agentName);
+
+  // ── Copilot: no background process — open VS Code + write context file ──
+  if (cmd && typeof cmd === 'object' && cmd.__copilot) {
+    broadcast('agentStatus', { agentId, status: 'running' });
+    await handleCopilotInvoke(agentId, agentName, cmd);
+    return { ok: true, agentId, mode: 'copilot' };
+  }
+
   broadcast('log', { agentId, level: 'system', msg: `▶ INVOKE  ${agentName}` });
   broadcast('log', { agentId, level: 'info',   msg: `$ ${cmd.slice(0, 80)}${cmd.length > 80 ? '…' : ''}` });
   broadcast('agentStatus', { agentId, status: 'running' });
   broadcast('kanban', { action: 'add', col: 'wip', card: { id: ++seq, agentId, title: `${agentName}: running`, agent: agentName } });
 
-  // Spawn in the project directory
-  const proc = spawn('bash', ['-c', cmd], {
+  // Spawn in the project directory with the enriched PATH
+  const proc = spawn('bash', ['-lc', cmd], {
     cwd: cfg.localPath,
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: spawnEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

@@ -13,3 +13,4 @@ Thumbs.db
 apm_modules/
 dashboard/node_modules/
 dashboard/.apm-project.json
+.copilot-agent-context.md
