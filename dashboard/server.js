@@ -374,6 +374,106 @@ async function handleRequest(req, res) {
 
 // ─── Copilot invoke (open VS Code + write context file) ──────────────────────
 /**
+ * Package and install the apm-copilot-bridge extension into the user's normal
+ * VS Code, so that on every workspace open it can read .copilot-agent-context.md
+ * and submit the prompt to Copilot Chat automatically.
+ *
+ * Idempotent: a flag file `.installed-version` next to the extension's
+ * package.json records the version already installed; subsequent calls are
+ * no-ops until the version bumps.
+ *
+ * The .vsix format is just a zip of the extension folder with an
+ * "extension/" prefix, plus a trivial "[Content_Types].xml" — we build it
+ * with the system `zip` CLI to avoid any npm dependency.
+ */
+function ensureBridgeExtensionInstalled(codeBin, agentId) {
+  if (!codeBin) throw new Error('no code shim');
+
+  const extDir   = path.join(DASHBOARD_DIR, 'extensions', 'apm-copilot-bridge');
+  const pkgPath  = path.join(extDir, 'package.json');
+  if (!fs.existsSync(pkgPath)) throw new Error('bridge extension folder missing');
+
+  const pkg     = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const version = pkg.version || '0.0.0';
+  const flagFile = path.join(extDir, '.installed-version');
+
+  // Already installed at this version? Skip.
+  try {
+    if (fs.existsSync(flagFile) &&
+        fs.readFileSync(flagFile, 'utf8').trim() === version) {
+      return;
+    }
+  } catch { /* keep going */ }
+
+  // Build the .vsix in a temp dir.
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'apm-bridge-'));
+  const stage   = path.join(tmpRoot, 'extension');
+  fs.mkdirSync(stage, { recursive: true });
+
+  // Copy package.json + extension.js + README (if any) into stage/
+  for (const f of ['package.json', 'extension.js', 'README.md']) {
+    const src = path.join(extDir, f);
+    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(stage, f));
+  }
+
+  // Minimal [Content_Types].xml at the root of the .vsix
+  const ctXml = `<?xml version="1.0" encoding="utf-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="json" ContentType="application/json"/>
+  <Default Extension="js" ContentType="application/javascript"/>
+  <Default Extension="md" ContentType="text/markdown"/>
+  <Default Extension="vsixmanifest" ContentType="text/xml"/>
+</Types>
+`;
+  fs.writeFileSync(path.join(tmpRoot, '[Content_Types].xml'), ctXml, 'utf8');
+
+  // Minimal extension.vsixmanifest (required by the .vsix installer)
+  const manifest = `<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Language="en-US" Id="${pkg.name}" Version="${version}" Publisher="${pkg.publisher || 'apm'}"/>
+    <DisplayName>${pkg.displayName || pkg.name}</DisplayName>
+    <Description xml:space="preserve">${pkg.description || ''}</Description>
+    <Tags>apm,copilot</Tags>
+    <Categories>Other</Categories>
+    <GalleryFlags>Public</GalleryFlags>
+  </Metadata>
+  <Installation>
+    <InstallationTarget Id="Microsoft.VisualStudio.Code"/>
+  </Installation>
+  <Dependencies/>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true"/>
+  </Assets>
+</PackageManifest>
+`;
+  fs.writeFileSync(path.join(tmpRoot, 'extension.vsixmanifest'), manifest, 'utf8');
+
+  // Zip everything into a .vsix
+  const vsixPath = path.join(tmpRoot, `${pkg.name}-${version}.vsix`);
+  const zipResult = require('child_process').spawnSync(
+    'zip', ['-qr', vsixPath, '.'],
+    { cwd: tmpRoot, encoding: 'utf8', timeout: 15000 }
+  );
+  if (zipResult.status !== 0) {
+    throw new Error(`zip failed: ${zipResult.stderr || zipResult.status}`);
+  }
+
+  // Install into the user's normal VS Code (no --user-data-dir override).
+  const installResult = require('child_process').spawnSync(
+    codeBin, ['--install-extension', vsixPath, '--force'],
+    { encoding: 'utf8', timeout: 30000, env: spawnEnv() }
+  );
+  if (installResult.status !== 0) {
+    throw new Error(`code --install-extension failed: ${installResult.stderr || installResult.stdout}`);
+  }
+
+  try { fs.writeFileSync(flagFile, version, 'utf8'); } catch { /* */ }
+  broadcast('log', { agentId, level: 'success',
+    msg: `Installed apm-copilot-bridge v${version} into VS Code` });
+}
+
+/**
  * For GitHub Copilot, we can't pipe output from VS Code.
  * Instead we:
  *  1. Write a temporary .copilot-agent-context.md into the project root
@@ -412,28 +512,151 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
 
   // ── Find the right VS Code .app ────────────────────────────────────────────
   const cfg2 = loadConfig();
-  const vscodeAppName = cfg2.vscodeApp || (() => {
-    const bases = ['/Applications', os.homedir() + '/Applications'];
-    const names = ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'];
-    for (const base of bases)
-      for (const name of names)
-        if (fs.existsSync(path.join(base, `${name}.app`))) return name;
-    return 'Visual Studio Code';
-  })();
+  const platform = os.platform();
 
-  // ── Open a guaranteed-new VS Code window for this project ────────────────
-  // `open -a App --args` passes the following tokens directly to the running
-  // VS Code process. `--new-window` forces a new window even when the folder
-  // is already open in another window — identical to File → New Window + open.
-  require('child_process').exec(
-    `open -a "${vscodeAppName.replace(/"/g, '\\"')}" --args --new-window "${workDir.replace(/"/g, '\\"')}"`
-  );
+  // Resolve the actual .app path (not just the name) so we can call `open` against it.
+  // Using the explicit .app path avoids LaunchServices ambiguity when multiple
+  // VS Code copies exist (Insiders, numbered duplicates, etc.).
+  function resolveVSCodeAppPath(preferredName) {
+    const bases = ['/Applications', path.join(os.homedir(), 'Applications')];
+    const names = preferredName
+      ? [preferredName, 'Visual Studio Code', 'Visual Studio Code - Insiders']
+      : ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code', 'Visual Studio Code - Insiders'];
+    for (const base of bases) {
+      for (const name of names) {
+        const p = path.join(base, `${name}.app`);
+        if (fs.existsSync(p)) return { appPath: p, appName: name };
+      }
+    }
+    return { appPath: null, appName: preferredName || 'Visual Studio Code' };
+  }
+
+  // If a VS Code is already running, *always* prefer THAT .app — otherwise
+  // we risk launching a second copy with the same CFBundleIdentifier
+  // (com.microsoft.VSCode) which makes the new Electron process exit
+  // immediately after appearing in the dock/tray.
+  function findRunningVSCodeApp() {
+    if (platform !== 'darwin') return null;
+    try {
+      const r = require('child_process').spawnSync(
+        'ps', ['-axo', 'command='], { encoding: 'utf8', timeout: 1500 }
+      );
+      const lines = (r.stdout || '').split('\n');
+      for (const line of lines) {
+        const m = line.match(/(\/[^\0]+?Visual Studio Code[^/]*\.app)\/Contents\/MacOS\/(?:Electron|Code)/);
+        if (m && fs.existsSync(m[1])) {
+          return { appPath: m[1], appName: path.basename(m[1], '.app') };
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  const runningApp = findRunningVSCodeApp();
+  const { appPath: vscodeAppPath, appName: vscodeAppName } =
+    runningApp || resolveVSCodeAppPath(cfg2.vscodeApp);
+
+  // ── macOS: strip quarantine on the .app once so App Translocation stops ──
+  // Translocation moves the .app to a randomised read-only mount, which is the
+  // root cause of "VS Code flashes and quits" — the GUI process can't write to
+  // its own state dirs and Electron exits. Removing the quarantine xattr is a
+  // permanent fix for this.
+  if (platform === 'darwin' && vscodeAppPath) {
+    try {
+      require('child_process').spawnSync('xattr',
+        ['-dr', 'com.apple.quarantine', vscodeAppPath],
+        { stdio: 'ignore', timeout: 3000 });
+    } catch { /* non-fatal */ }
+  }
+
+  // ── Launch VS Code: USER'S NORMAL VS CODE, NEW WINDOW PER AGENT ───────────
+  //
+  // Approach:
+  //   • Use the user's already-running, already-signed-in VS Code (no custom
+  //     --user-data-dir, so Copilot login is reused automatically).
+  //   • Write a UNIQUE per-agent <agentId>-<ts>.code-workspace into
+  //     <project>/.apm-workspaces/. VS Code de-duplicates windows by
+  //     workspace identity (not by folder), so a unique workspace file
+  //     guarantees a brand-new window every click.
+  //   • Launch via `open -a <App> <workspace-file>`. LaunchServices routes
+  //     it to the running VS Code, which honors the new-workspace request.
+  //   • Auto-install the apm-copilot-bridge extension once into the user's
+  //     normal VS Code so it can submit the prompt to Copilot Chat
+  //     automatically when the new window finishes loading.
+
+  function shimFor(appPath) {
+    if (!appPath) return null;
+    const shim = path.join(appPath, 'Contents', 'Resources', 'app', 'bin', 'code');
+    return fs.existsSync(shim) ? shim : null;
+  }
+
+  // 1) Make sure the bridge extension is installed in the user's normal VS Code.
+  const codeBin = shimFor(vscodeAppPath) || resolveBin('code');
+  try {
+    ensureBridgeExtensionInstalled(codeBin, agentId);
+  } catch (e) {
+    broadcast('log', { agentId, level: 'warn',
+      msg: `Bridge extension install skipped: ${e.message}` });
+  }
+
+  // 2) Write a unique per-agent .code-workspace so VS Code opens a NEW window.
+  const wsDir  = path.join(workDir, '.apm-workspaces');
+  try { fs.mkdirSync(wsDir, { recursive: true }); } catch { /* */ }
+  const wsFile = path.join(wsDir, `${agentId}-${Date.now()}.code-workspace`);
+  const wsJson = {
+    folders: [{ path: '..' }],
+    settings: { 'workbench.startupEditor': 'none' },
+  };
+  try { fs.writeFileSync(wsFile, JSON.stringify(wsJson, null, 2), 'utf8'); }
+  catch (e) { broadcast('log', { agentId, level: 'warn', msg: `workspace write failed: ${e.message}` }); }
+
+  // 3) Launch the new window via LaunchServices on macOS, or `code` elsewhere.
+  let launched = false;
+  let launchMethod = '';
+
+  if (platform === 'darwin' && vscodeAppPath) {
+    try {
+      const child = require('child_process').spawn(
+        'open',
+        ['-a', vscodeAppPath, wsFile],   // unique workspace ⇒ new window every time
+        { detached: true, stdio: 'ignore' }
+      );
+      child.unref();
+      launched = true;
+      launchMethod = `open -a "${vscodeAppName}" <workspace>`;
+    } catch (e) {
+      broadcast('log', { agentId, level: 'warn', msg: `open -a failed: ${e.message}` });
+    }
+  }
+
+  if (!launched && codeBin) {
+    try {
+      const child = require('child_process').spawn(
+        codeBin,
+        ['-n', wsFile],
+        { detached: true, stdio: 'ignore', env: spawnEnv() }
+      );
+      child.unref();
+      launched = true;
+      launchMethod = `${codeBin} -n <workspace>`;
+    } catch (e) {
+      broadcast('log', { agentId, level: 'error', msg: `code -n failed: ${e.message}` });
+    }
+  }
+
+  if (!launched) {
+    broadcast('log', { agentId, level: 'error',
+      msg: 'Could not launch VS Code. Install the `code` shim: ⇧⌘P → "Shell Command: Install \'code\' command in PATH".' });
+  }
+
+  broadcast('log', { agentId, level: 'info', msg: `Launch: ${launchMethod || 'failed'}` });
+  broadcast('log', { agentId, level: 'info', msg: `Workspace: ${path.relative(workDir, wsFile)}` });
 
   const rel = path.relative(workDir, contextPath);
   broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
   broadcast('log', { agentId, level: 'success', msg: `✓ Opening VS Code (${vscodeAppName}) → ${path.basename(workDir)}` });
   broadcast('log', { agentId, level: 'info',    msg: `Context file written: ${rel}` });
-  broadcast('log', { agentId, level: 'info',    msg: 'Open Copilot Chat (⌃⌘I) and paste the prompt from the context file.' });
+  broadcast('log', { agentId, level: 'info',    msg: 'Bridge extension will auto-submit the prompt to Copilot Chat.' });
   broadcast('agentStatus', { agentId, status: 'done' });
   broadcast('kanban', { action: 'add', col: 'done',
     card: { id: ++seq, agentId, title: `${agentName}: context ready`, agent: agentName } });
