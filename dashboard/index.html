@@ -1483,6 +1483,7 @@ function handleInput(raw) {
 
 // ─── Kanban ───────────────────────────────────────────────────────────────────
 function addKCard(col, card) {
+  // Normalize: card.agentId is required for reliable later lookups.
   kcards[card.id]={col,card}; renderKCard(col,card);
 }
 function moveKCard(id, col) {
@@ -1490,6 +1491,27 @@ function moveKCard(id, col) {
   kcards[id].col=col;
   document.getElementById(`kc-${id}`)?.remove();
   renderKCard(col, kcards[id].card);
+}
+function removeKCard(id) {
+  document.getElementById(`kc-${id}`)?.remove();
+  delete kcards[id];
+}
+function clearSeedKanban() {
+  // Remove demo cards once the server starts driving the board so reload-replay
+  // and live state aren't visually contaminated by canned fixtures.
+  Object.keys(kcards).forEach(id => { if (kcards[id]?.card?.seed) removeKCard(id); });
+}
+/** Find the most-recent live (server-originated) card for an agent. */
+function findKCardByAgent(agentId, preferCol) {
+  const ids = Object.keys(kcards);
+  for (let i = ids.length - 1; i >= 0; i--) {
+    const kc = kcards[ids[i]];
+    if (!kc || kc.card.seed) continue;
+    if (kc.card.agentId !== agentId) continue;
+    if (preferCol && kc.col === preferCol) continue;
+    return ids[i];
+  }
+  return null;
 }
 function renderKCard(col, card) {
   const el=document.createElement('div');
@@ -1506,7 +1528,7 @@ function seedKanban() {
     {title:'💸 Monthly tech-debt report',                agent:'Tech-Debt Agent', color:'#d29922', col:'todo'},
     {title:'📦 Bump v2.1.0 — 3 features merged',        agent:'Release Agent',   color:'#ffa502', col:'todo'},
     {title:'🔐 CVE-2025-4892 dependency review',         agent:'Security Agent',  color:'#f85149', col:'todo'},
-  ].forEach(t => addKCard(t.col, {id:Date.now()+Math.random(), ...t}));
+  ].forEach(t => addKCard(t.col, {id:`seed-${Date.now()}-${Math.random().toString(36).slice(2,8)}`, seed:true, ...t}));
 }
 
 // ─── SDLC Flow ────────────────────────────────────────────────────────────────
@@ -1587,6 +1609,20 @@ function handleServerMsg(msg) {
         });
       }
       applyProjectInfo(serverCfg);
+      // Replay any persisted board state from the server. This makes the board
+      // survive page reloads and lets a freshly-opened tab join an in-flight
+      // session without losing context.
+      if (Array.isArray(msg.kanban) && msg.kanban.length) {
+        clearSeedKanban();
+        msg.kanban.forEach(e => {
+          const a = AGENTS.find(x => x.id === e.agentId);
+          const color = a ? a.color : '#58a6ff';
+          addKCard(e.col, {
+            id: `srv-${e.id}`, agentId: e.agentId, agent: e.agent,
+            title: e.title, color, cls: e.col === 'wip' ? 'k-running' : '',
+          });
+        });
+      }
       clog('system', `Server: project="${serverCfg.localPath || 'not set'}"  tool=${serverCfg.aiTool}`);
       if (!serverCfg.localPath) {
         clog('warn', '⚠️  No project path set — click ⚙ Settings to configure');
@@ -1618,18 +1654,33 @@ function handleServerMsg(msg) {
     }
 
     case 'kanban': {
+      // First real server-driven kanban event clears the demo seed so the
+      // board reflects actual work, not canned fixtures.
+      clearSeedKanban();
       if (msg.action === 'add') {
         const a = AGENTS.find(x => x.id === msg.card.agentId);
         const color = a ? a.color : '#58a6ff';
-        addKCard(msg.col, { id: `srv-${msg.card.id}`, title: msg.card.title,
-          agent: msg.card.agent, color, cls: 'k-running' });
+        addKCard(msg.col, {
+          id: `srv-${msg.card.id}`,
+          agentId: msg.card.agentId,
+          title: msg.card.title,
+          agent: msg.card.agent,
+          color,
+          cls: msg.col === 'wip' ? 'k-running' : '',
+        });
       } else if (msg.action === 'move') {
-        // find card by agentId
-        const key = Object.keys(kcards).find(k => kcards[k]?.card?.agentId === msg.agentId
-          || String(k).startsWith('srv-'));
+        // Prefer the explicit card id from the server; fall back to the most
+        // recent live card for this agent that isn't already in the target col.
+        let key = null;
+        if (msg.id != null) {
+          const candidate = `srv-${msg.id}`;
+          if (kcards[candidate]) key = candidate;
+        }
+        if (!key && msg.agentId) key = findKCardByAgent(msg.agentId, msg.col);
         if (key) {
           const kc = kcards[key];
-          if (kc) { kc.card.cls = msg.col === 'done' ? '' : 'k-error'; moveKCard(key, msg.col); }
+          kc.card.cls = msg.col === 'done' ? '' : (msg.col === 'wip' ? 'k-running' : 'k-error');
+          moveKCard(key, msg.col);
         }
       }
       break;

@@ -88,6 +88,40 @@ function spawnEnv() {
 const running = new Map(); // agentId → process info
 let   seq     = 0;         // kanban card id sequence
 
+// ─── Kanban ring buffer ──────────────────────────────────────────────────────
+// Persists recent board cards in memory so reconnecting browsers can replay
+// the live state instead of starting from the demo seed every time.
+const KANBAN_MAX = 60;
+/** @type {Array<{id:string, agentId:string, agent:string, title:string, col:'todo'|'wip'|'done'}>} */
+const kanbanCards = [];
+
+function kanbanAdd(col, card) {
+  // card: { id, agentId, agent, title }
+  const entry = { id: String(card.id), agentId: card.agentId, agent: card.agent, title: card.title, col };
+  kanbanCards.push(entry);
+  while (kanbanCards.length > KANBAN_MAX) kanbanCards.shift();
+  broadcast('kanban', { action: 'add', col, card: { ...card, id: entry.id } });
+  return entry;
+}
+
+function kanbanMove(matcher, col) {
+  // matcher: { agentId } or { id }
+  // Move the most recent matching card so re-runs of the same agent target
+  // the right card and don't ping-pong an old WIP entry.
+  for (let i = kanbanCards.length - 1; i >= 0; i--) {
+    const e = kanbanCards[i];
+    if ((matcher.id && e.id === String(matcher.id)) ||
+        (matcher.agentId && e.agentId === matcher.agentId && e.col !== col)) {
+      e.col = col;
+      broadcast('kanban', { action: 'move', id: e.id, agentId: e.agentId, col });
+      return e;
+    }
+  }
+  // Fall back to a bare move event so old clients still react.
+  broadcast('kanban', { action: 'move', ...matcher, col });
+  return null;
+}
+
 /**
  * Default project config — user fills this in via the UI or .apm-project.json
  *
@@ -728,8 +762,12 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
   broadcast('log', { agentId, level: 'info',    msg: `Context file written: ${rel}` });
   broadcast('log', { agentId, level: 'info',    msg: 'Bridge extension will auto-submit the prompt to Copilot Chat.' });
   broadcast('agentStatus', { agentId, status: 'done' });
-  broadcast('kanban', { action: 'add', col: 'done',
-    card: { id: ++seq, agentId, title: `${agentName}: context ready`, agent: agentName } });
+  // Animate the board: queue → wip → done so the user sees a real transition,
+  // matching the Claude/shell flow even though Copilot hands off to VS Code.
+  const cardId = ++seq;
+  kanbanAdd('todo', { id: cardId, agentId, agent: agentName, title: `${agentName}: queued` });
+  setTimeout(() => kanbanMove({ id: cardId }, 'wip'),  150);
+  setTimeout(() => kanbanMove({ id: cardId }, 'done'), 1200);
 }
 
 // ─── Agent invocation ─────────────────────────────────────────────────────────
@@ -756,7 +794,8 @@ async function invokeAgent(agentId, agentName, cfg, mode) {
   broadcast('log', { agentId, level: 'system', msg: `▶ INVOKE  ${agentName}` });
   broadcast('log', { agentId, level: 'info',   msg: `$ ${cmd.slice(0, 80)}${cmd.length > 80 ? '…' : ''}` });
   broadcast('agentStatus', { agentId, status: 'running' });
-  broadcast('kanban', { action: 'add', col: 'wip', card: { id: ++seq, agentId, title: `${agentName}: running`, agent: agentName } });
+  const wipCardId = ++seq;
+  kanbanAdd('wip', { id: wipCardId, agentId, agent: agentName, title: `${agentName}: running` });
 
   // Spawn in the project directory with the enriched PATH
   const proc = spawn('bash', ['-lc', cmd], {
@@ -790,7 +829,7 @@ async function invokeAgent(agentId, agentName, cfg, mode) {
     const status = code === 0 ? 'done' : 'error';
     if (running.has(agentId)) running.get(agentId).status = status;
     broadcast('agentStatus', { agentId, status });
-    broadcast('kanban', { action: 'move', agentId, col: status === 'done' ? 'done' : 'todo' });
+    kanbanMove({ id: wipCardId }, status === 'done' ? 'done' : 'todo');
     broadcast('log', { agentId, level: status === 'done' ? 'success' : 'error',
       msg: status === 'done' ? `✅ ${agentName} finished (exit 0)` : `❌ ${agentName} exited with code ${code}` });
     // Remove from running map after a delay so the UI can read final status
@@ -808,7 +847,12 @@ wss.on('connection', (ws) => {
   // Send current running statuses to new clients
   const statuses = {};
   running.forEach((v, k) => { statuses[k] = { status: v.status, startedAt: v.startedAt }; });
-  ws.send(JSON.stringify({ type: 'hello', statuses, config: loadConfig() }));
+  ws.send(JSON.stringify({
+    type: 'hello',
+    statuses,
+    config: loadConfig(),
+    kanban: kanbanCards.slice(),  // replay recent board state to reload-resilient clients
+  }));
 
   ws.on('message', async (raw) => {
     try {
