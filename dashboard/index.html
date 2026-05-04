@@ -488,6 +488,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     </div>
   </div>
   <div class="tb-pills" id="tb-pills">
+    <div class="pill" id="pill-project" title="Project (click ⚙ to change)" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="dot a"></span>📁&nbsp;<strong id="stat-project">—</strong></div>
     <div class="pill"><span class="dot g"></span><strong id="stat-active">0</strong>&nbsp;active</div>
     <div class="pill"><span class="dot b"></span><strong id="stat-agents">15</strong>&nbsp;agents</div>
     <div class="pill"><span class="dot a"></span><strong>25</strong>&nbsp;workflows</div>
@@ -1565,6 +1566,17 @@ function setConn(live) {
   l.textContent = live ? 'live' : 'offline';
 }
 
+function applyProjectInfo(cfg) {
+  if (!cfg) return;
+  const name = cfg.projectName || (cfg.localPath ? cfg.localPath.split('/').filter(Boolean).pop() : '') || '—';
+  const el = document.getElementById('stat-project');
+  if (el) el.textContent = name;
+  const pill = document.getElementById('pill-project');
+  if (pill) pill.title = cfg.localPath ? `Project: ${cfg.localPath}` : 'No project set — click ⚙ to configure';
+  // Update browser tab title too.
+  document.title = `${name} — APM Dark Factory`;
+}
+
 function handleServerMsg(msg) {
   switch (msg.type) {
     case 'hello':
@@ -1574,6 +1586,7 @@ function handleServerMsg(msg) {
           if (s.status === 'running') setAgentBusy(id, true);
         });
       }
+      applyProjectInfo(serverCfg);
       clog('system', `Server: project="${serverCfg.localPath || 'not set'}"  tool=${serverCfg.aiTool}`);
       if (!serverCfg.localPath) {
         clog('warn', '⚠️  No project path set — click ⚙ Settings to configure');
@@ -1582,6 +1595,7 @@ function handleServerMsg(msg) {
 
     case 'config':
       serverCfg = msg.cfg;
+      applyProjectInfo(serverCfg);
       clog('success', `Config saved: ${serverCfg.localPath}  [${serverCfg.aiTool}]`);
       break;
 

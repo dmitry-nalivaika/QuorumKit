@@ -90,12 +90,70 @@ let   seq     = 0;         // kanban card id sequence
 
 /**
  * Default project config — user fills this in via the UI or .apm-project.json
+ *
+ * On first run we try to auto-detect:
+ *   • localPath  — the directory the user launched start.sh from
+ *                  (passed in via APM_PROJECT_DIR), falling back to the
+ *                  parent of the dashboard dir (handy when the package is
+ *                  vendored inside the project).
+ *   • repoUrl    — `git config --get remote.origin.url`
+ *   • branch     — `git rev-parse --abbrev-ref HEAD`
+ * so the user doesn't have to open Settings before invoking their first agent.
  */
+function autoDetectProject() {
+  // 1) Resolve the project directory.
+  let localPath = process.env.APM_PROJECT_DIR || '';
+  if (!localPath) {
+    // Heuristic: if the dashboard lives under <project>/ (e.g. vendored as
+    // node_modules/agentic-dev-stack/dashboard or apm_modules/.../dashboard),
+    // walk up looking for a .git directory.
+    let cur = path.resolve(DASHBOARD_DIR, '..');
+    for (let i = 0; i < 5 && cur !== '/'; i++) {
+      if (fs.existsSync(path.join(cur, '.git'))) { localPath = cur; break; }
+      cur = path.dirname(cur);
+    }
+  }
+  // Last-resort fallback: the package's own parent directory.
+  if (!localPath) localPath = path.resolve(DASHBOARD_DIR, '..');
+
+  // 2) Try to read git remote + branch from that directory.
+  let repoUrl = '';
+  let branch  = 'main';
+  try {
+    if (fs.existsSync(path.join(localPath, '.git'))) {
+      const cp = require('child_process');
+      const opts = { cwd: localPath, encoding: 'utf8', timeout: 2000 };
+      const url = cp.spawnSync('git', ['config', '--get', 'remote.origin.url'], opts);
+      if (url.status === 0 && url.stdout) repoUrl = url.stdout.trim();
+      const br = cp.spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], opts);
+      if (br.status === 0 && br.stdout) {
+        const b = br.stdout.trim();
+        if (b && b !== 'HEAD') branch = b;
+      }
+    }
+  } catch { /* git not available — keep defaults */ }
+
+  return { localPath, repoUrl, branch };
+}
+
+/** Derive a human-readable project name from a repo URL or local path. */
+function deriveProjectName(repoUrl, localPath) {
+  // Prefer the repo name from the git remote URL (works for SSH and HTTPS).
+  if (repoUrl) {
+    const m = repoUrl.match(/[/:]([^/:]+?)(?:\.git)?\/?$/);
+    if (m && m[1]) return m[1];
+  }
+  if (localPath) return path.basename(localPath);
+  return 'project';
+}
+
 function defaultConfig() {
+  const detected = autoDetectProject();
   return {
-    repoUrl:     '',
-    localPath:   '',
-    branch:      'main',
+    repoUrl:     detected.repoUrl,
+    localPath:   detected.localPath,
+    branch:      detected.branch,
+    projectName: deriveProjectName(detected.repoUrl, detected.localPath),
     aiTool:      'claude',   // 'claude' | 'copilot' | 'custom'
     customCmd:   '',         // used when aiTool === 'custom'
     terminalApp: autoDetectTerminal(),
@@ -104,12 +162,24 @@ function defaultConfig() {
 }
 
 function loadConfig() {
+  const defaults = defaultConfig();
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      return { ...defaultConfig(), ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) };
+      const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      // Merge: saved wins, but auto-detected values fill in any empty strings
+      // (e.g. if a previous version saved localPath:'' or repoUrl:'').
+      const merged = { ...defaults, ...saved };
+      for (const k of ['localPath', 'repoUrl', 'branch']) {
+        if (!merged[k] && defaults[k]) merged[k] = defaults[k];
+      }
+      // Re-derive the display name when missing or stale-empty.
+      if (!merged.projectName) {
+        merged.projectName = deriveProjectName(merged.repoUrl, merged.localPath);
+      }
+      return merged;
     }
   } catch { /* ignore */ }
-  return defaultConfig();
+  return defaults;
 }
 
 function saveConfig(cfg) {

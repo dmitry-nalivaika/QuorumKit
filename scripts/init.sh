@@ -389,7 +389,12 @@ if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   echo ""
 fi
 
-echo "  ── GitHub Actions (all modes) ───────────────────────────────────────"
+echo "  ── Orchestrator dashboard (optional) ────────────────────────────────"
+echo "  Run from THIS project directory ($PROJECT_DIR) to auto-fill the"
+echo "  project path, git remote, and current branch in the dashboard:"
+echo "    bash $APM_PACKAGE_DIR/dashboard/start.sh"
+echo "  Then open http://localhost:3131 — agents are launchable from the UI."
+echo ""
 echo "  Comment on a PR or issue to trigger agents:"
 echo "    @qa-agent             — QA + mutation testing review on PR"
 echo "    @reviewer-agent       — spec compliance + API contract review on PR"
