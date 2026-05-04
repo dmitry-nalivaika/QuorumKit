@@ -62,9 +62,31 @@ Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 | `/speckit-constitution` | Create/update project constitution |
 | `/speckit-taskstoissues` | Push tasks to GitHub Issues |
 
+### Autonomous Orchestration (Issue #2)
+
+The **APM Orchestrator** is a GitHub Actions workflow that automatically sequences agents
+in response to repository events — no slash-commands needed for routine SDLC work.
+
+| Capability | Details |
+|------------|---------|
+| Event-driven pipelines | Issues, PRs, labels, `workflow_run` completions trigger the right agent chain automatically |
+| Declarative YAML rules | Pipeline definitions live in `.apm/pipelines/*.yml`, version-controlled and PR-reviewable |
+| Human approval gates | `approval: required` on any step; resumes on `/approve` from a `write`+ collaborator |
+| Stateless & restartable | All state stored in GitHub Issue/PR comments — survives Orchestrator restarts |
+| Dual-AI dispatch | Routes to Claude (`agent-*.yml`) or Copilot (`copilot-agent-*.yml`) based on `aiTool` in `.apm-project.json` |
+| Full audit trail | Every state transition posts a human-readable comment on the triggering Issue/PR |
+| Dashboard broadcast | Pipeline status pushed to dashboard via `POST /webhook/pipeline-event` within 5 seconds |
+
+**Default pipelines installed by `init.sh`:**
+- `feature-pipeline.yml` — triage → ba → architect → dev → qa → reviewer → release
+- `bug-fix-pipeline.yml` — triage → dev → qa → reviewer
+- `release-pipeline.yml` — qa → reviewer → **[approval gate]** → release
+
+**Full guide:** [PIPELINES.md](PIPELINES.md)
+
 ### GitHub Templates
 
-- **25 GitHub Actions workflows** — 12 Claude + 12 Copilot + `alert-to-issue` observability webhook
+- **26 GitHub Actions workflows** — 12 Claude + 12 Copilot + `orchestrator` + `alert-to-issue` observability webhook
 - **PR template** — agent sign-off checklists referencing the constitution by path
 - **Issue templates** — bug report, feature request, security vulnerability, with auto-triage
 - **CONTRIBUTING.md** — human contributor guide (NNN convention, commit style, brownfield policy)
