@@ -7,8 +7,8 @@ const featurePipeline = {
   version: '1',
   trigger: { event: 'issues.opened', labels: ['type:feature'] },
   steps: [
-    { name: 'triage', agent: 'triage-agent' },
-    { name: 'ba', agent: 'ba-product-agent' },
+    { name: 'triage', agent: 'triage' },
+    { name: 'ba', agent: 'ba' },
   ],
 };
 
@@ -37,8 +37,27 @@ describe('orchestrator.runOrchestrator — new feature issue', () => {
 
     // Should have triggered the first agent workflow
     expect(client.triggerWorkflow).toHaveBeenCalledWith(
-      'o', 'r', 'copilot-agent-triage-agent.yml', 'main', expect.any(Object)
+      'o', 'r', 'copilot-agent-triage.yml', 'main', expect.any(Object)
     );
+  });
+
+  it('invokes ALL steps in sequence within a single run', async () => {
+    const client = makeClient();
+    const event = { type: 'issues.opened', labels: ['type:feature'], issueNumber: 10, ref: 'main' };
+    const pipelines = [featurePipeline];
+
+    await runOrchestrator({ client, event, pipelines, owner: 'o', repo: 'r', aiTool: 'copilot' });
+
+    const workflowCalls = client.triggerWorkflow.mock.calls.map(c => c[2]);
+    expect(workflowCalls).toContain('copilot-agent-triage.yml');
+    expect(workflowCalls).toContain('copilot-agent-ba.yml');
+
+    // Final state should be 'completed'
+    const allCommentBodies = client.createComment.mock.calls.map(c => c[3]);
+    const completedState = allCommentBodies.find(b =>
+      typeof b === 'string' && b.includes('"status":"completed"')
+    );
+    expect(completedState).toBeTruthy();
   });
 
   it('logs no-rule-match and does not invoke any agent when no pipeline matches', async () => {
@@ -77,7 +96,7 @@ describe('orchestrator.runOrchestrator — /approve comment', () => {
       status: 'awaiting-approval',
       currentStepIndex: 1,
       steps: [
-        { name: 'triage', status: 'completed', startedAt: '2026-05-04T10:00:00Z', completedAt: '2026-05-04T10:01:00Z', outcome: 'done' },
+        { name: 'triage', status: 'completed', startedAt: '2026-05-04T10:00:00Z', completedAt: '2026-05-04T10:01:00Z', outcome: 'dispatched' },
         { name: 'ba', status: 'pending', startedAt: null, completedAt: null, outcome: null },
       ],
       approvalGate: {
@@ -106,7 +125,7 @@ describe('orchestrator.runOrchestrator — /approve comment', () => {
     await runOrchestrator({ client, event, pipelines: [featurePipeline], owner: 'o', repo: 'r', aiTool: 'copilot' });
 
     expect(client.triggerWorkflow).toHaveBeenCalledWith(
-      'o', 'r', 'copilot-agent-ba-product-agent.yml', 'main', expect.any(Object)
+      'o', 'r', 'copilot-agent-ba.yml', 'main', expect.any(Object)
     );
   });
 });
