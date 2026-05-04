@@ -13,13 +13,13 @@ trigger:
 
 steps:
   - name: triage
-    agent: triage-agent
+    agent: triage
 
   - name: dev
-    agent: developer-agent
+    agent: dev
 
   - name: qa
-    agent: qa-test-agent
+    agent: qa
 
   - name: reviewer
-    agent: reviewer-agent
+    agent: reviewer

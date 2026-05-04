@@ -13,25 +13,25 @@ trigger:
 
 steps:
   - name: triage
-    agent: triage-agent
+    agent: triage
 
   - name: ba
-    agent: ba-product-agent
+    agent: ba
 
   - name: architect
-    agent: architect-agent
+    agent: architect
     condition: "labels.includes('needs:adr')"
 
   - name: dev
-    agent: developer-agent
+    agent: dev
 
   - name: qa
-    agent: qa-test-agent
+    agent: qa
 
   - name: reviewer
-    agent: reviewer-agent
+    agent: reviewer
 
   - name: release
-    agent: release-agent
+    agent: release
     approval: required
     approval_timeout_hours: 72

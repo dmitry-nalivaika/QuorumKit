@@ -1,0 +1,93 @@
+name: Developer Agent (Copilot)
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue or PR number triggering this agent'
+        required: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  models: read
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Developer Agent via GitHub Models
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const agentInstructions = readSafe('.github/agents/developer-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const issueNumber = Number('${{ github.event.inputs.issue_number }}');
+
+            let issueTitle = '';
+            let issueBody  = '';
+            try {
+              const issue = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: issueNumber,
+              });
+              issueTitle = issue.data.title ?? '';
+              issueBody  = issue.data.body  ?? '';
+            } catch (e) {
+              core.warning(`Could not fetch issue #${issueNumber}: ${e.message}`);
+            }
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub developer agent.';
+
+            const userContent =
+              `You are acting as the Developer Agent for issue #${issueNumber}.\n` +
+              `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
+              `Review the spec, plan the implementation, and post a summary of the next steps as a comment.`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data  = await res.json();
+            const reply = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Developer agent produced no output.';
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              body:         reply,
+            });
