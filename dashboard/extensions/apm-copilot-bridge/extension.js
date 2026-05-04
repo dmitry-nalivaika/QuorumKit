@@ -32,13 +32,40 @@ function readAgentMarker(rootPath) {
 }
 
 async function submitPrompt(prompt) {
-  // Public command: opens Copilot Chat (or any registered chat view) with a query.
-  // Available since VS Code 1.90.
+  // Strategy: ensure Agent mode is active, THEN submit the query.
+  // VS Code/Copilot honors `mode: 'agent'` inconsistently across builds, so
+  // we belt-and-braces it: open chat → flip to Agent mode via the dedicated
+  // command → re-open with the query so the prompt lands in Agent mode.
+
+  async function tryCmd(id, ...args) {
+    try { await vscode.commands.executeCommand(id, ...args); return true; }
+    catch { return false; }
+  }
+
+  // 1) Open the chat panel (no query yet) so the mode commands have a target.
+  await tryCmd('workbench.action.chat.open', { mode: 'agent' });
+
+  // 2) Force Agent mode. Different VS Code/Copilot versions expose different
+  //    command IDs — try them all; the first one that exists wins.
+  const modeSwitched =
+    await tryCmd('workbench.action.chat.openAgent') ||
+    await tryCmd('workbench.action.chat.setMode', 'agent') ||
+    await tryCmd('github.copilot.chat.setMode', 'agent') ||
+    await tryCmd('workbench.action.chat.toggleAgentMode');
+
+  // 3) Submit the prompt. With a chat already open in Agent mode, this
+  //    appends and sends. `mode: 'agent'` is also passed for newer builds
+  //    that key off the open-options instead.
   try {
     await vscode.commands.executeCommand('workbench.action.chat.open', {
       query: prompt,
-      mode: 'agent',   // open in Copilot Agent mode, not Ask mode
+      mode: 'agent',
     });
+    if (!modeSwitched) {
+      // Last resort: try once more after the chat has rendered.
+      await new Promise(r => setTimeout(r, 400));
+      await tryCmd('workbench.action.chat.openAgent');
+    }
     return true;
   } catch (e1) {
     try {
