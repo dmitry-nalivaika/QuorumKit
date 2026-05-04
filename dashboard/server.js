@@ -54,9 +54,13 @@ const EXTRA_PATHS = [
   '/opt/homebrew/sbin',
   path.join(os.homedir(), '.npm-global', 'bin'),
   path.join(os.homedir(), '.local', 'bin'),
-  // VS Code CLI shim
+  // VS Code CLI shims — /Applications first (proper install location), numbered versions win
+  '/Applications/Visual Studio Code 3.app/Contents/Resources/app/bin',
+  '/Applications/Visual Studio Code 2.app/Contents/Resources/app/bin',
   '/Applications/Visual Studio Code.app/Contents/Resources/app/bin',
-  path.join(os.homedir(), 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin'),
+  path.join(os.homedir(), 'Applications', 'Visual Studio Code 3.app', 'Contents', 'Resources', 'app', 'bin'),
+  path.join(os.homedir(), 'Applications', 'Visual Studio Code 2.app', 'Contents', 'Resources', 'app', 'bin'),
+  path.join(os.homedir(), 'Applications', 'Visual Studio Code.app',   'Contents', 'Resources', 'app', 'bin'),
   // Claude Code common install paths
   path.join(os.homedir(), '.claude', 'local'),
   path.join(os.homedir(), '.npm', 'bin'),
@@ -95,6 +99,7 @@ function defaultConfig() {
     aiTool:      'claude',   // 'claude' | 'copilot' | 'custom'
     customCmd:   '',         // used when aiTool === 'custom'
     terminalApp: autoDetectTerminal(),
+    vscodeApp:   '',         // override: e.g. 'Visual Studio Code 3' (leave blank = auto-detect)
   };
 }
 
@@ -405,38 +410,99 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
 
   try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }
 
-  // Try to find `code` binary
+  // Try to find `code` binary — resolveBin() walks EXTRA_PATHS which has VS Code 3 first
   const codeBin = resolveBin('code');
-  const canUseCode = codeBin !== 'code' || process.env.PATH?.includes('Visual Studio Code');
+  const codeBinResolved = codeBin !== 'code';
 
-  // Open VS Code — try the binary first, fall back to `open -a`
+  // Resolve the VS Code .app name for `open -a` fallback (macOS only).
+  // Also honour a user override via config field `vscodePath` / `vscodeApp`.
+  const cfg2 = loadConfig();
+  const vscodeAppName = cfg2.vscodeApp || resolveVSCodeApp();
+
+  function resolveVSCodeApp() {
+    // Check numbered versions first (VS Code 3, 2, then plain)
+    const candidates = [
+      { base: '/Applications',                names: ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'] },
+      { base: os.homedir() + '/Applications', names: ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'] },
+    ];
+    for (const { base, names } of candidates) {
+      for (const name of names) {
+        if (fs.existsSync(path.join(base, `${name}.app`))) return name;
+      }
+    }
+    return 'Visual Studio Code'; // ultimate fallback
+  }
+
+  // ── Step 1: open VS Code at the project folder AND open the context file ──
+  // Using `code <dir> <file>` opens the folder as workspace and shows the file.
   let opened = false;
-  if (canUseCode) {
+  if (codeBinResolved) {
     try {
-      require('child_process').spawnSync(codeBin, [workDir], {
-        detached: true, stdio: 'ignore', env: spawnEnv(),
-      });
+      const sp = require('child_process').spawn(
+        codeBin, [workDir, contextPath],
+        { detached: true, stdio: 'ignore', env: spawnEnv() }
+      );
+      sp.unref();
       opened = true;
     } catch { /* fall through */ }
   }
-  if (!opened) {
+  if (!opened && os.platform() === 'darwin') {
+    // Fallback: open -a <App Name> — uses the correct VS Code version
     try {
-      require('child_process').spawnSync('open', ['-a', 'Visual Studio Code', workDir], {
-        detached: true, stdio: 'ignore',
-      });
+      const sp = require('child_process').spawn(
+        'open', ['-a', vscodeAppName, '--args', workDir, contextPath],
+        { detached: true, stdio: 'ignore' }
+      );
+      sp.unref();
       opened = true;
     } catch { /* fall through */ }
   }
+
+  // ── Step 2: trigger the Copilot Chat panel via VS Code URI scheme ──────────
+  // We wait 1.5 s so VS Code has time to finish launching before we send the URI.
+  // vscode://GitHub.copilot-chat  → activates / focuses the Copilot Chat view.
+  const copilotUri = 'vscode://GitHub.copilot-chat';
+  setTimeout(() => {
+    let uriOpened = false;
+    // Prefer `code --open-url` — works even when VS Code is already running
+    if (codeBinResolved) {
+      try {
+        const sp = require('child_process').spawn(
+          codeBin, ['--open-url', copilotUri],
+          { detached: true, stdio: 'ignore', env: spawnEnv() }
+        );
+        sp.unref();
+        uriOpened = true;
+      } catch { /* fall through */ }
+    }
+    // macOS fallback: `open <vscode://…>` is handled by the OS URI dispatcher
+    if (!uriOpened && os.platform() === 'darwin') {
+      try {
+        const sp = require('child_process').spawn(
+          'open', ['-a', vscodeAppName, '--args', '--open-url', copilotUri],
+          { detached: true, stdio: 'ignore' }
+        );
+        sp.unref();
+        uriOpened = true;
+      } catch { /* ignore */ }
+    }
+    if (uriOpened) {
+      broadcast('log', { agentId, level: 'success', msg: '✓ Copilot Chat panel activated' });
+    } else {
+      broadcast('log', { agentId, level: 'warn', msg: '⚠ Could not auto-open Copilot Chat — open it manually (⌃⌘I)' });
+    }
+  }, 1500);
 
   // Broadcast instructions to the console
   const rel = path.relative(workDir, contextPath);
   broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
-  broadcast('log', { agentId, level: 'success', msg: opened ? '✓ VS Code opened' : '⚠ Could not auto-open VS Code — open it manually' });
-  broadcast('log', { agentId, level: 'info',    msg: `Context file written: ${rel}` });
+  broadcast('log', { agentId, level: 'success', msg: opened ? `✓ VS Code opened with context file` : '⚠ Could not auto-open VS Code — open it manually' });
+  broadcast('log', { agentId, level: 'info',    msg: `Context file: ${rel}` });
   broadcast('log', { agentId, level: 'system',  msg: '─'.repeat(52) });
-  broadcast('log', { agentId, level: 'info',    msg: '1. Open Copilot Chat in VS Code  (⌃⌘I  or  View → Copilot Chat)' });
-  broadcast('log', { agentId, level: 'info',    msg: `2. Open the file: ${rel}` });
+  broadcast('log', { agentId, level: 'info',    msg: '1. VS Code + Copilot Chat are opening automatically…' });
+  broadcast('log', { agentId, level: 'info',    msg: `2. The context file is open — review the prompt at the top` });
   broadcast('log', { agentId, level: 'info',    msg: '3. Copy the prompt block and paste it into Copilot Chat' });
+  broadcast('log', { agentId, level: 'info',    msg: '   (or just type  @workspace  — the file is already open)' });
   broadcast('log', { agentId, level: 'info',    msg: '4. Continue the conversation — Copilot will act as the agent' });
   broadcast('log', { agentId, level: 'system',  msg: '─'.repeat(52) });
   broadcast('agentStatus', { agentId, status: 'done' });

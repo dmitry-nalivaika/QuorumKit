@@ -648,6 +648,11 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
         </select>
         <div class="hint">Used when you click "Open Terminal" on an agent.</div>
       </div>
+      <div class="mfield" id="vscode-app-row">
+        <label>VS CODE APP (COPILOT MODE)</label>
+        <input id="cfg-vscode-app" type="text" placeholder="Auto-detect  (e.g. Visual Studio Code 3)" />
+        <div class="hint">Leave blank to auto-detect. Set to the exact .app name (without .app) to override — useful if you have multiple VS Code versions installed.</div>
+      </div>
     </div>
     <div class="modal-ft">
       <span id="cfg-status"></span>
@@ -1702,7 +1707,8 @@ function openSettings() {
     document.getElementById('cfg-branch').value   = cfg.branch      || 'main';
     document.getElementById('cfg-tool').value     = cfg.aiTool      || 'claude';
     document.getElementById('cfg-custom').value   = cfg.customCmd   || '';
-    document.getElementById('cfg-terminal').value = cfg.terminalApp || 'terminal';
+    document.getElementById('cfg-terminal').value    = cfg.terminalApp || 'terminal';
+    document.getElementById('cfg-vscode-app').value  = cfg.vscodeApp   || '';
     toggleCustomRow();
   };
   if (serverCfg) {
@@ -1731,6 +1737,7 @@ async function saveSettings() {
     aiTool:      document.getElementById('cfg-tool').value,
     customCmd:   document.getElementById('cfg-custom').value.trim(),
     terminalApp: document.getElementById('cfg-terminal').value,
+    vscodeApp:   document.getElementById('cfg-vscode-app').value.trim(),
   };
   document.getElementById('cfg-status').textContent = 'Saving…';
   const res = await fetch(`${SERVER}/api/config`, {
