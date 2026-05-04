@@ -13,15 +13,15 @@ trigger:
 
 steps:
   - name: qa
-    agent: qa-test-agent
+    agent: qa
 
   - name: security
-    agent: security-agent
+    agent: security
 
   - name: reviewer
-    agent: reviewer-agent
+    agent: reviewer
 
   - name: release
-    agent: release-agent
+    agent: release
     approval: required
     approval_timeout_hours: 72
