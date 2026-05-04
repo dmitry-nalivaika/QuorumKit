@@ -952,7 +952,24 @@ async function invokeAgent(agentId, agentName, cfg, mode) {
 
 // ─── Server bootstrap ─────────────────────────────────────────────────────────
 const server = http.createServer(handleRequest);
+
+// Register error handler BEFORE listen so EADDRINUSE is caught cleanly,
+// even when WebSocketServer re-emits the error on the same server instance.
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n  ✗ Port ${PORT} is already in use.`);
+    console.error(`    Kill the existing process or choose a different port:`);
+    console.error(`      lsof -ti:${PORT} | xargs kill`);
+    console.error(`      dashboard/start.sh --port ${PORT + 1}\n`);
+  } else {
+    console.error(e);
+  }
+  process.exit(1);
+});
+
 wss = new WebSocketServer({ server });
+// Swallow wss-level errors (the server error handler above covers the real ones)
+wss.on('error', () => {});
 
 wss.on('connection', (ws) => {
   // Send current running statuses to new clients
@@ -994,14 +1011,4 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('  Open the URL above in your browser, then use');
   console.log('  the ⚙ Settings button to set your project path.');
   console.log('');
-});
-
-server.on('error', (e) => {
-  if (e.code === 'EADDRINUSE') {
-    console.error(`\n  ✗ Port ${PORT} is already in use.`);
-    console.error(`    Try:  node server.js --port 3132\n`);
-  } else {
-    console.error(e);
-  }
-  process.exit(1);
 });
