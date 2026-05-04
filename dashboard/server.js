@@ -410,21 +410,16 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
 
   try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }
 
-  // ── Resolve tooling ────────────────────────────────────────────────────────
-  const codeBin = resolveBin('code');
-  const codeBinResolved = codeBin !== 'code';
-
-  // Resolve the VS Code .app name for `open -a` fallback (macOS only).
-  // Honour a user override via config field `vscodeApp`.
+  // ── Resolve the correct VS Code installation ───────────────────────────────
+  // Strategy: find the .app first, then derive the `code` shim from it.
+  // This avoids the PATH-based resolveBin() picking up a different VS Code's shim.
   const cfg2 = loadConfig();
   const vscodeAppName = cfg2.vscodeApp || resolveVSCodeApp();
 
   function resolveVSCodeApp() {
-    const candidates = [
-      { base: '/Applications',                names: ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'] },
-      { base: os.homedir() + '/Applications', names: ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'] },
-    ];
-    for (const { base, names } of candidates) {
+    const bases = ['/Applications', os.homedir() + '/Applications'];
+    const names = ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'];
+    for (const base of bases) {
       for (const name of names) {
         if (fs.existsSync(path.join(base, `${name}.app`))) return name;
       }
@@ -432,10 +427,24 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     return 'Visual Studio Code';
   }
 
-  // ── Step 1: open a NEW VS Code window for this project + show context file ─
-  // --new-window ensures we never land in some other open project's window.
+  // Derive the code shim from the resolved .app — guaranteed to match the app.
+  function resolveCodeBinFromApp(appName) {
+    const bases = ['/Applications', os.homedir() + '/Applications'];
+    for (const base of bases) {
+      const bin = path.join(base, `${appName}.app`, 'Contents', 'Resources', 'app', 'bin', 'code');
+      if (fs.existsSync(bin)) return bin;
+    }
+    return null;
+  }
+
+  const codeBin = resolveCodeBinFromApp(vscodeAppName);
+
+  // ── Step 1: open a new VS Code window for this project + context file ──────
+  // We use the `code` shim derived from the resolved .app so we always hit the
+  // right VS Code. `--new-window` opens a dedicated window instead of reusing
+  // an existing one for a different project.
   let opened = false;
-  if (codeBinResolved) {
+  if (codeBin) {
     try {
       const sp = require('child_process').spawn(
         codeBin, ['--new-window', workDir, contextPath],
@@ -446,26 +455,23 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     } catch { /* fall through */ }
   }
   if (!opened && os.platform() === 'darwin') {
-    // open -a (no -n): routes --new-window + paths to the already-running VS Code
-    // server process. Using -n would force a second app instance which conflicts
-    // with VS Code's single-server architecture and causes the window to close.
+    // AppleScript fallback — tells the running app directly, no new process fork
+    const safeApp  = vscodeAppName.replace(/"/g, '\\"');
+    const safeDir  = workDir.replace(/"/g, '\\"');
+    const safeFile = contextPath.replace(/"/g, '\\"');
+    const script = `tell application "${safeApp}" to activate\n` +
+                   `do shell script "${codeBin || 'code'} --new-window '${safeDir}' '${safeFile}' &"`;
     try {
-      const sp = require('child_process').spawn(
-        'open', ['-a', vscodeAppName, '--args', '--new-window', workDir, contextPath],
-        { detached: true, stdio: 'ignore' }
-      );
+      const sp = require('child_process').spawn('osascript', ['-e', script],
+        { detached: true, stdio: 'ignore' });
       sp.unref();
       opened = true;
     } catch { /* fall through */ }
   }
 
   // ── Step 2: send the agent prompt straight into Copilot Chat ──────────────
-  // vscode://GitHub.copilot-chat/chat?query=<encoded>
-  // This opens the Chat panel AND pre-fills + submits the message — the agent
-  // "hello" is delivered automatically without any copy-paste by the user.
-  //
-  // We keep the query short (no full skill dump) so the URI stays well under
-  // browser/OS limits; the full context is in the open context file.
+  // vscode://GitHub.copilot-chat/chat?query=<encoded> opens the panel AND
+  // pre-fills + submits the message automatically.
   const chatQuery = encodeURIComponent(
     `@workspace You are acting as the ${agentName}. ` +
     `The full role definition and instructions are in the file ` +
@@ -475,10 +481,10 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
   );
   const copilotUri = `vscode://GitHub.copilot-chat/chat?query=${chatQuery}`;
 
-  // Wait 2 s so VS Code finishes launching and registers the extension URI handler
+  // Wait 2 s so VS Code finishes loading the window before the URI is dispatched
   setTimeout(() => {
     let uriOpened = false;
-    if (codeBinResolved) {
+    if (codeBin) {
       try {
         const sp = require('child_process').spawn(
           codeBin, ['--open-url', copilotUri],
@@ -505,6 +511,8 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
   // ── Broadcast status ───────────────────────────────────────────────────────
   const rel = path.relative(workDir, contextPath);
   broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
+  broadcast('log', { agentId, level: 'info', msg: `VS Code app: ${vscodeAppName}` });
+  broadcast('log', { agentId, level: 'info', msg: `code shim: ${codeBin || '⚠ not found — will use AppleScript fallback'}` });
   broadcast('log', { agentId, level: opened ? 'success' : 'warn',
     msg: opened ? `✓ New VS Code window opening for: ${path.basename(workDir)}` : '⚠ Could not auto-open VS Code — open it manually' });
   broadcast('log', { agentId, level: 'info', msg: `Context file: ${rel}` });
