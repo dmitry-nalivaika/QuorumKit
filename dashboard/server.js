@@ -410,17 +410,16 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
 
   try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }
 
-  // Try to find `code` binary — resolveBin() walks EXTRA_PATHS which has VS Code 3 first
+  // ── Resolve tooling ────────────────────────────────────────────────────────
   const codeBin = resolveBin('code');
   const codeBinResolved = codeBin !== 'code';
 
   // Resolve the VS Code .app name for `open -a` fallback (macOS only).
-  // Also honour a user override via config field `vscodePath` / `vscodeApp`.
+  // Honour a user override via config field `vscodeApp`.
   const cfg2 = loadConfig();
   const vscodeAppName = cfg2.vscodeApp || resolveVSCodeApp();
 
   function resolveVSCodeApp() {
-    // Check numbered versions first (VS Code 3, 2, then plain)
     const candidates = [
       { base: '/Applications',                names: ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'] },
       { base: os.homedir() + '/Applications', names: ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'] },
@@ -430,16 +429,16 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
         if (fs.existsSync(path.join(base, `${name}.app`))) return name;
       }
     }
-    return 'Visual Studio Code'; // ultimate fallback
+    return 'Visual Studio Code';
   }
 
-  // ── Step 1: open VS Code at the project folder AND open the context file ──
-  // Using `code <dir> <file>` opens the folder as workspace and shows the file.
+  // ── Step 1: open a NEW VS Code window for this project + show context file ─
+  // --new-window ensures we never land in some other open project's window.
   let opened = false;
   if (codeBinResolved) {
     try {
       const sp = require('child_process').spawn(
-        codeBin, [workDir, contextPath],
+        codeBin, ['--new-window', workDir, contextPath],
         { detached: true, stdio: 'ignore', env: spawnEnv() }
       );
       sp.unref();
@@ -447,10 +446,10 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     } catch { /* fall through */ }
   }
   if (!opened && os.platform() === 'darwin') {
-    // Fallback: open -a <App Name> — uses the correct VS Code version
+    // `open -na` — -n forces a new app instance, -a picks the right version
     try {
       const sp = require('child_process').spawn(
-        'open', ['-a', vscodeAppName, '--args', workDir, contextPath],
+        'open', ['-na', vscodeAppName, '--args', '--new-window', workDir, contextPath],
         { detached: true, stdio: 'ignore' }
       );
       sp.unref();
@@ -458,13 +457,25 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     } catch { /* fall through */ }
   }
 
-  // ── Step 2: trigger the Copilot Chat panel via VS Code URI scheme ──────────
-  // We wait 1.5 s so VS Code has time to finish launching before we send the URI.
-  // vscode://GitHub.copilot-chat  → activates / focuses the Copilot Chat view.
-  const copilotUri = 'vscode://GitHub.copilot-chat';
+  // ── Step 2: send the agent prompt straight into Copilot Chat ──────────────
+  // vscode://GitHub.copilot-chat/chat?query=<encoded>
+  // This opens the Chat panel AND pre-fills + submits the message — the agent
+  // "hello" is delivered automatically without any copy-paste by the user.
+  //
+  // We keep the query short (no full skill dump) so the URI stays well under
+  // browser/OS limits; the full context is in the open context file.
+  const chatQuery = encodeURIComponent(
+    `@workspace You are acting as the ${agentName}. ` +
+    `The full role definition and instructions are in the file ` +
+    `\`.copilot-agent-context.md\` that is currently open in the editor — ` +
+    `read it now and follow every instruction exactly. ` +
+    `Introduce yourself as ${agentName} and ask what I need.`
+  );
+  const copilotUri = `vscode://GitHub.copilot-chat/chat?query=${chatQuery}`;
+
+  // Wait 2 s so VS Code finishes launching and registers the extension URI handler
   setTimeout(() => {
     let uriOpened = false;
-    // Prefer `code --open-url` — works even when VS Code is already running
     if (codeBinResolved) {
       try {
         const sp = require('child_process').spawn(
@@ -475,36 +486,27 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
         uriOpened = true;
       } catch { /* fall through */ }
     }
-    // macOS fallback: `open <vscode://…>` is handled by the OS URI dispatcher
     if (!uriOpened && os.platform() === 'darwin') {
       try {
-        const sp = require('child_process').spawn(
-          'open', ['-a', vscodeAppName, '--args', '--open-url', copilotUri],
-          { detached: true, stdio: 'ignore' }
-        );
+        const sp = require('child_process').spawn('open', [copilotUri],
+          { detached: true, stdio: 'ignore' });
         sp.unref();
         uriOpened = true;
       } catch { /* ignore */ }
     }
-    if (uriOpened) {
-      broadcast('log', { agentId, level: 'success', msg: '✓ Copilot Chat panel activated' });
-    } else {
-      broadcast('log', { agentId, level: 'warn', msg: '⚠ Could not auto-open Copilot Chat — open it manually (⌃⌘I)' });
-    }
-  }, 1500);
+    broadcast('log', { agentId, level: uriOpened ? 'success' : 'warn',
+      msg: uriOpened
+        ? '✓ Copilot Chat opened — agent prompt sent automatically'
+        : '⚠ Could not auto-send prompt — paste it from the context file manually (⌃⌘I)' });
+  }, 2000);
 
-  // Broadcast instructions to the console
+  // ── Broadcast status ───────────────────────────────────────────────────────
   const rel = path.relative(workDir, contextPath);
   broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
-  broadcast('log', { agentId, level: 'success', msg: opened ? `✓ VS Code opened with context file` : '⚠ Could not auto-open VS Code — open it manually' });
-  broadcast('log', { agentId, level: 'info',    msg: `Context file: ${rel}` });
-  broadcast('log', { agentId, level: 'system',  msg: '─'.repeat(52) });
-  broadcast('log', { agentId, level: 'info',    msg: '1. VS Code + Copilot Chat are opening automatically…' });
-  broadcast('log', { agentId, level: 'info',    msg: `2. The context file is open — review the prompt at the top` });
-  broadcast('log', { agentId, level: 'info',    msg: '3. Copy the prompt block and paste it into Copilot Chat' });
-  broadcast('log', { agentId, level: 'info',    msg: '   (or just type  @workspace  — the file is already open)' });
-  broadcast('log', { agentId, level: 'info',    msg: '4. Continue the conversation — Copilot will act as the agent' });
-  broadcast('log', { agentId, level: 'system',  msg: '─'.repeat(52) });
+  broadcast('log', { agentId, level: opened ? 'success' : 'warn',
+    msg: opened ? `✓ New VS Code window opening for: ${path.basename(workDir)}` : '⚠ Could not auto-open VS Code — open it manually' });
+  broadcast('log', { agentId, level: 'info', msg: `Context file: ${rel}` });
+  broadcast('log', { agentId, level: 'info', msg: '⏳ Sending agent prompt to Copilot Chat in 2 s…' });
   broadcast('agentStatus', { agentId, status: 'done' });
   broadcast('kanban', { action: 'add', col: 'done',
     card: { id: ++seq, agentId, title: `${agentName}: context ready`, agent: agentName } });
