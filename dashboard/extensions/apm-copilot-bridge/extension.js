@@ -32,54 +32,81 @@ function readAgentMarker(rootPath) {
 }
 
 async function submitPrompt(prompt) {
-  // Strategy: ensure Agent mode is active, THEN submit the query.
-  // VS Code/Copilot honors `mode: 'agent'` inconsistently across builds, so
-  // we belt-and-braces it: open chat → flip to Agent mode via the dedicated
-  // command → re-open with the query so the prompt lands in Agent mode.
+  // Strategy:
+  //   1. Wait until Copilot Chat has actually finished registering its
+  //      commands AND its language model is online. Firing too early causes
+  //      "Language model unavailable".
+  //   2. Switch to Agent mode FIRST, in its own command call. Trying to do it
+  //      in the same chat.open call as the query sometimes lands in Ask mode.
+  //   3. Submit the query as a separate call, after Agent mode has applied.
+  //   4. On failure, retry once after a longer wait.
 
   async function tryCmd(id, ...args) {
-    try { await vscode.commands.executeCommand(id, ...args); return true; }
-    catch { return false; }
+    try {
+      await vscode.commands.executeCommand(id, ...args);
+      console.log(`[APM] cmd ok: ${id}`);
+      return true;
+    } catch (e) {
+      console.log(`[APM] cmd fail: ${id} → ${e && e.message}`);
+      return false;
+    }
   }
 
-  // 1) Open the chat panel (no query yet) so the mode commands have a target.
-  await tryCmd('workbench.action.chat.open', { mode: 'agent' });
+  // Wait until a known Copilot/chat command is available (max 6s).
+  async function waitForChatReady() {
+    const known = [
+      'workbench.action.chat.openAgent',
+      'workbench.action.chat.open',
+    ];
+    for (let i = 0; i < 30; i++) {
+      const all = await vscode.commands.getCommands(true);
+      if (known.some(k => all.includes(k))) {
+        // Plus give the language model itself a moment to wake up.
+        await new Promise(r => setTimeout(r, 1500));
+        return;
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
 
-  // 2) Force Agent mode. Different VS Code/Copilot versions expose different
-  //    command IDs — try them all; the first one that exists wins.
+  await waitForChatReady();
+
+  // Step 1 — Force Agent mode. First command that succeeds wins.
   const modeSwitched =
     await tryCmd('workbench.action.chat.openAgent') ||
     await tryCmd('workbench.action.chat.setMode', 'agent') ||
     await tryCmd('github.copilot.chat.setMode', 'agent') ||
     await tryCmd('workbench.action.chat.toggleAgentMode');
+  console.log(`[APM] agent mode switched: ${modeSwitched}`);
 
-  // 3) Submit the prompt. With a chat already open in Agent mode, this
-  //    appends and sends. `mode: 'agent'` is also passed for newer builds
-  //    that key off the open-options instead.
+  // Tiny wait so the mode flip lands before the query reaches the panel.
+  await new Promise(r => setTimeout(r, 500));
+
+  // Step 2 — Submit the query. Retry once on failure (handles the
+  // "Language model unavailable" race on cold start).
+  async function submitOnce() {
+    return tryCmd('workbench.action.chat.open', { query: prompt, mode: 'agent' });
+  }
+
+  let ok = await submitOnce();
+  if (!ok) {
+    await new Promise(r => setTimeout(r, 2500));
+    ok = await submitOnce();
+  }
+
+  if (ok) return true;
+
+  // Final fallback — clipboard + notification.
   try {
-    await vscode.commands.executeCommand('workbench.action.chat.open', {
-      query: prompt,
-      mode: 'agent',
-    });
-    if (!modeSwitched) {
-      // Last resort: try once more after the chat has rendered.
-      await new Promise(r => setTimeout(r, 400));
-      await tryCmd('workbench.action.chat.openAgent');
-    }
+    await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+    await vscode.env.clipboard.writeText(prompt);
+    vscode.window.showInformationMessage(
+      'APM: prompt copied to clipboard — paste into Copilot Chat (⌘V, Enter).'
+    );
     return true;
-  } catch (e1) {
-    try {
-      // Older fallback — focus the panel and stash the prompt on the clipboard.
-      await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-      await vscode.env.clipboard.writeText(prompt);
-      vscode.window.showInformationMessage(
-        'APM: prompt copied to clipboard — paste into Copilot Chat (⌘V, Enter).'
-      );
-      return true;
-    } catch (e2) {
-      vscode.window.showErrorMessage(`APM Copilot Bridge: ${e2.message || e2}`);
-      return false;
-    }
+  } catch (e) {
+    vscode.window.showErrorMessage(`APM Copilot Bridge: ${e.message || e}`);
+    return false;
   }
 }
 
@@ -102,8 +129,7 @@ async function tryInjectOnce() {
   const prompt = extractPrompt(md);
   if (!prompt) return;
 
-  // Small delay so the chat extension has time to register its commands.
-  await new Promise(r => setTimeout(r, 1500));
+  // submitPrompt() waits for chat readiness internally.
   const ok = await submitPrompt(prompt);
   if (ok) {
     try { fs.writeFileSync(flag, new Date().toISOString()); } catch { /* */ }

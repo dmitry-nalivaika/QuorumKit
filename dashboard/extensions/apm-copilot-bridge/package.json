@@ -2,7 +2,7 @@
   "name": "apm-copilot-bridge",
   "displayName": "APM Copilot Bridge",
   "description": "Auto-submits APM agent prompts to Copilot Chat on workspace open.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "apm",
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
