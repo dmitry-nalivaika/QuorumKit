@@ -473,6 +473,48 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .kcard.k-running { border-left-color: var(--green) !important; }
 .kcard.k-running .kcard-by::before { content: '⚡ '; }
 .kcard.k-error   { border-left-color: var(--red) !important; opacity: 0.7; }
+
+/* ─── Pipelines panel ─────────────────────────────────────────────────────── */
+#ppanel { padding: 10px 14px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.pipe-trigger-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.pipe-trigger-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pipe-trigger-row select, .pipe-trigger-row input {
+  background: var(--surface3); border: 1px solid var(--border); border-radius: var(--r-xs);
+  color: var(--text); font-size: 12px; padding: 4px 8px; outline: none;
+  font-family: var(--font);
+}
+.pipe-trigger-row select { flex: 1; min-width: 140px; }
+.pipe-trigger-row select:focus, .pipe-trigger-row input:focus { border-color: var(--blue); }
+.pipe-btn { background: var(--blue); color: #0d1117; border: none; border-radius: var(--r-xs); padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+.pipe-btn:hover { opacity: 0.85; }
+.pipe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pipe-btn-ghost { background: var(--surface3); color: var(--text2); border: 1px solid var(--border); }
+.pipe-trigger-status { font-size: 11px; color: var(--text3); min-height: 14px; }
+.pipe-trigger-status.ok  { color: var(--green); }
+.pipe-trigger-status.err { color: var(--red); }
+.pipe-runs-hd { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+#pipe-runs { display: flex; flex-direction: column; gap: 6px; }
+.prun { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--r-xs); padding: 8px 10px; font-size: 12px; }
+.prun.pr-running { border-left-color: var(--green); }
+.prun.pr-awaiting { border-left-color: var(--amber); }
+.prun.pr-completed { border-left-color: var(--blue); opacity: 0.7; }
+.prun.pr-failed { border-left-color: var(--red); opacity: 0.7; }
+.prun-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.prun-name { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.prun-status { font-size: 10px; font-family: var(--mono); padding: 1px 5px; border-radius: 3px; background: var(--surface3); color: var(--text3); }
+.prun-status.s-running   { background: rgba(63,185,80,.15);  color: var(--green); }
+.prun-status.s-awaiting  { background: rgba(210,153,34,.15); color: var(--amber); }
+.prun-status.s-completed { background: rgba(88,166,255,.15); color: var(--blue); }
+.prun-status.s-failed    { background: rgba(248,81,73,.15);  color: var(--red); }
+.prun-step { color: var(--text3); margin-top: 4px; }
+.prun-bar  { margin-top: 6px; background: var(--surface3); border-radius: 3px; height: 4px; overflow: hidden; }
+.prun-bar-fill { height: 100%; border-radius: 3px; background: var(--green); transition: width .4s; }
+.prun-bar-fill.s-failed { background: var(--red); }
+.prun-bar-fill.s-awaiting { background: var(--amber); }
+.prun-approve { margin-top: 6px; }
+.prun-approve button { background: var(--amber); color: #0d1117; border: none; border-radius: var(--r-xs); padding: 3px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.prun-approve button:hover { opacity: 0.85; }
+.prun-time { font-size: 10px; color: var(--textMute); margin-top: 3px; }
   </style>
 </head>
 <body>
@@ -538,6 +580,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     <div class="dtabs">
       <button class="dtab on" data-dt="console">💻 Console</button>
       <button class="dtab"    data-dt="kanban">📋 Board</button>
+      <button class="dtab"    data-dt="pipelines">🚀 Pipelines</button>
       <button class="dtab"    data-dt="about">ℹ️ Stack</button>
     </div>
     <div class="drw-ctrls">
@@ -559,6 +602,27 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
       <div class="kcol ktodo"><div class="kchd">📥 Queue</div><div id="k-todo"></div></div>
       <div class="kcol kwip" ><div class="kchd">⚡ In Progress</div><div id="k-wip"></div></div>
       <div class="kcol kdone"><div class="kchd">✅ Done</div><div id="k-done"></div></div>
+    </div>
+  </div>
+
+  <div class="dpanel" id="pipelines-panel">
+    <div id="ppanel">
+      <div class="pipe-trigger-box">
+        <div class="pipe-trigger-row">
+          <select id="pipe-select" title="Choose pipeline">
+            <option value="">— select pipeline —</option>
+          </select>
+          <input id="pipe-issue" type="number" placeholder="Issue #" min="1" title="GitHub issue number" style="width:90px" />
+          <button id="pipe-run-btn" class="pipe-btn" title="Trigger pipeline via Orchestrator webhook">▶ Run</button>
+          <button id="pipe-refresh-btn" class="pipe-btn pipe-btn-ghost" title="Reload pipeline list">↺</button>
+        </div>
+        <div id="pipe-trigger-status" class="pipe-trigger-status"></div>
+      </div>
+      <div class="pipe-runs-hd">
+        <span>Active &amp; recent runs</span>
+        <button class="pipe-btn pipe-btn-ghost" id="pipe-clear-btn" style="font-size:10px;padding:2px 6px">clear</button>
+      </div>
+      <div id="pipe-runs"></div>
     </div>
   </div>
 
@@ -1552,9 +1616,12 @@ function pulse() {
 }
 
 // ─── Server / WebSocket ───────────────────────────────────────────────────────
-const SERVER = `${location.protocol === 'file:' ? 'http' : location.protocol.replace(':','')}://localhost:3131`;
-const WS_URL  = `ws://localhost:3131`;
-let   ws      = null;
+// Derive host:port from the page URL so any --port value works automatically.
+// Falls back to localhost:3131 only when opened as a file:// URL.
+const _origin  = location.protocol === 'file:' ? 'localhost:3131' : location.host;
+const SERVER   = `${location.protocol === 'file:' ? 'http' : location.protocol.replace(':','')}://${_origin}`;
+const WS_URL   = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${_origin}`;
+let   ws       = null;
 let   serverCfg = null;  // config received from server
 
 function wsConnect() {
@@ -1563,7 +1630,7 @@ function wsConnect() {
     ws = new WebSocket(WS_URL);
     ws.onopen = () => {
       setConn(true);
-      clog('success', '✓ Connected to orchestrator server (localhost:3131)');
+      clog('success', `✓ Connected to orchestrator server (${_origin})`);
     };
     ws.onclose = () => {
       setConn(false);
@@ -1685,6 +1752,10 @@ function handleServerMsg(msg) {
       }
       break;
     }
+
+    case 'pipeline-event':
+      upsertPipelineRun(msg);
+      break;
   }
 }
 
@@ -1762,6 +1833,175 @@ async function stopAgent(id, agentName) {
 function isServerMode() {
   return ws && ws.readyState === WebSocket.OPEN && serverCfg && !!serverCfg.localPath;
 }
+
+// ─── Pipeline panel ───────────────────────────────────────────────────────────
+const pipelineRuns = new Map(); // runId → { ...payload, el }
+
+const STATUS_CLASS = { running: 'pr-running', awaiting: 'pr-awaiting', 'awaiting-approval': 'pr-awaiting', completed: 'pr-completed', failed: 'pr-failed' };
+const STATUS_BADGE = { running: 's-running', awaiting: 's-awaiting', 'awaiting-approval': 's-awaiting', completed: 's-completed', failed: 's-failed' };
+const STATUS_ICON  = { running: '⚡', awaiting: '⏸', 'awaiting-approval': '⏸', completed: '✅', failed: '✗', pending: '◷' };
+
+function upsertPipelineRun(payload) {
+  const { runId, pipeline, status, step, currentStepIndex, steps, updatedAt } = payload;
+  if (!runId) return;
+
+  // Switch to pipelines tab automatically on first live event
+  const panel = document.getElementById('pipelines-panel');
+  if (panel && !panel.classList.contains('on')) switchTab('pipelines');
+
+  const total  = Array.isArray(steps) ? steps.length : 0;
+  const idx    = typeof currentStepIndex === 'number' ? currentStepIndex + 1 : (total ? 1 : 0);
+  const pct    = total ? Math.round((idx / total) * 100) : 0;
+  const ts     = updatedAt ? new Date(updatedAt).toLocaleTimeString() : new Date().toLocaleTimeString();
+  const stepLbl = step || (Array.isArray(steps) && steps[currentStepIndex]) || '';
+  const isAwaiting = status === 'awaiting-approval' || status === 'awaiting';
+
+  const existing = pipelineRuns.get(runId);
+  if (existing) {
+    // Update in-place
+    existing.status = status;
+    existing.step   = stepLbl;
+    existing.el.className = `prun ${STATUS_CLASS[status] || ''}`;
+    existing.el.querySelector('.prun-status').className = `prun-status ${STATUS_BADGE[status] || ''}`;
+    existing.el.querySelector('.prun-status').textContent = `${STATUS_ICON[status] || ''} ${status}`;
+    existing.el.querySelector('.prun-step').textContent = stepLbl ? `Step: ${stepLbl}` : '';
+    if (total) {
+      const fill = existing.el.querySelector('.prun-bar-fill');
+      if (fill) { fill.style.width = pct + '%'; fill.className = `prun-bar-fill ${STATUS_BADGE[status] || ''}`; }
+    }
+    existing.el.querySelector('.prun-time').textContent = ts;
+    // Show/hide approve button
+    let approveEl = existing.el.querySelector('.prun-approve');
+    if (isAwaiting) {
+      if (!approveEl) {
+        approveEl = document.createElement('div');
+        approveEl.className = 'prun-approve';
+        approveEl.innerHTML = `<button onclick="approvePipelineRun('${esc(runId)}')">⏸ Post /approve</button>`;
+        existing.el.appendChild(approveEl);
+      }
+    } else if (approveEl) {
+      approveEl.remove();
+    }
+  } else {
+    // Create new card
+    const el = document.createElement('div');
+    el.className = `prun ${STATUS_CLASS[status] || ''}`;
+    el.id = `prun-${runId.replace(/[^a-z0-9]/gi, '_')}`;
+    el.innerHTML = `
+      <div class="prun-top">
+        <span class="prun-name" title="${esc(runId)}">🔗 ${esc(pipeline || runId)}</span>
+        <span class="prun-status ${STATUS_BADGE[status] || ''}">${STATUS_ICON[status] || ''} ${esc(status)}</span>
+      </div>
+      <div class="prun-step">${stepLbl ? `Step: ${esc(stepLbl)}` : ''}</div>
+      ${total ? `<div class="prun-bar"><div class="prun-bar-fill ${STATUS_BADGE[status] || ''}" style="width:${pct}%"></div></div>` : ''}
+      ${isAwaiting ? `<div class="prun-approve"><button onclick="approvePipelineRun('${esc(runId)}')">⏸ Post /approve</button></div>` : ''}
+      <div class="prun-time">${ts}</div>`;
+    document.getElementById('pipe-runs').prepend(el);
+    pipelineRuns.set(runId, { runId, pipeline, status, step: stepLbl, el });
+  }
+
+  // Mirror onto Kanban board too
+  const colMap = { running: 'wip', 'awaiting-approval': 'wip', awaiting: 'wip', pending: 'todo', completed: 'done', failed: 'done' };
+  const col = colMap[status] || 'wip';
+  const kId = `pipe-${runId}`;
+  if (!kcards[kId]) {
+    clearSeedKanban();
+    addKCard(col, { id: kId, title: `🔗 ${pipeline || runId}${stepLbl ? ': ' + stepLbl : ''}`, agent: 'Orchestrator', color: '#a371f7', cls: col === 'wip' ? 'k-running' : '' });
+  } else if (kcards[kId].col !== col) {
+    kcards[kId].card.cls = col === 'wip' ? 'k-running' : '';
+    moveKCard(kId, col);
+  }
+}
+
+async function loadPipelineList() {
+  const sel = document.getElementById('pipe-select');
+  sel.innerHTML = '<option value="">— loading… —</option>';
+  try {
+    const res = await fetch(`${SERVER}/api/pipelines`);
+    if (!res.ok) throw new Error(res.status);
+    const { pipelines } = await res.json();
+    sel.innerHTML = '<option value="">— select pipeline —</option>';
+    (pipelines || []).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.name; opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  } catch {
+    sel.innerHTML = '<option value="">— server not reachable —</option>';
+  }
+}
+
+async function triggerPipeline() {
+  const name    = document.getElementById('pipe-select').value;
+  const issue   = document.getElementById('pipe-issue').value.trim();
+  const statusEl = document.getElementById('pipe-trigger-status');
+  const btn     = document.getElementById('pipe-run-btn');
+
+  if (!name) { statusEl.textContent = 'Select a pipeline first.'; statusEl.className = 'pipe-trigger-status err'; return; }
+  if (!issue) { statusEl.textContent = 'Enter an issue number.'; statusEl.className = 'pipe-trigger-status err'; return; }
+
+  btn.disabled = true;
+  statusEl.textContent = 'Triggering…'; statusEl.className = 'pipe-trigger-status';
+
+  try {
+    const res = await fetch(`${SERVER}/api/pipeline/trigger`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipeline: name, issueNumber: parseInt(issue, 10) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      statusEl.textContent = `✓ Triggered run ${data.runId || ''}`;
+      statusEl.className = 'pipe-trigger-status ok';
+      clog('success', `Pipeline triggered: ${name} for issue #${issue}`, 'ORCHESTRATOR');
+      if (data.runId) {
+        upsertPipelineRun({ runId: data.runId, pipeline: name, status: 'pending', step: '', steps: data.steps || [], currentStepIndex: 0, updatedAt: new Date().toISOString() });
+      }
+    } else {
+      statusEl.textContent = `✗ ${data.error || res.status}`;
+      statusEl.className = 'pipe-trigger-status err';
+    }
+  } catch (e) {
+    statusEl.textContent = '✗ Cannot reach server';
+    statusEl.className = 'pipe-trigger-status err';
+  }
+  btn.disabled = false;
+}
+
+async function approvePipelineRun(runId) {
+  const statusEl = document.getElementById('pipe-trigger-status');
+  try {
+    const res = await fetch(`${SERVER}/api/pipeline/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      clog('success', `Approved pipeline run ${runId}`, 'ORCHESTRATOR');
+      statusEl.textContent = `✓ /approve posted for ${runId}`;
+      statusEl.className = 'pipe-trigger-status ok';
+    } else {
+      clog('error', data.error || 'Approve failed', 'ORCHESTRATOR');
+    }
+  } catch {
+    clog('error', 'Server not reachable', 'ORCHESTRATOR');
+  }
+}
+
+// Init pipeline panel wiring
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pipe-run-btn')?.addEventListener('click', triggerPipeline);
+  document.getElementById('pipe-refresh-btn')?.addEventListener('click', loadPipelineList);
+  document.getElementById('pipe-clear-btn')?.addEventListener('click', () => {
+    pipelineRuns.clear();
+    document.getElementById('pipe-runs').innerHTML = '';
+  });
+  // Load list when tab becomes visible
+  document.querySelectorAll('.dtab[data-dt="pipelines"]').forEach(btn =>
+    btn.addEventListener('click', loadPipelineList)
+  );
+});
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
 function openSettings() {

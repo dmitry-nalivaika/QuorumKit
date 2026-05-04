@@ -50,8 +50,8 @@ Acceptance Scenarios:
   When the Orchestrator loads the file  
   Then it rejects that file with a clear validation error message, leaves other pipelines active, and logs the error
 - Given a pipeline file is added, modified, or removed in a merged PR  
-  When the Orchestrator next starts (or hot-reloads, if supported)  
-  Then only the updated pipeline rules are affected; all other running pipelines continue uninterrupted
+  When the Orchestrator next starts (triggered by the next incoming GitHub event)  
+  Then only the updated pipeline rules are in effect; hot-reload is explicitly out of scope (see Out of Scope)
 
 ### US-3: Human-in-the-Loop Approval Gate
 
@@ -132,16 +132,31 @@ Acceptance Scenarios:
 ## Functional Requirements
 
 - **FR-001**: The Orchestrator MUST be the sole component permitted to sequence, trigger, and coordinate agents — no agent may directly invoke another agent.
-- **FR-002**: The Orchestrator MUST be stateless between runs; all persistent state MUST reside in GitHub Issues, PRs, and spec files — not in local memory or local files.
+- **FR-002**: The Orchestrator MUST be stateless between runs; all persistent state MUST reside in GitHub Issues, PRs, and spec files — not in local memory or local files. Pipeline run state MUST be serialised as a JSON object inside a specially-tagged HTML comment (`<!-- apm-pipeline-state: {...} -->`) posted as a GitHub Issue or PR comment. When multiple such comments exist (e.g. after retries), the Orchestrator MUST treat the **most recently created** comment matching the tag as the authoritative state; it MUST paginate through all comment pages (up to GitHub's API limit) to find it.
+- **FR-002a**: The pipeline state JSON object MUST conform to the following schema:
+  ```json
+  {
+    "runId": "<uuid>",
+    "pipelineName": "<string>",
+    "triggerEvent": "<string>",
+    "status": "pending|running|awaiting-approval|timed-out|failed|completed",
+    "currentStepIndex": "<integer>",
+    "steps": [
+      { "name": "<string>", "status": "pending|running|completed|failed|skipped", "startedAt": "<ISO8601>", "completedAt": "<ISO8601|null>", "outcome": "<string|null>" }
+    ],
+    "approvalGate": { "requestedAt": "<ISO8601|null>", "timeoutAt": "<ISO8601|null>", "approvedBy": "<string|null>" },
+    "updatedAt": "<ISO8601>"
+  }
+  ```
 - **FR-003**: Pipeline rules MUST be expressed as declarative YAML files (not imperative scripts) located at `.apm/pipelines/*.yml`.
 - **FR-004**: The Orchestrator MUST validate all pipeline YAML files against a published schema on load and reject malformed files with actionable error messages.
 - **FR-005**: The Orchestrator MUST retry failed GitHub API calls up to 3 times with exponential back-off before marking a pipeline run as failed.
 - **FR-006**: Every pipeline state transition MUST produce a human-readable audit entry posted as a GitHub Issue or PR comment on the triggering entity.
-- **FR-007**: Pipeline run status MUST be broadcast to the dashboard via the existing WebSocket mechanism within 5 seconds of any state change.
+- **FR-007**: Pipeline run status MUST be broadcast to the dashboard by: (a) the Orchestrator GitHub Actions workflow POSTing a JSON payload to a `/webhook/pipeline-event` endpoint on `dashboard/server.js`, and (b) `dashboard/server.js` forwarding the payload over its existing WebSocket broadcast channel within 5 seconds of receipt. The GHA workflow MUST call this endpoint only when `DASHBOARD_WEBHOOK_URL` is set as a repository variable/secret; if absent, the broadcast step is silently skipped. The 5-second SLA applies from receipt at the dashboard server, not from GHA workflow start.
 - **FR-008**: The Orchestrator MUST support an `approval: required` gate on any pipeline step; the gate MUST pause execution and resume only on an authorised `/approve` comment.
 - **FR-009**: Approval gates MUST enforce a configurable timeout (default: 72 hours); on expiry the run MUST be marked `timed-out` with a posted explanation.
-- **FR-010**: Approval gate `/approve` commands MUST be accepted only from users with at least `write` permission on the repository.
-- **FR-011**: The Orchestrator MUST support both Claude Code and GitHub Copilot agent invocation paths, controlled by the `aiTool` setting in `.apm-project.json`.
+- **FR-010**: Approval gate `/approve` commands MUST be accepted only from users with at least `write` permission on the repository. The Orchestrator MUST verify this by calling `GET /repos/{owner}/{repo}/collaborators/{username}/permission` using a GitHub App token or PAT with `read:org` scope (in addition to the base scopes listed in the Security section). The response field `permission` MUST be one of `write`, `admin`, or `maintain` for the approval to be accepted. If the API call fails or returns an insufficient permission level, the approval MUST be rejected and a comment posted explaining the rejection.
+- **FR-011**: The Orchestrator MUST support both Claude Code and GitHub Copilot agent invocation paths, controlled by the `aiTool` setting in `.apm-project.json`. If `.apm-project.json` is absent or the `aiTool` field is missing, the Orchestrator MUST default to `copilot`. If `aiTool` is set to an unrecognised value, the pipeline run MUST be marked `failed` with a comment explaining the invalid configuration. Both runtimes may be installed simultaneously; on any given event, only the runtime matching the configured `aiTool` fires — they do not run in parallel.
 - **FR-012**: `init.sh` MUST install exactly three default pipeline templates: `feature-pipeline.yml`, `bug-fix-pipeline.yml`, and `release-pipeline.yml`. `release-pipeline.yml` MUST include an `approval: required` gate before the release step by default.
 - **FR-013**: Pipeline templates MUST be overridable by editing the installed `.apm/pipelines/*.yml` files with no changes required outside that directory.
 - **FR-014**: The Orchestrator MUST log every unmatched event with reason `no-rule-match` and take no further action on that event.
@@ -186,12 +201,13 @@ Acceptance Scenarios:
 - Paid/licensed approval workflow tooling — GitHub native primitives only (comments + permission checks)
 - Persistent Orchestrator backend service — execution is stateless, driven by GitHub Actions webhooks
 - Machine learning-based auto-routing or dynamic pipeline generation
+- **Hot-reload of pipeline YAML files** — the Orchestrator is a stateless GHA workflow; pipeline file changes take effect on the next workflow invocation. Hot-reload requires a persistent process and is deferred as a future enhancement.
 
 ---
 
 ## Security and Privacy Considerations
 
-- The Orchestrator MUST use least-privilege GitHub token scopes: `issues:write`, `pull-requests:write`, `contents:read`, `actions:write` — no broader scopes.
+- The Orchestrator MUST use least-privilege GitHub token scopes: `issues:write`, `pull-requests:write`, `contents:read`, `actions:write` — no broader scopes, **except** that the approval gate permission check additionally requires `read:org` scope to call `GET /repos/{owner}/{repo}/collaborators/{username}/permission`. This additional scope MUST be justified in the GitHub Actions workflow YAML as a comment and reviewed by the Security Agent.
 - Approval gate authorisation MUST use GitHub repository permission levels (`write` or above) — no custom role system.
 - No secrets, tokens, or credentials may be written to pipeline YAML files or any committed file (Constitution Security §1).
 - Pipeline YAML files are committed code and subject to standard PR review — any change to pipeline routing is auditable via git history.
@@ -205,18 +221,25 @@ Acceptance Scenarios:
 
 - **A1**: Pipelines are defined in YAML files in `.apm/pipelines/` (not via a UI) — consistent with Constitution §VII (simplicity, existing GitHub primitives) and the triage recommendation. *Reporter confirmation not required.*
 - **A2**: Human-in-the-loop approval uses GitHub Issue/PR comments (`/approve`) checked against repository write permission — GitHub Environment approvals are not used, as they require GitHub Actions execution context and add external dependency. *Reporter confirmation not required.*
-- **A3**: The Orchestrator works with **both** Claude Code and GitHub Copilot simultaneously, controlled by per-project `aiTool` config — Constitution §IV (Dual-AI Compatibility) requires this. *Reporter confirmation not required.*
+- **A3**: The Orchestrator works with **both** Claude Code and GitHub Copilot simultaneously in the sense that both runtime workflows are installed, but only the one matching the `aiTool` config fires per event. The default is `copilot` when `.apm-project.json` is absent. Simultaneous parallel firing of both runtimes on the same event is not supported — Constitution §IV (Dual-AI Compatibility) requires equivalent behaviour, not concurrent execution. *Reporter confirmation not required.*
 - **A4**: Three out-of-the-box pipeline templates are provided: `feature-pipeline.yml`, `bug-fix-pipeline.yml`, `release-pipeline.yml`. No additional templates are required for initial release; further templates are a future enhancement. `release-pipeline.yml` includes an `approval: required` gate before the release step by default — confirmed by reporter.
 - **A5**: The Orchestrator is implemented as a stateless GitHub Actions workflow (not a long-running server process) — consistent with Constitution §VIII (stateless between runs) and the existing `agent-*.yml` / `copilot-agent-*.yml` pattern.
-- **A6**: The existing `dashboard/server.js` WebSocket broadcast mechanism is reused for real-time status updates — no new observability infrastructure is required.
+- **A6**: The existing `dashboard/server.js` WebSocket broadcast mechanism is reused for real-time status updates. The bridge between stateless GHA workflows and the local dashboard server is a webhook POST from GHA to `dashboard/server.js` at a configurable `DASHBOARD_WEBHOOK_URL`. No new observability infrastructure is required beyond adding the `/webhook/pipeline-event` POST endpoint to `dashboard/server.js` and the outbound HTTP call to GHA's Orchestrator workflow. See FR-007 and `docs/architecture/adr-002-orchestrator-state-storage.md`.
+- **A7**: The architectural decision to use GitHub Issue comments as the sole state store (FR-002, FR-002a) is captured in `docs/architecture/adr-002-orchestrator-state-storage.md`. Considered alternatives (GHA cache, GitHub Releases, lightweight DB) are evaluated and rejected in that ADR in favour of GitHub Issue comments, which require no external service and are auditable by any GitHub user.
 
 ---
 
 ## Open Questions
 
-> All open questions resolved. Spec is ready for handoff to the Developer Agent.
+> All open questions resolved. Spec updated 2026-05-04 to address Architect Agent review (ARCH-BLOCKER-1, ARCH-BLOCKER-2, ARCH-CONCERN-1 through ARCH-CONCERN-4).
 
 | # | Question | Owner | Status |
 |---|----------|-------|--------|
 | OQ-1 | Should `release-pipeline.yml` include the approval gate by default, or should gates be opt-in only? | Reporter (@dmitry-nalivaika) | ✅ RESOLVED — approval gate is **on by default** in `release-pipeline.yml` |
 | OQ-2 | Are there additional out-of-the-box pipeline templates beyond the three defaults required for initial release? | Reporter (@dmitry-nalivaika) | ✅ RESOLVED — **no** additional templates; three defaults only |
+| OQ-3 | ARCH-BLOCKER-1: Define pipeline state serialisation schema and authoritative-comment lookup algorithm | Architect Agent | ✅ RESOLVED — FR-002a added; JSON schema and "most-recently-created tagged comment" algorithm specified |
+| OQ-4 | ARCH-BLOCKER-2: Specify GitHub API endpoint and token scope for approval gate permission check | Architect Agent | ✅ RESOLVED — FR-010 updated; `GET /repos/.../collaborators/.../permission` with `read:org` scope specified and justified in Security section |
+| OQ-5 | ARCH-CONCERN-1: Remove hot-reload ambiguity | Architect Agent | ✅ RESOLVED — hot-reload explicitly deferred in US-2 and Out of Scope |
+| OQ-6 | ARCH-CONCERN-2: GHA-to-local-WebSocket architectural mismatch | Architect Agent | ✅ RESOLVED — FR-007 rewritten; webhook POST bridge defined; 5s SLA scoped to dashboard server receipt |
+| OQ-7 | ARCH-CONCERN-3: `aiTool` fallback/default behaviour | Architect Agent | ✅ RESOLVED — FR-011 and A3 updated with default `copilot`, unknown-value error behaviour, and parallel-fire clarification |
+| OQ-8 | ARCH-CONCERN-4: ADR for Orchestrator state-storage strategy | Architect Agent | ✅ RESOLVED — `docs/architecture/adr-002-orchestrator-state-storage.md` created; A7 added |

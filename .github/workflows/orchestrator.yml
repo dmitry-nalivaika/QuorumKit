@@ -1,0 +1,59 @@
+name: APM Orchestrator
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, labeled, synchronize]
+  pull_request_review_comment:
+    types: [created]
+  workflow_run:
+    workflows: ["*"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: write        # needed to trigger workflow_dispatch (agent invocation)
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    # Skip if this is itself an orchestrator run (avoid infinite loops)
+    if: ${{ !contains(github.event.sender.login, '[bot]') || github.event_name == 'workflow_run' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install orchestrator dependencies
+        run: npm ci
+        working-directory: scripts/orchestrator
+
+      - name: Run Orchestrator
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
+        run: node scripts/orchestrator/index.js
+
+      - name: Broadcast to dashboard
+        if: ${{ vars.DASHBOARD_WEBHOOK_URL != '' }}
+        env:
+          DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
+        run: |
+          # Payload is written to /tmp/apm-pipeline-event.json by index.js when a state transition occurs
+          if [ -f /tmp/apm-pipeline-event.json ]; then
+            curl -s -X POST "$DASHBOARD_WEBHOOK_URL/webhook/pipeline-event" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/apm-pipeline-event.json || echo "Dashboard broadcast failed (non-fatal)"
+          fi

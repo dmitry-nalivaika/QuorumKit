@@ -22,8 +22,19 @@ if [ ! -d node_modules ]; then
   npm install --silent
 fi
 
-# Open browser (macOS / Linux / WSL)
+# Resolve the port: honour --port <N> flag first, then $APM_PORT, then 3131
 PORT="${APM_PORT:-3131}"
+for arg in "$@"; do
+  case "$arg" in
+    --port=*) PORT="${arg#--port=}" ;;
+  esac
+done
+# Also handle "--port 4000" (two separate args)
+prev=""
+for arg in "$@"; do
+  [ "$prev" = "--port" ] && PORT="$arg"
+  prev="$arg"
+done
 
 open_browser() {
   local url="http://localhost:$PORT"

@@ -1,0 +1,4 @@
+name: bad pipeline name with spaces
+trigger:
+  event: issues.opened
+steps: []

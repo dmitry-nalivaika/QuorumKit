@@ -216,6 +216,31 @@ install_copilot() {
 # =============================================================================
 # SHARED GITHUB TEMPLATES
 # =============================================================================
+
+# =============================================================================
+# PIPELINE TEMPLATES (FR-012)
+# =============================================================================
+install_pipelines() {
+  h1 "Installing Orchestrator pipeline templates (.apm/pipelines/)"
+  local pipelines_src="$APM_PACKAGE_DIR/templates/.apm/pipelines"
+  if [ ! -d "$pipelines_src" ]; then
+    warn "Pipeline templates not found at $pipelines_src — skipping"
+    return
+  fi
+
+  mkdir -p .apm/pipelines
+
+  for tpl in "$pipelines_src"/*.yml; do
+    tpl_name="$(basename "$tpl")"
+    if [ ! -f ".apm/pipelines/$tpl_name" ]; then
+      cp "$tpl" ".apm/pipelines/$tpl_name"
+      ok "Pipeline template: $tpl_name"
+    else
+      warn "Pipeline template $tpl_name already exists — skipping (edit to customise)"
+    fi
+  done
+}
+
 install_github_templates() {
   local ai_mode="$1"
   h1 "Installing GitHub templates (workflows, PR & issue templates)"
@@ -253,6 +278,9 @@ install_github_templates() {
       done
       ;;
   esac
+
+  # ── orchestrator.yml — always installed (autonomous agent orchestration) ───
+  copy_workflow "$GITHUB_TMPL/workflows/orchestrator.yml"
 
   # ── alert-to-issue.yml — always installed (observability feedback loop) ────
   copy_workflow "$GITHUB_TMPL/workflows/alert-to-issue.yml"
@@ -306,15 +334,18 @@ case "$AI_MODE" in
   claude)
     install_claude
     install_github_templates "claude"
+    install_pipelines
     ;;
   copilot)
     install_copilot
     install_github_templates "copilot"
+    install_pipelines
     ;;
   both)
     install_claude
     install_copilot
     install_github_templates "both"
+    install_pipelines
     ;;
 esac
 

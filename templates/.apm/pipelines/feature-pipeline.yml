@@ -1,0 +1,37 @@
+# Feature Pipeline
+# Triggered when a new issue is opened with label type:feature.
+# Chain: triage → ba → architect (if ADR needed) → dev → qa → reviewer → release
+#
+# Customise this file freely — changes take effect on the next Orchestrator run.
+name: feature-pipeline
+version: "1"
+
+trigger:
+  event: issues.opened
+  labels:
+    - type:feature
+
+steps:
+  - name: triage
+    agent: triage-agent
+
+  - name: ba
+    agent: ba-product-agent
+
+  - name: architect
+    agent: architect-agent
+    condition: "labels.includes('needs:adr')"
+
+  - name: dev
+    agent: developer-agent
+
+  - name: qa
+    agent: qa-test-agent
+
+  - name: reviewer
+    agent: reviewer-agent
+
+  - name: release
+    agent: release-agent
+    approval: required
+    approval_timeout_hours: 72
