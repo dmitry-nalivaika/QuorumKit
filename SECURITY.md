@@ -71,4 +71,4 @@ Top 10 vulnerabilities. Trigger it on any PR by commenting:
 @security-agent
 ```
 
-See [README.md](../README.md) for the full agent reference.
+See [README.md](README.md) for the full agent reference.
