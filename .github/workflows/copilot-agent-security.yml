@@ -1,0 +1,35 @@
+name: Security Agent (Copilot)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  security:
+    if: |
+      contains(github.event.comment.body, '@security-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Security Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read `.github/agents/security-agent.md` in full — it defines your role,
+            OWASP checklist, reporting format, severity levels, and hard constraints.
+            Read `.specify/memory/constitution.md` in full.
+
+            Your task: perform a security review of PR #${{ github.event.issue.number }}
+            and post the Security Review report.
+            Follow every step in security-agent.md exactly.

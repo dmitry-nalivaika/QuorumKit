@@ -1,0 +1,34 @@
+name: QA/Test Agent (Copilot)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  qa:
+    if: |
+      contains(github.event.comment.body, '@qa-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run QA Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read `.github/agents/qa-test-agent.md` in full — it defines your role,
+            quality gates, reporting format, and hard constraints.
+            Read `.specify/memory/constitution.md` in full.
+
+            Your task: validate PR #${{ github.event.issue.number }} and post a QA Report.
+            Follow every step in qa-test-agent.md exactly.

@@ -1,0 +1,43 @@
+name: Release Agent (Copilot)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump override (patch|minor|major)'
+        required: false
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Release Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read `.github/agents/release-agent.md` in full — it defines your role,
+            semver algorithm, changelog format, version bump PR template, and hard constraints.
+            Read `.specify/memory/constitution.md` in full.
+
+            Bump override (if set): ${{ github.event.inputs.bump || 'auto' }}
+
+            Your task: determine the correct semver bump from commits since the last
+            Git tag, generate the CHANGELOG delta, update the version file and
+            CHANGELOG.md, and open a Version Bump PR.
+            Follow every step in release-agent.md exactly.
