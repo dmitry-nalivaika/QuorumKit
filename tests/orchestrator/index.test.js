@@ -41,23 +41,66 @@ describe('orchestrator.runOrchestrator — new feature issue', () => {
     );
   });
 
-  it('invokes ALL steps in sequence within a single run', async () => {
+  it('pauses at awaiting-agent after dispatching the first step', async () => {
     const client = makeClient();
     const event = { type: 'issues.opened', labels: ['type:feature'], issueNumber: 10, ref: 'main' };
-    const pipelines = [featurePipeline];
 
-    await runOrchestrator({ client, event, pipelines, owner: 'o', repo: 'r', aiTool: 'copilot' });
+    await runOrchestrator({ client, event, pipelines: [featurePipeline], owner: 'o', repo: 'r', aiTool: 'copilot' });
 
+    // Only the first agent should be dispatched in this run
     const workflowCalls = client.triggerWorkflow.mock.calls.map(c => c[2]);
-    expect(workflowCalls).toContain('copilot-agent-triage.yml');
-    expect(workflowCalls).toContain('copilot-agent-ba.yml');
+    expect(workflowCalls).toEqual(['copilot-agent-triage.yml']);
 
-    // Final state should be 'completed'
-    const allCommentBodies = client.createComment.mock.calls.map(c => c[3]);
-    const completedState = allCommentBodies.find(b =>
-      typeof b === 'string' && b.includes('"status":"completed"')
-    );
-    expect(completedState).toBeTruthy();
+    // State should be awaiting-agent (not completed)
+    const allBodies = client.createComment.mock.calls.map(c => c[3]);
+    const awaitingState = allBodies.find(b => typeof b === 'string' && b.includes('"status":"awaiting-agent"'));
+    expect(awaitingState).toBeTruthy();
+  });
+
+  it('advances to the next step when workflow_run.completed fires for the current agent', async () => {
+    const state = {
+      runId: 'run-xyz',
+      pipelineName: 'feature-pipeline',
+      triggerEvent: 'issues.opened',
+      status: 'awaiting-agent',
+      currentStepIndex: 0,
+      steps: [
+        { name: 'triage', status: 'awaiting-agent', startedAt: '2026-05-04T10:00:00Z', completedAt: null, outcome: null },
+        { name: 'ba', status: 'pending', startedAt: null, completedAt: null, outcome: null },
+      ],
+      approvalGate: { requestedAt: null, timeoutAt: null, approvedBy: null },
+      updatedAt: '2026-05-04T10:00:00Z',
+    };
+    const stateBody = `<!-- apm-pipeline-state: ${JSON.stringify(state)} -->`;
+    const client = {
+      listComments: vi.fn().mockResolvedValue([{ body: stateBody, created_at: '2026-05-04T10:00:00Z' }]),
+      createComment: vi.fn().mockResolvedValue({ id: 3 }),
+      triggerWorkflow: vi.fn().mockResolvedValue(undefined),
+      getCollaboratorPermission: vi.fn().mockResolvedValue('write'),
+    };
+    const event = {
+      type: 'workflow_run.completed',
+      issueNumber: 10,
+      ref: 'main',
+      labels: [],
+      workflowName: 'Triage Agent (Copilot)',
+      workflowConclusion: 'success',
+    };
+
+    await runOrchestrator({ client, event, pipelines: [featurePipeline], owner: 'o', repo: 'r', aiTool: 'copilot' });
+
+    // Should advance and dispatch the second agent (ba)
+    expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'copilot-agent-ba.yml', 'main', expect.any(Object));
+  });
+
+  it('does not post no-rule-match comment for issues.labeled events', async () => {
+    const client = makeClient();
+    const event = { type: 'issues.labeled', labels: ['type:chore'], issueNumber: 13, ref: 'main' };
+
+    await runOrchestrator({ client, event, pipelines: [featurePipeline], owner: 'o', repo: 'r', aiTool: 'copilot' });
+
+    expect(client.createComment).not.toHaveBeenCalled();
+    expect(client.triggerWorkflow).not.toHaveBeenCalled();
   });
 
   it('logs no-rule-match and does not invoke any agent when no pipeline matches', async () => {
