@@ -82,21 +82,19 @@ async function submitPrompt(prompt) {
   console.log(`[APM] chat-related commands (${interesting.length}):`);
   for (const c of interesting) console.log(`  ${c}`);
 
-  // Step 1 — Open the chat panel in Agent mode (no query yet).
-  await tryCmd('workbench.action.chat.open', { mode: 'agent' });
-  await new Promise(r => setTimeout(r, 400));
-
-  // Step 2 — Force Agent mode through every command name we know about.
+  // Step 1 — Open the chat panel directly in Agent mode.
+  // CRITICAL: do NOT call chat.open afterwards — it resets the mode to Ask
+  // and submits the query there. Once openAgent succeeds, we keep that
+  // chat session and submit into IT.
+  let modeSwitched = false;
   const modeAttempts = [
     ['workbench.action.chat.openAgent'],
-    ['workbench.action.chat.newEditSession', { agentMode: true }],
-    ['workbench.action.chat.setMode', 'agent'],
-    ['github.copilot.chat.setMode', 'agent'],
     ['github.copilot.chat.openAgent'],
     ['github.copilot.openAgent'],
+    ['workbench.action.chat.setMode', 'agent'],
+    ['github.copilot.chat.setMode', 'agent'],
     ['workbench.action.chat.toggleAgentMode'],
   ];
-  let modeSwitched = false;
   for (const [id, ...args] of modeAttempts) {
     if (all.includes(id)) {
       modeSwitched = await tryCmd(id, ...args);
@@ -105,21 +103,45 @@ async function submitPrompt(prompt) {
   }
   console.log(`[APM] agent mode switched: ${modeSwitched}`);
 
-  // Wait so the UI actually flips to Agent mode before we submit.
-  await new Promise(r => setTimeout(r, 800));
+  // If no Agent mode command exists at all, fall back to chat.open with mode.
+  if (!modeSwitched) {
+    await tryCmd('workbench.action.chat.open', { mode: 'agent' });
+  }
 
-  // Step 3 — Submit the query. Prefer the explicit submit path so the prompt
-  // is sent in whatever mode is currently active in the panel.
+  // Wait so the Agent-mode chat finishes opening and the input is focused.
+  await new Promise(r => setTimeout(r, 1200));
+
+  // Step 2 — Submit the prompt INTO the already-open Agent chat.
+  // We deliberately avoid `workbench.action.chat.open` here — that command
+  // creates/reopens a chat session and silently reverts the mode.
   async function submitOnce() {
-    // Path A — direct query in chat.open (newer builds key off this).
-    if (await tryCmd('workbench.action.chat.open', { query: prompt, mode: 'agent' })) {
-      return true;
+    // A) Most reliable cross-version path: focus chat input → paste → submit.
+    const savedClip = await vscode.env.clipboard.readText().catch(() => '');
+    await vscode.env.clipboard.writeText(prompt);
+    const focused =
+      await tryCmd('workbench.action.chat.focusInput') ||
+      await tryCmd('workbench.action.chatEditor.focusInput') ||
+      await tryCmd('workbench.panel.chat.view.copilot.focus');
+    if (focused) {
+      await new Promise(r => setTimeout(r, 200));
+      await tryCmd('editor.action.clipboardPasteAction');
+      await new Promise(r => setTimeout(r, 150));
+      // Restore the user's clipboard before submitting.
+      try { await vscode.env.clipboard.writeText(savedClip); } catch { /* */ }
+      // Submit
+      const submitted =
+        await tryCmd('workbench.action.chat.submit') ||
+        await tryCmd('workbench.action.chat.acceptInput');
+      if (submitted) return true;
+    } else {
+      // restore clipboard if we couldn't focus
+      try { await vscode.env.clipboard.writeText(savedClip); } catch { /* */ }
     }
-    // Path B — set the input box text, then accept (= press enter / submit).
-    await new Promise(r => setTimeout(r, 200));
-    if (await tryCmd('workbench.action.chat.acceptInput', { text: prompt })) {
-      return true;
-    }
+
+    // B) Fallback: pass the prompt as input value to acceptInput.
+    if (await tryCmd('workbench.action.chat.acceptInput', prompt)) return true;
+    if (await tryCmd('workbench.action.chat.acceptInput', { inputValue: prompt })) return true;
+
     return false;
   }
 
@@ -134,7 +156,6 @@ async function submitPrompt(prompt) {
 
   // Final fallback — clipboard + notification.
   try {
-    await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
     await vscode.env.clipboard.writeText(prompt);
     vscode.window.showInformationMessage(
       'APM: prompt copied to clipboard — paste into Copilot Chat (⌘V, Enter).'
