@@ -446,10 +446,12 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     } catch { /* fall through */ }
   }
   if (!opened && os.platform() === 'darwin') {
-    // `open -na` — -n forces a new app instance, -a picks the right version
+    // open -a (no -n): routes --new-window + paths to the already-running VS Code
+    // server process. Using -n would force a second app instance which conflicts
+    // with VS Code's single-server architecture and causes the window to close.
     try {
       const sp = require('child_process').spawn(
-        'open', ['-na', vscodeAppName, '--args', '--new-window', workDir, contextPath],
+        'open', ['-a', vscodeAppName, '--args', '--new-window', workDir, contextPath],
         { detached: true, stdio: 'ignore' }
       );
       sp.unref();
