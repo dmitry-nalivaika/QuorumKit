@@ -35,6 +35,7 @@ permissions:
   issues: write
   pull-requests: write
   actions: write        # needed to trigger workflow_dispatch (agent invocation)
+  members: read         # FR-010: required to call GET /repos/{owner}/{repo}/collaborators/{username}/permission for approval-gate authorisation checks
 
 jobs:
   orchestrate:
@@ -80,10 +81,13 @@ jobs:
         if: steps.check.outputs.skip != 'true' && vars.DASHBOARD_WEBHOOK_URL != ''
         env:
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
+          APM_WEBHOOK_SECRET: ${{ secrets.APM_WEBHOOK_SECRET }}
         run: |
           # Payload is written to /tmp/apm-pipeline-event.json by index.js when a state transition occurs
+          # SEC-HIGH-001: X-APM-Webhook-Secret header authenticates the request to the dashboard server
           if [ -f /tmp/apm-pipeline-event.json ]; then
             curl -s -X POST "$DASHBOARD_WEBHOOK_URL/webhook/pipeline-event" \
               -H "Content-Type: application/json" \
+              -H "X-APM-Webhook-Secret: ${APM_WEBHOOK_SECRET}" \
               -d @/tmp/apm-pipeline-event.json || echo "Dashboard broadcast failed (non-fatal)"
           fi

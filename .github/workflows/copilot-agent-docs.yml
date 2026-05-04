@@ -18,7 +18,8 @@ jobs:
   docs:
     if: |
       github.event_name == 'push' ||
-      contains(github.event.comment.body, '@docs-agent')
+      (contains(github.event.comment.body, '@docs-agent') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

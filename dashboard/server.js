@@ -31,6 +31,7 @@
 const http       = require('http');
 const fs         = require('fs');
 const path       = require('path');
+const crypto     = require('crypto');
 const { exec, spawn }  = require('child_process');
 const { WebSocketServer } = require('ws');
 const os         = require('os');
@@ -309,6 +310,13 @@ function buildAgentCmd(agentId, cfg, agentName) {
     techdebt: 'tech-debt', ot: 'ot-integration', twin: 'digital-twin',
     compliance: 'compliance', incident: 'incident',
   };
+
+  // SEC-HIGH-003: agentId must be in the known allowlist before any shell use.
+  if (!Object.prototype.hasOwnProperty.call(idToSkill, agentId)) {
+    throw Object.assign(new Error(`Unknown agentId: ${agentId}`), { code: 'UNKNOWN_AGENT_ID' });
+  }
+  // SEC-HIGH-003: agentName must not contain shell-special characters.
+  const safeAgentName = (agentName || agentId).replace(/[^a-zA-Z0-9 _\-]/g, '');
   const skill = idToSkill[agentId] || agentId;
   const skillFile = path.join(DASHBOARD_DIR, '..', '.apm', 'skills', `${skill}-agent`, 'SKILL.md');
   const agentFile = path.join(DASHBOARD_DIR, '..', '.apm', 'agents',
@@ -337,12 +345,13 @@ function buildAgentCmd(agentId, cfg, agentName) {
     case 'copilot':
       // VS Code cannot be meaningfully spawned as a background process.
       // Return a sentinel — the caller will handle it specially.
-      return { __copilot: true, workDir, skillFile, agentFile, agentName };
+      return { __copilot: true, workDir, skillFile, agentFile, agentName: safeAgentName };
 
     case 'custom':
+      // SEC-HIGH-003: use sanitised values only — never raw agentId/agentName from the request body.
       return (cfg.customCmd || 'bash')
         .replace('{agent}', agentId)
-        .replace('{agentName}', agentName)
+        .replace('{agentName}', safeAgentName)
         .replace('{skill}', skillFile)
         .replace('{cwd}', workDir);
 
@@ -350,7 +359,7 @@ function buildAgentCmd(agentId, cfg, agentName) {
       // Shell mode: print the agent definition then drop into an interactive shell
       return fs.existsSync(agentFile)
         ? `cat "${agentFile.replace(/"/g,'\\"')}" && printf '\\n═══ Agent console ready — type your instructions ═══\\n' && bash`
-        : `echo "Agent: ${agentName}" && bash`;
+        : `echo "Agent: ${safeAgentName}" && bash`;
   }
 }
 
@@ -418,7 +427,25 @@ async function handleRequest(req, res) {
   // ── POST /webhook/pipeline-event (FR-007) ─────────────────────
   // Receives pipeline state transition payloads from the GHA Orchestrator
   // workflow and broadcasts them over the existing WebSocket channel.
+  // SEC-HIGH-001: Requires X-APM-Webhook-Secret header matching APM_WEBHOOK_SECRET
+  // env var (constant-time comparison). When APM_WEBHOOK_SECRET is not set the
+  // endpoint is disabled entirely — callers receive 403.
   if (method === 'POST' && url.pathname === '/webhook/pipeline-event') {
+    const expectedSecret = process.env.APM_WEBHOOK_SECRET || '';
+    if (!expectedSecret) {
+      json(res, 403, { error: 'Webhook endpoint is disabled: APM_WEBHOOK_SECRET is not configured' });
+      return;
+    }
+    const providedSecret = req.headers['x-apm-webhook-secret'] || '';
+    const expected = Buffer.from(expectedSecret);
+    const provided = Buffer.from(providedSecret);
+    const secretsMatch =
+      expected.length === provided.length &&
+      crypto.timingSafeEqual(expected, provided);
+    if (!secretsMatch) {
+      json(res, 403, { error: 'Forbidden: invalid or missing X-APM-Webhook-Secret' });
+      return;
+    }
     const body = await readBody(req);
     // Minimal shape validation
     if (!body || typeof body.runId !== 'string' || typeof body.status !== 'string') {
@@ -530,7 +557,13 @@ async function handleRequest(req, res) {
     if (!agentId) { json(res, 400, { error: 'agentId required' }); return; }
 
     const cfg = loadConfig();
-    const result = await invokeAgent(agentId, agentName || agentId, cfg, mode);
+    let result;
+    try {
+      result = await invokeAgent(agentId, agentName || agentId, cfg, mode);
+    } catch (err) {
+      if (err.code === 'UNKNOWN_AGENT_ID') { json(res, 400, { error: err.message }); return; }
+      throw err;
+    }
     json(res, 200, result); return;
   }
 
@@ -541,7 +574,13 @@ async function handleRequest(req, res) {
     if (!agentId) { json(res, 400, { error: 'agentId required' }); return; }
 
     const cfg = loadConfig();
-    const cmd = buildAgentCmd(agentId, cfg, agentName || agentId);
+    let cmd;
+    try {
+      cmd = buildAgentCmd(agentId, cfg, agentName || agentId);
+    } catch (err) {
+      if (err.code === 'UNKNOWN_AGENT_ID') { json(res, 400, { error: err.message }); return; }
+      throw err;
+    }
 
     // Copilot mode: write context file + open VS Code (no terminal needed)
     if (cmd && typeof cmd === 'object' && cmd.__copilot) {

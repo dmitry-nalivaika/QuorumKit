@@ -4,11 +4,16 @@
  * Spawns the dashboard server on a random port, sends pipeline-event payloads,
  * and asserts correct HTTP responses. WebSocket broadcast is verified by
  * connecting a WS client before posting.
+ *
+ * SEC-HIGH-001: APM_WEBHOOK_SECRET is set in the server env; tests verify that
+ * requests without / with a wrong X-APM-Webhook-Secret header are rejected 403.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { WebSocket } from 'ws';
+
+const TEST_WEBHOOK_SECRET = 'test-secret-abc123';
 
 // ─── Find a free port ─────────────────────────────────────────────────────────
 function getFreePort() {
@@ -23,12 +28,12 @@ function getFreePort() {
 }
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
-function httpPost(port, path, body) {
+function httpPost(port, path, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
     const req = require('node:http').request(
       { hostname: '127.0.0.1', port, path, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...headers } },
       res => {
         let raw = '';
         res.on('data', d => { raw += d; });
@@ -42,17 +47,22 @@ function httpPost(port, path, body) {
 }
 
 // Use native fetch when available (Node 18+), otherwise fall back to http helper
-async function post(port, path, body) {
+async function post(port, path, body, extraHeaders = {}) {
   if (typeof fetch !== 'undefined') {
     const res = await fetch(`http://127.0.0.1:${port}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify(body),
     });
     const text = await res.text();
     return { status: res.status, body: text };
   }
-  return httpPost(port, path, body);
+  return httpPost(port, path, body, extraHeaders);
+}
+
+/** Convenience: post with the correct secret header */
+function postAuth(port, path, body) {
+  return post(port, path, body, { 'X-APM-Webhook-Secret': TEST_WEBHOOK_SECRET });
 }
 
 // ─── Server lifecycle ────────────────────────────────────────────────────────
@@ -67,7 +77,7 @@ beforeAll(async () => {
     ['server.js', '--port', String(port)],
     {
       cwd: '/Users/Dmitry_Nalivaika/Documents/Projects/APM/dashboard',
-      env: { ...process.env, APM_PORT: String(port) },
+      env: { ...process.env, APM_PORT: String(port), APM_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   );
@@ -99,8 +109,8 @@ afterAll(() => {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 describe('POST /webhook/pipeline-event', () => {
-  it('returns 204 for a valid payload', async () => {
-    const { status } = await post(port, '/webhook/pipeline-event', {
+  it('returns 204 for a valid payload with correct secret', async () => {
+    const { status } = await postAuth(port, '/webhook/pipeline-event', {
       runId: 'run-001',
       status: 'running',
       step: 'triage',
@@ -108,8 +118,26 @@ describe('POST /webhook/pipeline-event', () => {
     expect(status).toBe(204);
   });
 
-  it('returns 400 when runId is missing', async () => {
+  it('returns 403 when X-APM-Webhook-Secret header is missing', async () => {
     const { status, body } = await post(port, '/webhook/pipeline-event', {
+      runId: 'run-001',
+      status: 'running',
+    });
+    expect(status).toBe(403);
+    expect(JSON.parse(body)).toMatchObject({ error: expect.stringContaining('Forbidden') });
+  });
+
+  it('returns 403 when X-APM-Webhook-Secret header is wrong', async () => {
+    const { status, body } = await post(port, '/webhook/pipeline-event',
+      { runId: 'run-001', status: 'running' },
+      { 'X-APM-Webhook-Secret': 'wrong-secret' }
+    );
+    expect(status).toBe(403);
+    expect(JSON.parse(body)).toMatchObject({ error: expect.stringContaining('Forbidden') });
+  });
+
+  it('returns 400 when runId is missing', async () => {
+    const { status, body } = await postAuth(port, '/webhook/pipeline-event', {
       status: 'running',
     });
     expect(status).toBe(400);
@@ -117,7 +145,7 @@ describe('POST /webhook/pipeline-event', () => {
   });
 
   it('returns 400 when status is missing', async () => {
-    const { status, body } = await post(port, '/webhook/pipeline-event', {
+    const { status, body } = await postAuth(port, '/webhook/pipeline-event', {
       runId: 'run-002',
     });
     expect(status).toBe(400);
@@ -125,7 +153,7 @@ describe('POST /webhook/pipeline-event', () => {
   });
 
   it('returns 400 for a completely empty body', async () => {
-    const { status } = await post(port, '/webhook/pipeline-event', {});
+    const { status } = await postAuth(port, '/webhook/pipeline-event', {});
     expect(status).toBe(400);
   });
 
@@ -136,7 +164,7 @@ describe('POST /webhook/pipeline-event', () => {
 
       ws.on('open', async () => {
         // Post immediately after WS is open so we catch the broadcast
-        await post(port, '/webhook/pipeline-event', {
+        await postAuth(port, '/webhook/pipeline-event', {
           runId: 'run-ws-test',
           status: 'completed',
           step: 'release',
