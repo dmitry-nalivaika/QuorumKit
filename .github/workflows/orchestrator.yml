@@ -28,16 +28,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check orchestrator is installed
+        id: check
+        run: |
+          if [ ! -f scripts/orchestrator/index.js ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Orchestrator not installed in this repo — skipping. Run scripts/init.sh to install."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install orchestrator dependencies
+        if: steps.check.outputs.skip != 'true'
         run: npm ci
         working-directory: scripts/orchestrator
 
       - name: Run Orchestrator
+        if: steps.check.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -47,7 +60,7 @@ jobs:
         run: node scripts/orchestrator/index.js
 
       - name: Broadcast to dashboard
-        if: ${{ vars.DASHBOARD_WEBHOOK_URL != '' }}
+        if: steps.check.outputs.skip != 'true' && vars.DASHBOARD_WEBHOOK_URL != ''
         env:
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
         run: |
