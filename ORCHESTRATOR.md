@@ -11,18 +11,19 @@
 1. [What the Orchestrator Is](#1-what-the-orchestrator-is)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Prerequisites](#3-prerequisites)
-4. [First-Time Setup](#4-first-time-setup)
-5. [Connecting a Project](#5-connecting-a-project)
-6. [The Dashboard UI](#6-the-dashboard-ui)
-7. [Running Agents](#7-running-agents)
-8. [The Board — Live Agent Status](#8-the-board--live-agent-status)
-9. [The Console](#9-the-console)
-10. [Offline / Simulation Mode](#10-offline--simulation-mode)
-11. [Worked Example — "Todo App" from Zero to Deployed](#11-worked-example--todo-app-from-zero-to-deployed)
-12. [Configuration Reference](#12-configuration-reference)
-13. [API Reference](#13-api-reference)
-14. [Keyboard Shortcuts](#14-keyboard-shortcuts)
-15. [Troubleshooting](#15-troubleshooting)
+4. [Installing agentic-dev-stack into your project](#4-installing-agentic-dev-stack-into-your-project)
+5. [Launching the dashboard from your project directory](#5-launching-the-dashboard-from-your-project-directory)
+6. [Connecting a project (manual override)](#6-connecting-a-project-manual-override)
+7. [The Dashboard UI](#7-the-dashboard-ui)
+8. [Running Agents](#8-running-agents)
+9. [The Board — Live Agent Status](#9-the-board--live-agent-status)
+10. [The Console](#10-the-console)
+11. [Offline / Simulation Mode](#11-offline--simulation-mode)
+12. [Worked Example — "Todo App" from Zero to Deployed](#12-worked-example--todo-app-from-zero-to-deployed)
+13. [Configuration Reference](#13-configuration-reference)
+14. [API Reference](#14-api-reference)
+15. [Keyboard Shortcuts](#15-keyboard-shortcuts)
+16. [Troubleshooting](#16-troubleshooting)
 
 ---
 
@@ -114,74 +115,184 @@ User clicks ▶ Invoke
 |-------------|---------|-------|
 | Node.js | ≥ 18 | `node --version` |
 | npm | ≥ 9 | `npm --version` |
-| An AI CLI tool | any | `claude --version` or `code --version` |
-| A project repository | — | local folder with git |
+| git | any | `git --version` |
+| An AI CLI tool | any | `claude --version` *or* VS Code with Copilot |
+| A project repository | — | local folder, with or without `.git` |
 
-The dashboard itself has **one npm dependency**: [`ws`](https://github.com/websockets/ws)
-(WebSocket server). It is installed automatically on first run.
+The dashboard itself has **one npm dependency** ([`ws`](https://github.com/websockets/ws)) and is installed automatically on first run.
+
+The orchestrator works equally well on:
+
+- 🌱 **Greenfield** projects — a fresh `mkdir` you just `git init`ed.
+- 🏭 **Brownfield** projects — an existing repo with code, history, CI, and conventions you want to keep.
+
+You install the agentic-dev-stack **into your project**, then launch the dashboard **from your project directory**. The dashboard auto-detects the project name, the git remote, and the current branch — no manual settings needed for the common case.
 
 ---
 
-## 4. First-Time Setup
+## 4. Installing agentic-dev-stack into your project
 
-### Option A — one-command launcher (recommended)
+You only need to do this once per project.
+
+### 4.1 — Get the agentic-dev-stack package
+
+Clone the package somewhere on your machine. It does **not** need to live inside your project.
 
 ```zsh
-# From the APM repo root:
-bash dashboard/start.sh
+# A reasonable home for the package itself:
+git clone https://github.com/dmitry-nalivaika/agentic-dev-stack.git ~/.agentic-dev-stack
 ```
 
-This script:
-1. `cd`s into `dashboard/`
-2. Runs `npm install` if `node_modules/` is missing
-3. Opens `http://localhost:3131` in your default browser
-4. Starts `node server.js`
+> Anywhere works — `~/Documents/Projects/agentic-dev-stack`, `~/code/agentic-dev-stack`, etc. Just remember the path; the install script lives at `<that-path>/scripts/init.sh`.
 
-### Option B — manual
+### 4.2 — Run `init.sh` from inside your project
 
 ```zsh
-cd dashboard
-npm install          # first time only
-node server.js       # starts on port 3131
+# Greenfield example
+mkdir -p ~/projects/my-new-app && cd ~/projects/my-new-app
+git init
 
-# In another terminal or via the system:
-open http://localhost:3131
+# Brownfield example
+cd ~/work/legacy-billing-service
 ```
 
-### Option C — custom port
+Then, **from your project root**, run the installer once:
 
 ```zsh
-node dashboard/server.js --port 4000
+bash ~/.agentic-dev-stack/scripts/init.sh                                # Claude Code (default)
+bash ~/.agentic-dev-stack/scripts/init.sh --ai=copilot                   # GitHub Copilot
+bash ~/.agentic-dev-stack/scripts/init.sh --ai=both                      # Both
+bash ~/.agentic-dev-stack/scripts/init.sh --ai=both --domain=industrial  # Both + industrial agents
+```
+
+What the script writes into your project (idempotent — re-running is safe and never overwrites your files):
+
+| Path | Purpose |
+|------|---------|
+| `.claude/agents/*.md` | Claude agent role definitions (when `--ai=claude` or `both`) |
+| `.claude/skills/*/SKILL.md` | Slash-command skill definitions for Claude |
+| `.github/agents/*.md` | Shared agent role definitions for Copilot (when `--ai=copilot` or `both`) |
+| `.github/instructions/*.instructions.md` | Per-agent Copilot custom instructions |
+| `.github/copilot-instructions.md` | Workspace-level Copilot context |
+| `.github/workflows/agent-*.yml` | GitHub Actions that invoke agents on PR/issue events |
+| `.github/ISSUE_TEMPLATE/*` | Bug/feature/security templates |
+| `.github/pull_request_template.md` | PR template wired up to the reviewer agent |
+| `CLAUDE.md` | Workspace-level Claude context (only created if missing) |
+| `CONTRIBUTING.md`, `SECURITY.md` | Community files (only created if missing) |
+| `BROWNFIELD_GUIDE.md`, `DARK_FACTORY_GUIDE.md`, `ENHANCEMENTS.md` | Reference docs |
+
+> **Brownfield safety**: the script never overwrites an existing `CLAUDE.md`, PR template, issue template, workflow, or instruction file. If you've already got one, the new copy is skipped and you'll see a `⚠ already exists — skipping` line. Diff afterward and merge by hand if you want the new bits.
+
+### 4.3 — Verify the install
+
+```zsh
+ls .claude/agents 2>/dev/null | head             # Claude agents present?
+ls .github/agents 2>/dev/null | head             # Copilot agents present?
+ls .github/workflows | grep -E '^(copilot-)?agent-' | head
+```
+
+If the directories exist and contain `.md` / `.yml` files, you're ready to launch the dashboard.
+
+---
+
+## 5. Launching the dashboard from your project directory
+
+This is the part that changed in the latest release: the orchestrator now picks up the project context **automatically** when you launch it from inside the project.
+
+### 5.1 — Recommended: run `start.sh` from your project root
+
+From **your project directory**:
+
+```zsh
+cd ~/work/legacy-billing-service
+bash ~/.agentic-dev-stack/dashboard/start.sh
+```
+
+`start.sh` captures `$PWD` into `APM_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses it as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to fill in the **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
+
+You'll see the project context echoed before the server starts:
+
+```
+  APM Dark Factory — Orchestrator
+  Project: /Users/alice/work/legacy-billing-service
+```
+
+When the dashboard opens at `http://localhost:3131` the topbar shows:
+
+```
+🏭 APM Dark Factory   📁 legacy-billing-service   ● 0 active   15 agents   …   ⚙
+```
+
+— and you can invoke any agent without ever opening Settings.
+
+### 5.2 — Optional: shell alias
+
+If you orchestrate several projects, a one-liner saves typing:
+
+```zsh
+# In ~/.zshrc
+alias apm='bash ~/.agentic-dev-stack/dashboard/start.sh'
+```
+
+Then from any project: `cd ~/work/foo && apm`.
+
+### 5.3 — Custom port
+
+```zsh
+APM_PORT=4000 apm
 # or
-APM_PORT=4000 bash dashboard/start.sh
+bash ~/.agentic-dev-stack/dashboard/start.sh --port 4000
 ```
 
-### Verifying the server is up
+### 5.4 — Override the auto-detected project
+
+The detected values can always be edited from **⚙ Settings** in the UI, or by setting `APM_PROJECT_DIR` explicitly:
+
+```zsh
+APM_PROJECT_DIR=~/work/some-other-repo apm
+```
+
+### 5.5 — Verifying the server is up
 
 ```zsh
 curl http://localhost:3131/api/config
-# → {"repoUrl":"","localPath":"","branch":"main","aiTool":"claude",...}
 ```
 
-The topbar connection badge in the UI turns **green** (● live) when the WebSocket
-connects. If it stays **amber** (● offline) the server is not reachable.
+```json
+{
+  "localPath":   "/Users/alice/work/legacy-billing-service",
+  "repoUrl":     "git@github.com:alice/legacy-billing-service.git",
+  "branch":      "main",
+  "projectName": "legacy-billing-service",
+  "aiTool":      "claude",
+  ...
+}
+```
+
+The topbar **● live** badge (green) confirms the WebSocket is connected. **● offline** (amber) means the server is not reachable.
 
 ---
 
-## 5. Connecting a Project
+## 6. Connecting a project (manual override)
 
-Once the dashboard is open, click the **⚙** button (top-right) to open Settings.
+The dashboard auto-detects the project on launch (see §5). You only need this section if any of these apply:
+
+- The auto-detected values are wrong (e.g. you launched from a parent directory).
+- You want to change the AI tool, terminal app, or VS Code app per project.
+- You're switching the running dashboard between two projects without restarting it.
+
+Click the **⚙** button (top-right) to open Settings.
 
 ### Settings fields
 
-| Field | What to enter | Example |
-|-------|--------------|---------|
-| **Local Project Path** | Absolute path to the project root on disk. Agents are spawned from here (the AI tool's working directory). | `/Users/alice/projects/my-app` |
-| **GitHub Repository URL** | Full HTTPS URL of the repository. Used for reference links and GitHub-based agents. | `https://github.com/alice/my-app` |
-| **Default Branch** | Main integration branch. Defaults to `main`. | `main` |
-| **AI Tool** | Which AI CLI to invoke. See table below. | `Claude Code` |
-| **Custom Command** | Template string used when AI Tool = "Custom". | `aider --model gpt-4o --cwd {cwd}` |
-| **Terminal App** | Which app to open when you click "⬜ Terminal". | `iTerm2` |
+| Field | What to enter | Auto-detected? | Example |
+|-------|--------------|----------------|---------|
+| **Local Project Path** | Absolute path to the project root on disk. Agents are spawned from here. | ✅ from `$PWD` at launch | `/Users/alice/work/legacy-billing-service` |
+| **GitHub Repository URL** | Full URL of the repository. | ✅ from `git config remote.origin.url` | `git@github.com:alice/legacy-billing-service.git` |
+| **Default Branch** | Main integration branch. | ✅ from `git rev-parse --abbrev-ref HEAD` | `main` |
+| **AI Tool** | Which AI CLI to invoke. See table below. | ❌ user choice | `Claude Code` |
+| **Custom Command** | Template string used when AI Tool = "Custom". | ❌ | `aider --model gpt-4o --cwd {cwd}` |
+| **Terminal App** | Which app to open when you click "⬜ Terminal". | ✅ first installed of iTerm/Warp/… | `iTerm2` |
 
 ### AI Tool options
 
@@ -211,7 +322,7 @@ folder and broadcasts the config to all connected browser tabs.
 
 ---
 
-## 6. The Dashboard UI
+## 7. The Dashboard UI
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -280,7 +391,7 @@ Opens from the right when you click a card. Contains:
 
 ---
 
-## 7. Running Agents
+## 8. Running Agents
 
 ### Via the UI
 
@@ -314,7 +425,7 @@ answer questions, steer its output) rather than letting it run unattended.
 
 ---
 
-## 8. The Board — Live Agent Status
+## 9. The Board — Live Agent Status
 
 The **📋 Board** tab shows a three-column Kanban that reflects real agent state,
 driven by WebSocket events from the server:
@@ -333,7 +444,7 @@ disappear as real cards from live invocations accumulate.
 
 ---
 
-## 9. The Console
+## 10. The Console
 
 A real terminal-style interface. All agent output streams here in real time.
 
@@ -376,7 +487,7 @@ Colour coding:
 
 ---
 
-## 10. Offline / Simulation Mode
+## 11. Offline / Simulation Mode
 
 When the server is not running (badge shows **● offline**), the dashboard falls back
 to a **built-in simulation**:
@@ -391,12 +502,12 @@ without a live project.
 
 ---
 
-## 11. Worked Example — "Todo App" from Zero to Deployed
+## 12. Worked Example — "Todo App" from Zero to Deployed
 
 This walkthrough shows how to use the Orchestrator on a real project. We will
 build a simple Node.js REST API for a todo app, guided entirely by APM agents.
 
-### 11.1 — Project setup
+### 12.1 — Project setup
 
 ```zsh
 # Create the project
@@ -409,30 +520,49 @@ git add . && git commit -m "chore: initial project skeleton"
 gh repo create todo-api --public --source=. --push
 ```
 
-### 11.2 — Start the Orchestrator
+### 12.2 — Install agentic-dev-stack into the project
+
+From the project root (one-time, idempotent — see §4 for details):
 
 ```zsh
-cd ~/Documents/Projects/APM
-bash dashboard/start.sh
+cd ~/projects/todo-api
+bash ~/.agentic-dev-stack/scripts/init.sh --ai=copilot
+# → writes .github/agents/, .github/instructions/, .github/workflows/, etc.
+git add . && git commit -m "chore: install agentic-dev-stack"
+```
+
+Use `--ai=claude` if you prefer Claude Code, or `--ai=both` for both.
+
+### 12.3 — Launch the Orchestrator from the project
+
+```zsh
+cd ~/projects/todo-api
+bash ~/.agentic-dev-stack/dashboard/start.sh
 # → browser opens http://localhost:3131
 ```
 
-### 11.3 — Connect the project
+Or, if you set up the `apm` alias from §5.2:
 
-1. Click **⚙** in the topbar
-2. Fill in:
-   - **Local Project Path:** `/Users/alice/projects/todo-api`
-   - **GitHub Repository URL:** `https://github.com/alice/todo-api`
-   - **AI Tool:** `Claude Code`
-   - **Terminal App:** `iTerm2` (or whichever you use)
-3. Click **Save & Connect**
+```zsh
+cd ~/projects/todo-api && apm
+```
+
+The topbar now shows the project pill automatically:
+
+```
+🏭 APM Dark Factory   📁 todo-api   ● 0 active   15 agents   …   ⚙
+```
+
+The browser tab title also reads `todo-api — APM Dark Factory`. Open **⚙ Settings**
+only if you want to flip the **AI Tool** to something other than the default, or
+override the auto-detected path/repo/branch.
 
 Console shows:
 ```
-[09:00:01]  [SYSTEM        ]  Config saved: /Users/alice/projects/todo-api  [claude]
+[09:00:01]  [SYSTEM        ]  Project: /Users/alice/projects/todo-api  [copilot]
 ```
 
-### 11.4 — Step 1: Triage → BA/Product Agent (spec)
+### 12.4 — Step 1: Triage → BA/Product Agent (spec)
 
 Create a GitHub Issue in your project:
 
@@ -470,7 +600,7 @@ Board view after this step:
                                             📋 BA: spec 001
 ```
 
-### 11.5 — Step 2: Architect Agent (ADR)
+### 12.5 — Step 2: Architect Agent (ADR)
 
 Invoke **Architect Agent** via the dashboard:
 
@@ -482,7 +612,7 @@ Invoke **Architect Agent** via the dashboard:
 3. Agent produces `docs/adr/ADR-001-persistence.md` comparing in-memory vs SQLite vs PostgreSQL,
    recommends SQLite for a simple todo API, commits the ADR.
 
-### 11.6 — Step 3: Developer Agent (implementation)
+### 12.6 — Step 3: Developer Agent (implementation)
 
 1. Click 💻 **Developer Agent** card → **⬜ Terminal**
 2. Type:
@@ -520,7 +650,7 @@ While the Developer is running you can see its output live in the **Console** ta
 [09:14:58]  [DEVELOPER AGENT]  npm test → 1 passing ✓
 ```
 
-### 11.7 — Step 4: QA Agent + Reviewer Agent
+### 12.7 — Step 4: QA Agent + Reviewer Agent
 
 Invoke via the **▶ Invoke** button (background mode — no steering needed):
 
@@ -536,7 +666,7 @@ Board during this phase:
                       👁️ Reviewer: PR #1    📋 BA: spec 001
 ```
 
-### 11.8 — Step 5: Security Agent
+### 12.8 — Step 5: Security Agent
 
 ```
 /invoke security
@@ -552,7 +682,7 @@ Console output:
 [09:31:24]  [SECURITY AGENT ]  APPROVED — no blockers
 ```
 
-### 11.9 — Step 6: Release Agent
+### 12.9 — Step 6: Release Agent
 
 PR merged to main (manually or by the Reviewer). Then:
 
@@ -568,7 +698,7 @@ Agent:
 - Opens Version Bump PR
 - After merge: creates GitHub Release `v0.2.0` with generated notes
 
-### 11.10 — Final board state
+### 12.10 — Final board state
 
 ```
 📥 Queue              ⚡ In Progress        ✅ Done
@@ -588,29 +718,32 @@ changelog, release — was handled by agents.
 
 ---
 
-## 12. Configuration Reference
+## 13. Configuration Reference
 
-### `.apm-project.json` (saved by the Settings modal)
+### `.apm-project.json` (auto-detected on launch, overridable from Settings)
 
 ```json
 {
   "localPath":   "/Users/alice/projects/todo-api",
   "repoUrl":     "https://github.com/alice/todo-api",
   "branch":      "main",
-  "aiTool":      "claude",
+  "projectName": "todo-api",
+  "aiTool":      "copilot",
   "customCmd":   "",
   "terminalApp": "iterm"
 }
 ```
 
-This file lives in `dashboard/.apm-project.json` (inside the APM repo, not your project).
-It is git-ignored so your credentials/paths stay local.
+This file lives in `dashboard/.apm-project.json` (inside the agentic-dev-stack repo, not your project).
+It is git-ignored so your paths stay local. The server re-derives `projectName` and any
+missing fields on every launch from `APM_PROJECT_DIR` + `git`, so older saved configs upgrade automatically.
 
 ### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APM_PORT` | `3131` | HTTP + WebSocket port |
+| `APM_PROJECT_DIR` | `$PWD` at launch | Project root used for auto-detection. `start.sh` captures it before `cd`-ing into the dashboard folder. |
 
 ### Agent-to-skill mapping
 
@@ -636,7 +769,7 @@ The server maps each agent card ID to the correct skill file:
 
 ---
 
-## 13. API Reference
+## 14. API Reference
 
 All endpoints are on `http://localhost:3131` (or your custom port).
 
@@ -750,7 +883,7 @@ curl http://localhost:3131/api/log/qa
 
 ---
 
-## 14. Keyboard Shortcuts
+## 15. Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -761,7 +894,7 @@ curl http://localhost:3131/api/log/qa
 
 ---
 
-## 15. Troubleshooting
+## 16. Troubleshooting
 
 ### Badge stays ● offline
 
@@ -774,11 +907,28 @@ The browser cannot reach `ws://localhost:3131`.
 
 ### "No project path configured" error on invoke
 
-Open **⚙ Settings** and fill in **Local Project Path**. The path must exist on disk.
+This should be rare since the dashboard auto-detects `$PWD` at launch (§5).
+If you see it:
+
+1. Confirm you launched `start.sh` from inside the project (not from `~/`):
+   ```zsh
+   cd ~/projects/todo-api && bash ~/.agentic-dev-stack/dashboard/start.sh
+   ```
+2. Or set `APM_PROJECT_DIR` explicitly: `APM_PROJECT_DIR=~/projects/todo-api apm`
+3. Or open **⚙ Settings** and fill in **Local Project Path**. The path must exist on disk.
 
 ```zsh
 ls /Users/alice/projects/todo-api   # must return files
 ```
+
+### Topbar pill shows the wrong project name
+
+The dashboard derives the name from the git remote (`remote.origin.url` → repo basename),
+falling back to the directory basename. If you see the wrong name:
+
+- Check `git -C <project> remote -v` — is `origin` set to the expected repo?
+- Or override **Local Project Path** in **⚙ Settings** and click **Save & Connect**.
+- Or relaunch from the right directory: `cd <correct-path> && apm`.
 
 ### Agent spawns but produces no output
 
@@ -829,7 +979,7 @@ The server logs the exit code and the stderr output to the console. Common cause
 |-------|-----|
 | `claude: command not found` | Install Claude Code, add to PATH |
 | Permission denied on project path | `chmod -R u+rw <localPath>` |
-| Skill file not found | Run `bash scripts/init.sh` in your target project to install agents |
+| Skill file not found | Run `bash ~/.agentic-dev-stack/scripts/init.sh` from your project root to install agents |
 | Python/Node not found in PATH | Start server from a terminal with the full environment |
 
 ---
