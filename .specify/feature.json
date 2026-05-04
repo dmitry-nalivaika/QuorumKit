@@ -3,7 +3,11 @@
   "issue": 2,
   "slug": "002-autonomous-agent-orchestration",
   "specFile": "specs/002-autonomous-agent-orchestration/spec.md",
+  "adr": "docs/architecture/adr-002-orchestrator-state-storage.md",
   "status": "ready-for-dev",
   "openQuestions": 0,
-  "updatedAt": "2026-05-04"
+  "updatedAt": "2026-05-04",
+  "architectReviewResolved": true,
+  "archBlockers": [],
+  "archConcerns": []
 }
