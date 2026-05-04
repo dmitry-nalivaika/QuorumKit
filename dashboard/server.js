@@ -410,113 +410,30 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
 
   try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }
 
-  // ── Resolve the correct VS Code installation ───────────────────────────────
-  // Strategy: find the .app first, then derive the `code` shim from it.
-  // This avoids the PATH-based resolveBin() picking up a different VS Code's shim.
+  // ── Find the right VS Code .app ────────────────────────────────────────────
   const cfg2 = loadConfig();
-  const vscodeAppName = cfg2.vscodeApp || resolveVSCodeApp();
-
-  function resolveVSCodeApp() {
+  const vscodeAppName = cfg2.vscodeApp || (() => {
     const bases = ['/Applications', os.homedir() + '/Applications'];
     const names = ['Visual Studio Code 3', 'Visual Studio Code 2', 'Visual Studio Code'];
-    for (const base of bases) {
-      for (const name of names) {
+    for (const base of bases)
+      for (const name of names)
         if (fs.existsSync(path.join(base, `${name}.app`))) return name;
-      }
-    }
     return 'Visual Studio Code';
-  }
+  })();
 
-  // Derive the code shim from the resolved .app — guaranteed to match the app.
-  function resolveCodeBinFromApp(appName) {
-    const bases = ['/Applications', os.homedir() + '/Applications'];
-    for (const base of bases) {
-      const bin = path.join(base, `${appName}.app`, 'Contents', 'Resources', 'app', 'bin', 'code');
-      if (fs.existsSync(bin)) return bin;
-    }
-    return null;
-  }
+  // ── Open a new window — exactly like File → New Window in VS Code ──────────
+  // `open -a "App" /path` is the macOS-native way; it hands the path to the
+  // already-running app instance with no subprocess issues.
+  require('child_process').spawn(
+    'open', ['-a', vscodeAppName, workDir],
+    { detached: true, stdio: 'ignore' }
+  ).unref();
 
-  const codeBin = resolveCodeBinFromApp(vscodeAppName);
-
-  // ── Step 1: open a new VS Code window for this project + context file ──────
-  // We use the `code` shim derived from the resolved .app so we always hit the
-  // right VS Code. `--new-window` opens a dedicated window instead of reusing
-  // an existing one for a different project.
-  let opened = false;
-  if (codeBin) {
-    try {
-      const sp = require('child_process').spawn(
-        codeBin, ['--new-window', workDir, contextPath],
-        { detached: true, stdio: 'ignore', env: spawnEnv() }
-      );
-      sp.unref();
-      opened = true;
-    } catch { /* fall through */ }
-  }
-  if (!opened && os.platform() === 'darwin') {
-    // AppleScript fallback — tells the running app directly, no new process fork
-    const safeApp  = vscodeAppName.replace(/"/g, '\\"');
-    const safeDir  = workDir.replace(/"/g, '\\"');
-    const safeFile = contextPath.replace(/"/g, '\\"');
-    const script = `tell application "${safeApp}" to activate\n` +
-                   `do shell script "${codeBin || 'code'} --new-window '${safeDir}' '${safeFile}' &"`;
-    try {
-      const sp = require('child_process').spawn('osascript', ['-e', script],
-        { detached: true, stdio: 'ignore' });
-      sp.unref();
-      opened = true;
-    } catch { /* fall through */ }
-  }
-
-  // ── Step 2: send the agent prompt straight into Copilot Chat ──────────────
-  // vscode://GitHub.copilot-chat/chat?query=<encoded> opens the panel AND
-  // pre-fills + submits the message automatically.
-  const chatQuery = encodeURIComponent(
-    `@workspace You are acting as the ${agentName}. ` +
-    `The full role definition and instructions are in the file ` +
-    `\`.copilot-agent-context.md\` that is currently open in the editor — ` +
-    `read it now and follow every instruction exactly. ` +
-    `Introduce yourself as ${agentName} and ask what I need.`
-  );
-  const copilotUri = `vscode://GitHub.copilot-chat/chat?query=${chatQuery}`;
-
-  // Wait 2 s so VS Code finishes loading the window before the URI is dispatched
-  setTimeout(() => {
-    let uriOpened = false;
-    if (codeBin) {
-      try {
-        const sp = require('child_process').spawn(
-          codeBin, ['--open-url', copilotUri],
-          { detached: true, stdio: 'ignore', env: spawnEnv() }
-        );
-        sp.unref();
-        uriOpened = true;
-      } catch { /* fall through */ }
-    }
-    if (!uriOpened && os.platform() === 'darwin') {
-      try {
-        const sp = require('child_process').spawn('open', [copilotUri],
-          { detached: true, stdio: 'ignore' });
-        sp.unref();
-        uriOpened = true;
-      } catch { /* ignore */ }
-    }
-    broadcast('log', { agentId, level: uriOpened ? 'success' : 'warn',
-      msg: uriOpened
-        ? '✓ Copilot Chat opened — agent prompt sent automatically'
-        : '⚠ Could not auto-send prompt — paste it from the context file manually (⌃⌘I)' });
-  }, 2000);
-
-  // ── Broadcast status ───────────────────────────────────────────────────────
   const rel = path.relative(workDir, contextPath);
   broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
-  broadcast('log', { agentId, level: 'info', msg: `VS Code app: ${vscodeAppName}` });
-  broadcast('log', { agentId, level: 'info', msg: `code shim: ${codeBin || '⚠ not found — will use AppleScript fallback'}` });
-  broadcast('log', { agentId, level: opened ? 'success' : 'warn',
-    msg: opened ? `✓ New VS Code window opening for: ${path.basename(workDir)}` : '⚠ Could not auto-open VS Code — open it manually' });
-  broadcast('log', { agentId, level: 'info', msg: `Context file: ${rel}` });
-  broadcast('log', { agentId, level: 'info', msg: '⏳ Sending agent prompt to Copilot Chat in 2 s…' });
+  broadcast('log', { agentId, level: 'success', msg: `✓ Opening VS Code (${vscodeAppName}) → ${path.basename(workDir)}` });
+  broadcast('log', { agentId, level: 'info',    msg: `Context file written: ${rel}` });
+  broadcast('log', { agentId, level: 'info',    msg: 'Open Copilot Chat (⌃⌘I) and paste the prompt from the context file.' });
   broadcast('agentStatus', { agentId, status: 'done' });
   broadcast('kanban', { action: 'add', col: 'done',
     card: { id: ++seq, agentId, title: `${agentName}: context ready`, agent: agentName } });
