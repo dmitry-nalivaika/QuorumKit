@@ -421,13 +421,13 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     return 'Visual Studio Code';
   })();
 
-  // ── Open a new window — exactly like File → New Window in VS Code ──────────
-  // `open -a "App" /path` is the macOS-native way; it hands the path to the
-  // already-running app instance with no subprocess issues.
-  require('child_process').spawn(
-    'open', ['-a', vscodeAppName, workDir],
-    { detached: true, stdio: 'ignore' }
-  ).unref();
+  // ── Open a guaranteed-new VS Code window for this project ────────────────
+  // `open -a App --args` passes the following tokens directly to the running
+  // VS Code process. `--new-window` forces a new window even when the folder
+  // is already open in another window — identical to File → New Window + open.
+  require('child_process').exec(
+    `open -a "${vscodeAppName.replace(/"/g, '\\"')}" --args --new-window "${workDir.replace(/"/g, '\\"')}"`
+  );
 
   const rel = path.relative(workDir, contextPath);
   broadcast('log', { agentId, level: 'system',  msg: `▶ INVOKE  ${agentName}  [Copilot mode]` });
