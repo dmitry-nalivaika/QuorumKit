@@ -25,16 +25,79 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Docs Agent via GitHub Copilot
-        uses: github/copilot-actions/ask@v1
+      - name: Run Docs Agent via GitHub Models
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            Read `.github/agents/docs-agent.md` in full — it defines your role,
-            audit checklist, labelling convention, hard constraints, and reporting format.
-            Read `.specify/memory/constitution.md` in full.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            Your task: audit documentation for the most recently merged PR or the
-            PR referenced in the comment, then open a Documentation PR if any
-            updates are needed.
-            Follow every step in docs-agent.md exactly.
+            const agentInstructions = readSafe('.github/agents/docs-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const trigger =
+              context.eventName === 'push'
+                ? `push to ${context.payload.ref} (${context.sha?.slice(0,7)})`
+                : `comment by @${context.payload.comment?.user?.login ?? 'unknown'}`;
+
+            const issueNumber   = context.payload.issue?.number;
+            const commentBody   = context.payload.comment?.body ?? '';
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub documentation agent.';
+
+            const userContent =
+              `Triggered by: ${trigger}.\n` +
+              (commentBody ? `Comment:\n${commentBody}\n` : '') +
+              `Audit documentation for the most recently merged PR or the PR referenced in the trigger. ` +
+              `If any updates are needed, describe them clearly so a follow-up PR can be opened.`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data   = await res.json();
+            const report = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Docs agent produced no output.';
+
+            // Post as comment if triggered by a comment, otherwise open an issue
+            if (issueNumber) {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: issueNumber,
+                body:         report,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner:  context.repo.owner,
+                repo:   context.repo.repo,
+                title:  `📄 Docs Agent Report – ${new Date().toISOString().slice(0,10)}`,
+                body:   report,
+                labels: ['documentation', 'agent-report'],
+              });
+            }

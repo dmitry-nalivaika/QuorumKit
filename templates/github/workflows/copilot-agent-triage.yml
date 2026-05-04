@@ -16,14 +16,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Triage Agent via GitHub Copilot
-        uses: github/copilot-actions/ask@v1
+      - name: Run Triage Agent via GitHub Models
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            Read `.github/agents/triage-agent.md` in full — it defines your role,
-            label taxonomy, triage workflow, comment format, and hard constraints.
-            Read `.specify/memory/constitution.md` for project scope and principles.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            Your task: triage issue #${{ github.event.issue.number }}.
-            Follow every step in triage-agent.md exactly.
+            const agentInstructions = readSafe('.github/agents/triage-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const issueNumber = context.payload.issue.number;
+            const issueTitle  = context.payload.issue.title  ?? '';
+            const issueBody   = context.payload.issue.body   ?? '';
+            const issueAuthor = context.payload.issue.user?.login ?? '';
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub triage agent.';
+
+            const userContent =
+              `Triage issue #${issueNumber} opened by @${issueAuthor}.\n` +
+              `Title: ${issueTitle}\n\nBody:\n${issueBody}`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data  = await res.json();
+            const reply = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Triage agent produced no output.';
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              body:         reply,
+            });

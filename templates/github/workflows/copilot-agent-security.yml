@@ -21,15 +21,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Security Agent via GitHub Copilot
-        uses: github/copilot-actions/ask@v1
+      - name: Run Security Agent via GitHub Models
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            Read `.github/agents/security-agent.md` in full — it defines your role,
-            OWASP checklist, reporting format, severity levels, and hard constraints.
-            Read `.specify/memory/constitution.md` in full.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            Your task: perform a security review of PR #${{ github.event.issue.number }}
-            and post the Security Review report.
-            Follow every step in security-agent.md exactly.
+            const agentInstructions = readSafe('.github/agents/security-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const issueNumber   = context.payload.issue?.number ?? context.payload.pull_request?.number;
+            const commentBody   = context.payload.comment?.body ?? '';
+            const commentAuthor = context.payload.comment?.user?.login ?? '';
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub security review agent.';
+
+            const userContent =
+              `@${commentAuthor} asked you (via comment on #${issueNumber}) to perform a security review.\n` +
+              `Comment:\n${commentBody}`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data  = await res.json();
+            const reply = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Security agent produced no output.';
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              body:         reply,
+            });
