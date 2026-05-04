@@ -1,0 +1,25 @@
+# Bug Fix Pipeline
+# Triggered when a new issue is opened with label type:bug.
+# Chain: triage → dev → qa → reviewer
+#
+# Customise this file freely — changes take effect on the next Orchestrator run.
+name: bug-fix-pipeline
+version: "1"
+
+trigger:
+  event: issues.opened
+  labels:
+    - type:bug
+
+steps:
+  - name: triage
+    agent: triage-agent
+
+  - name: dev
+    agent: developer-agent
+
+  - name: qa
+    agent: qa-test-agent
+
+  - name: reviewer
+    agent: reviewer-agent

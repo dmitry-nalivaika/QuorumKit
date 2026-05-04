@@ -1,0 +1,27 @@
+# Release Pipeline
+# Triggered when a PR is merged to main (workflow_run completed + label type:release).
+# The release step requires explicit human approval before the release-agent publishes.
+#
+# Customise this file freely — changes take effect on the next Orchestrator run.
+name: release-pipeline
+version: "1"
+
+trigger:
+  event: issues.labeled
+  labels:
+    - type:release
+
+steps:
+  - name: qa
+    agent: qa-test-agent
+
+  - name: security
+    agent: security-agent
+
+  - name: reviewer
+    agent: reviewer-agent
+
+  - name: release
+    agent: release-agent
+    approval: required
+    approval_timeout_hours: 72

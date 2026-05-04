@@ -1,0 +1,11 @@
+name: feature-pipeline
+version: "1"
+trigger:
+  event: issues.opened
+  labels:
+    - type:feature
+steps:
+  - name: triage
+    agent: triage-agent
+  - name: ba
+    agent: ba-product-agent

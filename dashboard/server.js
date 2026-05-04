@@ -9,6 +9,7 @@
  *  • /api/invoke  → POST invoke an agent in a real shell
  *  • /api/terminal→ POST open a native terminal for an agent
  *  • /api/stop    → POST stop a running agent
+ *  • /webhook/pipeline-event → POST receive Orchestrator pipeline state (FR-007)
  *
  * Usage:
  *   node server.js [--port 3131]
@@ -401,6 +402,21 @@ async function handleRequest(req, res) {
     saveConfig(cfg);
     broadcast('config', { cfg });
     json(res, 200, { ok: true, cfg }); return;
+  }
+
+  // ── POST /webhook/pipeline-event (FR-007) ─────────────────────
+  // Receives pipeline state transition payloads from the GHA Orchestrator
+  // workflow and broadcasts them over the existing WebSocket channel.
+  if (method === 'POST' && url.pathname === '/webhook/pipeline-event') {
+    const body = await readBody(req);
+    // Minimal shape validation
+    if (!body || typeof body.runId !== 'string' || typeof body.status !== 'string') {
+      json(res, 400, { error: 'payload must include runId (string) and status (string)' }); return;
+    }
+    broadcast('pipeline-event', body);
+    res.writeHead(204, { 'Access-Control-Allow-Origin': '*' });
+    res.end();
+    return;
   }
 
   // ── GET /api/agents ────────────────────────────────────────────
