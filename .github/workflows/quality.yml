@@ -22,11 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check
+
       - name: Check markdown links
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
-        with:
-          use-quiet-mode: 'yes'
-          use-verbose-mode: 'yes'
-          config-file: '.github/mlc-config.json'
-          folder-path: '.'
-          file-extension: '.md'
+        run: |
+          find . -name "*.md" \
+            -not -path "*/node_modules/*" \
+            | xargs markdown-link-check --config .markdown-link-check.json
