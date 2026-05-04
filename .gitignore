@@ -11,3 +11,4 @@ Thumbs.db
 
 # APM installed modules (like node_modules)
 apm_modules/
+dashboard/node_modules/
