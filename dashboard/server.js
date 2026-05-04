@@ -1,5 +1,13 @@
 /**
- * APM Dark Factory — Orchestrator Backend
+ * *  • /api/config              → GET / POST project config
+ *  • /api/agents              → GET live agent status
+ *  • /api/invoke              → POST invoke an agent in a real shell
+ *  • /api/terminal            → POST open a native terminal for an agent
+ *  • /api/stop                → POST stop a running agent
+ *  • /api/pipelines           → GET list pipelines from project .apm/pipelines/
+ *  • /api/pipeline/trigger    → POST create a manual pipeline run (broadcasts pipeline-event)
+ *  • /api/pipeline/approve    → POST broadcast approval for a waiting run
+ *  • /webhook/pipeline-event  → POST receive Orchestrator pipeline state (FR-007)ark Factory — Orchestrator Backend
  *
  * Provides:
  *  • HTTP server  → serves index.html
@@ -9,7 +17,10 @@
  *  • /api/invoke  → POST invoke an agent in a real shell
  *  • /api/terminal→ POST open a native terminal for an agent
  *  • /api/stop    → POST stop a running agent
- *  • /webhook/pipeline-event → POST receive Orchestrator pipeline state (FR-007)
+ *  • /webhook/pipeline-event  → POST receive Orchestrator pipeline state (FR-007)
+ *  • /api/pipelines           → GET list pipelines from .apm/pipelines/
+ *  • /api/pipeline/trigger    → POST manually trigger a pipeline run
+ *  • /api/pipeline/approve    → POST approve a waiting pipeline run
  *
  * Usage:
  *   node server.js [--port 3131]
@@ -417,6 +428,90 @@ async function handleRequest(req, res) {
     res.writeHead(204, { 'Access-Control-Allow-Origin': '*' });
     res.end();
     return;
+  }
+
+  // ── GET /api/pipelines ────────────────────────────────────────────
+  // Returns a list of pipeline names loaded from the project's .apm/pipelines/ dir.
+  if (method === 'GET' && url.pathname === '/api/pipelines') {
+    const cfg = loadConfig();
+    const pipelines = [];
+    if (cfg.localPath) {
+      const pipeDir = path.join(cfg.localPath, '.apm', 'pipelines');
+      try {
+        const files = fs.readdirSync(pipeDir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
+        for (const f of files) {
+          try {
+            const raw = fs.readFileSync(path.join(pipeDir, f), 'utf8');
+            // Quick parse: grab `name:` line without a full YAML dependency here
+            const nameMatch = raw.match(/^name:\s*(.+)$/m);
+            const stepsMatch = [...raw.matchAll(/^\s*-\s*name:\s*(.+)$/gm)];
+            pipelines.push({
+              name: nameMatch ? nameMatch[1].trim() : f.replace(/\.ya?ml$/, ''),
+              file: f,
+              steps: stepsMatch.map(m => m[1].trim()),
+            });
+          } catch { /* skip unreadable file */ }
+        }
+      } catch { /* dir missing — return empty */ }
+    }
+    json(res, 200, { pipelines }); return;
+  }
+
+  // ── POST /api/pipeline/trigger ───────────────────────────────────
+  // Creates a synthetic pipeline-event (status: pending) and broadcasts it.
+  // The actual GHA run must be triggered separately (via GitHub webhook).
+  // This endpoint is for dashboard-initiated manual runs / local dev testing.
+  if (method === 'POST' && url.pathname === '/api/pipeline/trigger') {
+    const body = await readBody(req);
+    const { pipeline, issueNumber } = body;
+    if (!pipeline || typeof pipeline !== 'string') {
+      json(res, 400, { error: 'pipeline (string) required' }); return;
+    }
+    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // Load step names from disk so the progress bar is accurate
+    const cfg = loadConfig();
+    let steps = [];
+    if (cfg.localPath) {
+      const pipeDir = path.join(cfg.localPath, '.apm', 'pipelines');
+      try {
+        const files = fs.readdirSync(pipeDir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
+        for (const f of files) {
+          const raw = fs.readFileSync(path.join(pipeDir, f), 'utf8');
+          const nameMatch = raw.match(/^name:\s*(.+)$/m);
+          if (nameMatch && nameMatch[1].trim() === pipeline) {
+            const stepsMatch = [...raw.matchAll(/^\s*-\s*name:\s*(.+)$/gm)];
+            steps = stepsMatch.map(m => m[1].trim());
+            break;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    const event = {
+      runId,
+      pipeline,
+      status: 'pending',
+      step: steps[0] || '',
+      currentStepIndex: 0,
+      steps,
+      issueNumber: issueNumber || null,
+      updatedAt: new Date().toISOString(),
+    };
+    broadcast('pipeline-event', event);
+    json(res, 200, { ok: true, runId, steps }); return;
+  }
+
+  // ── POST /api/pipeline/approve ───────────────────────────────────
+  // Broadcasts an approval event for a waiting run (dashboard convenience).
+  if (method === 'POST' && url.pathname === '/api/pipeline/approve') {
+    const body = await readBody(req);
+    const { runId } = body;
+    if (!runId || typeof runId !== 'string') {
+      json(res, 400, { error: 'runId (string) required' }); return;
+    }
+    broadcast('pipeline-event', { runId, status: 'approved', updatedAt: new Date().toISOString() });
+    json(res, 200, { ok: true }); return;
   }
 
   // ── GET /api/agents ────────────────────────────────────────────
