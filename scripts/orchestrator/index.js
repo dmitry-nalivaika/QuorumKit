@@ -153,6 +153,8 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
   } catch (err) {
     const isInvalidTool = err.message.includes('INVALID_AI_TOOL');
     state.status = 'failed';
+    state.steps[state.currentStepIndex].status = 'failed';
+    state.steps[state.currentStepIndex].completedAt = now();
     state.updatedAt = now();
     await saveState(client, owner, repo, issueNumber, state);
     await postAuditEntry(
@@ -163,7 +165,19 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
         ? 'Fix the `aiTool` value in `.apm-project.json` and re-trigger the pipeline.'
         : 'No further agents will be invoked.')
     );
+    return;
   }
+
+  // ── Step completed — advance to next ───────────────────────────────────
+  state.steps[state.currentStepIndex].status = 'completed';
+  state.steps[state.currentStepIndex].completedAt = now();
+  state.steps[state.currentStepIndex].outcome = 'dispatched';
+  state.currentStepIndex += 1;
+  state.updatedAt = now();
+  await saveState(client, owner, repo, issueNumber, state);
+
+  // Recurse into the next step (or complete the pipeline)
+  await advancePipeline({ client, event, pipeline, state, owner, repo, aiTool });
 }
 
 async function handleApproveComment({ client, event, pipelines, owner, repo, aiTool }) {
