@@ -22,28 +22,28 @@ const APPROVAL_TIMEOUT_DEFAULT_HOURS = 72;
 
 // ─── Exported core (fully testable with injected dependencies) ───────────────
 
-/**
- * Run one orchestrator cycle.
- *
- * @param {{
- *   client: object,
- *   event: { type: string, labels: string[], issueNumber: number, ref: string, comment?: {body:string, user:string} },
- *   pipelines: Pipeline[],
- *   owner: string,
- *   repo: string,
- *   aiTool: string | undefined,
- * }} opts
- */
 export async function runOrchestrator({ client, event, pipelines, owner, repo, aiTool }) {
-  const { issueNumber, ref } = event;
+  const { issueNumber } = event;
 
   // ── Handle /approve comment ─────────────────────────────────────────────
   if (event.type === 'issue_comment.created' && event.comment) {
     if (isApproveCommand(event.comment.body)) {
       await handleApproveComment({ client, event, pipelines, owner, repo, aiTool });
-      return;
     }
-    // Non-/approve comment — nothing to do
+    return;
+  }
+
+  // ── workflow_run.completed bypasses the router — it resumes an active run ──
+  // The event carries no issue labels so matchEvent would never find a pipeline.
+  // Instead we load state from the issue, look up the pipeline by name, and advance.
+  if (event.type.startsWith('workflow_run.') && issueNumber) {
+    const state = await loadState(client, owner, repo, issueNumber);
+    if (state && state.status === 'awaiting-agent') {
+      const pipeline = pipelines.find(p => p.name === state.pipelineName);
+      if (pipeline) {
+        await handleWorkflowRunCompleted({ client, event, pipeline, state, owner, repo, aiTool });
+      }
+    }
     return;
   }
 
@@ -51,9 +51,9 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
   const pipeline = matchEvent(event, pipelines);
   if (!pipeline) {
     const msg = `⚪ Event \`${event.type}\` did not match any pipeline rule. Reason: \`no-rule-match\`. No action taken.`;
-    // Only post a comment when there is an issue/PR to comment on.
-    // Events like workflow_run.completed carry no issueNumber — log only.
-    if (issueNumber) {
+    // Suppress label-noise: every label a triage agent applies fires issues.labeled
+    // — these never match a pipeline rule but would flood the issue with comments.
+    if (issueNumber && event.type !== 'issues.labeled') {
       await postAuditEntry(client, owner, repo, issueNumber, msg);
     } else {
       console.log(`[orchestrator] ${msg}`);
@@ -61,25 +61,28 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
     return;
   }
 
-  // ── Load existing state (restart-safe, FR-015) ──────────────────────────
+  // ── Load existing state ─────────────────────────────────────────────────
   let state = await loadState(client, owner, repo, issueNumber);
 
+  // ── Suppress issues.labeled on an active run ────────────────────────────
+  if (event.type === 'issues.labeled' && state &&
+      state.status !== 'completed' && state.status !== 'failed' && state.status !== 'timed-out') {
+    console.log(`[orchestrator] Suppressing issues.labeled on active run ${state.runId}`);
+    return;
+  }
+
   if (!state) {
-    // Brand-new pipeline run
     state = newRunState(pipeline, event.type);
-    await saveState(client, owner, repo, issueNumber, state);
-    await postAuditEntry(
-      client, owner, repo, issueNumber,
-      `🚀 Pipeline **${pipeline.name}** started (run \`${state.runId}\`). ` +
-      `Trigger: \`${event.type}\`.`
+    await saveState(
+      client, owner, repo, issueNumber, state,
+      `🚀 Pipeline **${pipeline.name}** started (run \`${state.runId}\`). Trigger: \`${event.type}\`.`
     );
   }
 
   if (state.status === 'completed' || state.status === 'timed-out' || state.status === 'failed') {
-    return; // Terminal state — do nothing
+    return;
   }
 
-  // ── Advance the pipeline ────────────────────────────────────────────────
   await advancePipeline({ client, event, pipeline, state, owner, repo, aiTool });
 }
 
@@ -90,11 +93,9 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
   const step = pipeline.steps[state.currentStepIndex];
 
   if (!step) {
-    // All steps done
     state.status = 'completed';
     state.updatedAt = now();
-    await saveState(client, owner, repo, issueNumber, state);
-    await postAuditEntry(client, owner, repo, issueNumber,
+    await saveState(client, owner, repo, issueNumber, state,
       `✅ Pipeline **${state.pipelineName}** completed successfully (run \`${state.runId}\`).`
     );
     return;
@@ -107,11 +108,8 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
     state.status = 'awaiting-approval';
     state.approvalGate = { requestedAt: now(), timeoutAt, approvedBy: null };
     state.updatedAt = now();
-    await saveState(client, owner, repo, issueNumber, state);
-    await postAuditEntry(
-      client, owner, repo, issueNumber,
-      `🔐 Approval required before step **${step.name}**.\n\n` +
-      `Post \`/approve\` to continue. Gate expires at \`${timeoutAt}\`.`
+    await saveState(client, owner, repo, issueNumber, state,
+      `🔐 Approval required before step **${step.name}**.\n\nPost \`/approve\` to continue. Gate expires at \`${timeoutAt}\`.`
     );
     return;
   }
@@ -120,32 +118,19 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
   if (state.status === 'awaiting-approval' && checkApprovalTimeout(state.approvalGate)) {
     state.status = 'timed-out';
     state.updatedAt = now();
-    await saveState(client, owner, repo, issueNumber, state);
-    await postAuditEntry(
-      client, owner, repo, issueNumber,
-      `⏰ Approval gate for step **${step.name}** timed out. ` +
-      `Pipeline run \`${state.runId}\` is now \`timed-out\`. No further agents will be invoked.`
+    await saveState(client, owner, repo, issueNumber, state,
+      `⏰ Approval gate for step **${step.name}** timed out. Pipeline run \`${state.runId}\` is now \`timed-out\`. No further agents will be invoked.`
     );
     return;
   }
 
   // ── Invoke the agent ────────────────────────────────────────────────────
   state.status = 'running';
-  if (!state.steps[state.currentStepIndex]) {
-    state.steps[state.currentStepIndex] = {
-      name: step.name, status: 'running',
-      startedAt: now(), completedAt: null, outcome: null,
-    };
-  } else {
-    state.steps[state.currentStepIndex].status = 'running';
-    state.steps[state.currentStepIndex].startedAt = now();
-  }
+  state.steps[state.currentStepIndex].status = 'running';
+  state.steps[state.currentStepIndex].startedAt = now();
   state.updatedAt = now();
-  await saveState(client, owner, repo, issueNumber, state);
-  await postAuditEntry(
-    client, owner, repo, issueNumber,
-    `⚙️ Invoking agent **${step.agent}** (step \`${step.name}\`, ` +
-    `${state.currentStepIndex + 1}/${pipeline.steps.length}).`
+  await saveState(client, owner, repo, issueNumber, state,
+    `⚙️ Invoking agent **${step.agent}** (step \`${step.name}\`, ${state.currentStepIndex + 1}/${pipeline.steps.length}).`
   );
 
   try {
@@ -156,59 +141,90 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
     state.steps[state.currentStepIndex].status = 'failed';
     state.steps[state.currentStepIndex].completedAt = now();
     state.updatedAt = now();
-    await saveState(client, owner, repo, issueNumber, state);
-    await postAuditEntry(
-      client, owner, repo, issueNumber,
-      `❌ Pipeline **${state.pipelineName}** failed at step **${step.name}**.\n\n` +
-      `Error: ${err.message}\n\n` +
-      (isInvalidTool
-        ? 'Fix the `aiTool` value in `.apm-project.json` and re-trigger the pipeline.'
-        : 'No further agents will be invoked.')
+    await saveState(client, owner, repo, issueNumber, state,
+      `❌ Pipeline **${state.pipelineName}** failed at step **${step.name}**.\n\nError: ${err.message}\n\n` +
+      (isInvalidTool ? 'Fix the `aiTool` value in `.apm-project.json` and re-trigger the pipeline.' : 'No further agents will be invoked.')
     );
     return;
   }
 
-  // ── Step completed — advance to next ───────────────────────────────────
+  // ── Pause — wait for workflow_run.completed before advancing ───────────
+  // Prevents instant fake "completed" pipelines. The next step runs only after
+  // the agent's GHA workflow finishes and triggers a workflow_run event.
+  state.status = 'awaiting-agent';
+  state.steps[state.currentStepIndex].status = 'awaiting-agent';
+  state.updatedAt = now();
+  await saveState(client, owner, repo, issueNumber, state,
+    `⏳ Waiting for agent **${step.agent}** to complete (step \`${step.name}\`, ${state.currentStepIndex + 1}/${pipeline.steps.length}).`
+  );
+}
+
+/**
+ * Handle workflow_run.completed: match to the awaiting-agent step, mark it done,
+ * advance the pipeline.
+ */
+async function handleWorkflowRunCompleted({ client, event, pipeline, state, owner, repo, aiTool }) {
+  const { issueNumber, ref } = event;
+  if (state.status !== 'awaiting-agent') return;
+
+  const step = pipeline.steps[state.currentStepIndex];
+  if (!step) return;
+
+  // Only advance if the workflow name matches the expected agent
+  if (event.workflowName && !event.workflowName.toLowerCase().includes(step.agent.toLowerCase())) {
+    console.log(`[orchestrator] workflow_run.completed for '${event.workflowName}' does not match expected '${step.agent}' — ignoring`);
+    return;
+  }
+
+  const outcome = event.workflowConclusion ?? 'unknown';
+
+  if (outcome === 'failure' || outcome === 'cancelled') {
+    state.status = 'failed';
+    state.steps[state.currentStepIndex].status = 'failed';
+    state.steps[state.currentStepIndex].completedAt = now();
+    state.steps[state.currentStepIndex].outcome = outcome;
+    state.updatedAt = now();
+    await saveState(client, owner, repo, issueNumber, state,
+      `❌ Agent **${step.agent}** workflow finished with \`${outcome}\`. Pipeline **${state.pipelineName}** is now \`failed\`.`
+    );
+    return;
+  }
+
   state.steps[state.currentStepIndex].status = 'completed';
   state.steps[state.currentStepIndex].completedAt = now();
-  state.steps[state.currentStepIndex].outcome = 'dispatched';
+  state.steps[state.currentStepIndex].outcome = outcome;
   state.currentStepIndex += 1;
+  state.status = 'running';
   state.updatedAt = now();
-  await saveState(client, owner, repo, issueNumber, state);
+  await saveState(client, owner, repo, issueNumber, state,
+    `✅ Agent **${step.agent}** completed (step \`${step.name}\`).`
+  );
 
-  // Recurse into the next step (or complete the pipeline)
   await advancePipeline({ client, event, pipeline, state, owner, repo, aiTool });
 }
 
 async function handleApproveComment({ client, event, pipelines, owner, repo, aiTool }) {
-  const { issueNumber, ref } = event;
+  const { issueNumber } = event;
   const username = event.comment.user;
 
   const state = await loadState(client, owner, repo, issueNumber);
   if (!state || state.status !== 'awaiting-approval') return;
 
-  // Find the matching pipeline definition
   const pipeline = pipelines.find(p => p.name === state.pipelineName);
   if (!pipeline) return;
 
-  // Verify permission
   const hasPermission = await verifyApproverPermission(client, owner, repo, username);
   if (!hasPermission) {
-    await postAuditEntry(
-      client, owner, repo, issueNumber,
-      `🚫 Approval from @${username} rejected — insufficient repository permissions ` +
-      `(requires \`write\`, \`maintain\`, or \`admin\`). Gate remains open.`
+    await postAuditEntry(client, owner, repo, issueNumber,
+      `🚫 Approval from @${username} rejected — insufficient repository permissions (requires \`write\`, \`maintain\`, or \`admin\`). Gate remains open.`
     );
     return;
   }
 
-  // Resume
   state.status = 'running';
   state.approvalGate.approvedBy = username;
   state.updatedAt = now();
-  await saveState(client, owner, repo, issueNumber, state);
-  await postAuditEntry(
-    client, owner, repo, issueNumber,
+  await saveState(client, owner, repo, issueNumber, state,
     `✅ Approval granted by @${username}. Resuming pipeline **${state.pipelineName}**.`
   );
 
@@ -263,7 +279,6 @@ async function main() {
     return;
   }
 
-  // Load aiTool from .apm-project.json
   let aiTool = 'copilot';
   const projectConfigPath = path.join(process.cwd(), '.apm-project.json');
   if (existsSync(projectConfigPath)) {
@@ -273,7 +288,6 @@ async function main() {
     } catch { /* use default */ }
   }
 
-  // Load pipelines
   const pipelinesDir = path.join(process.cwd(), '.apm', 'pipelines');
   const { valid: pipelines, errors } = await loadPipelines(pipelinesDir);
   for (const err of errors) {
@@ -281,41 +295,27 @@ async function main() {
   }
 
   const client = createGitHubClient(token);
-
   await runOrchestrator({ client, event, pipelines, owner, repo, aiTool });
-
-  // Optionally broadcast to dashboard (FR-007)
   await broadcastToDashboard(event.issueNumber, owner, repo, client);
 }
 
 async function broadcastToDashboard(issueNumber, owner, repo, client) {
   const webhookUrl = process.env.DASHBOARD_WEBHOOK_URL;
-  if (!webhookUrl) return; // silently skipped per FR-007
-  if (!issueNumber) return; // no issue context — nothing to broadcast
-
+  if (!webhookUrl || !issueNumber) return;
   try {
     const state = await loadState(client, owner, repo, issueNumber);
     if (!state) return;
-
-    const payload = JSON.stringify(state);
-    // Use Node built-in fetch (Node 18+)
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: payload,
+      body: JSON.stringify(state),
     });
-    if (!res.ok) {
-      console.warn(`[orchestrator] Dashboard webhook returned ${res.status}`);
-    }
+    if (!res.ok) console.warn(`[orchestrator] Dashboard webhook returned ${res.status}`);
   } catch (err) {
     console.warn(`[orchestrator] Dashboard broadcast failed: ${err.message}`);
   }
 }
 
-/**
- * Normalise a raw GitHub event payload into the internal event shape.
- * Returns null for unsupported event types.
- */
 function normaliseEvent(eventName, payload) {
   const issue = payload.issue ?? payload.pull_request;
   const issueNumber = issue?.number ?? payload.number;
@@ -338,13 +338,19 @@ function normaliseEvent(eventName, payload) {
           : undefined,
       };
     case 'workflow_run':
-      return { type: `workflow_run.${payload.action}`, labels, issueNumber, ref };
+      return {
+        type: `workflow_run.${payload.action}`,
+        labels,
+        issueNumber,
+        ref,
+        workflowName: payload.workflow_run?.name ?? null,
+        workflowConclusion: payload.workflow_run?.conclusion ?? null,
+      };
     default:
       return null;
   }
 }
 
-// Run CLI only when invoked directly (not when imported in tests)
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'))) {
   main().catch(err => {
     console.error('[orchestrator] Fatal error:', err);

@@ -56,6 +56,23 @@ describe('state-manager.saveState', () => {
     expect(body).toContain(STATE_TAG);
     expect(body).toContain('"runId":"run-001"');
   });
+
+  it('includes the audit message in the same comment when provided', async () => {
+    const client = makeClient();
+    await saveState(client, 'owner', 'repo', 42, mockState, '⚙️ Invoking agent triage');
+    expect(client.createComment).toHaveBeenCalledOnce();
+    const body = client.createComment.mock.calls[0][3];
+    expect(body).toContain('Invoking agent triage');
+    expect(body).toContain(STATE_TAG);
+    expect(body).toContain('"runId":"run-001"');
+  });
+
+  it('does NOT post a separate audit comment when message is passed to saveState', async () => {
+    // Verify only ONE createComment call — no separate blank state comment
+    const client = makeClient();
+    await saveState(client, 'owner', 'repo', 42, mockState, 'some message');
+    expect(client.createComment).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('state-manager.postAuditEntry', () => {

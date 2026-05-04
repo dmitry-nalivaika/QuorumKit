@@ -46,21 +46,30 @@ export async function loadState(client, owner, repo, issueNumber) {
 }
 
 /**
- * Persist updated pipeline run state by posting a new tagged comment.
+ * Persist updated pipeline run state AND post a human-readable audit message
+ * in a single comment. The state JSON is hidden inside an HTML comment so it
+ * does not render as a blank comment in the GitHub UI.
  *
  * @param {object} client
  * @param {string} owner
  * @param {string} repo
  * @param {number} issueNumber
  * @param {PipelineRunState} state
+ * @param {string} [auditMessage]  - optional human-readable message to include
  */
-export async function saveState(client, owner, repo, issueNumber, state) {
-  const body = `${STATE_TAG}${JSON.stringify(state)}${STATE_CLOSE}`;
+export async function saveState(client, owner, repo, issueNumber, state, auditMessage) {
+  const stateTag = `${STATE_TAG}${JSON.stringify(state)}${STATE_CLOSE}`;
+  const now = new Date().toISOString();
+  const humanLine = auditMessage
+    ? `**[APM Orchestrator]** ${auditMessage}\n\n_${now}_\n\n`
+    : '';
+  const body = `${humanLine}${stateTag}`;
   return client.createComment(owner, repo, issueNumber, body);
 }
 
 /**
- * Post a human-readable audit entry (no state tag — visible in rendered GitHub UI).
+ * Post a human-readable audit entry without a state update.
+ * Use this only when there is no state change to persist alongside the message.
  *
  * @param {object} client
  * @param {string} owner
