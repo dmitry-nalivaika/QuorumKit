@@ -3,6 +3,11 @@ name: Triage Agent (Copilot)
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to triage (used when triggered by the Orchestrator)'
+        required: true
 
 permissions:
   contents: read
@@ -29,10 +34,15 @@ jobs:
             const agentInstructions = readSafe('.github/agents/triage-agent.md');
             const constitution      = readSafe('.specify/memory/constitution.md');
 
-            const issueNumber = context.payload.issue.number;
-            const issueTitle  = context.payload.issue.title  ?? '';
-            const issueBody   = context.payload.issue.body   ?? '';
-            const issueAuthor = context.payload.issue.user?.login ?? '';
+            const issueNumber = context.eventName === 'workflow_dispatch'
+              ? Number(context.payload.inputs.issue_number)
+              : context.payload.issue.number;
+            const issueData = context.eventName === 'workflow_dispatch'
+              ? (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data
+              : context.payload.issue;
+            const issueTitle  = issueData.title  ?? '';
+            const issueBody   = issueData.body   ?? '';
+            const issueAuthor = issueData.user?.login ?? '';
 
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
