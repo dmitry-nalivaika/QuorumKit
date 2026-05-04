@@ -10,7 +10,24 @@ on:
   pull_request_review_comment:
     types: [created]
   workflow_run:
-    workflows: ["*"]
+    # Only watch agent workflows completing — not the orchestrator itself
+    workflows:
+      - "Triage Agent (Copilot)"
+      - "BA/Product Agent (Copilot)"
+      - "Architect Agent (Copilot)"
+      - "Developer Agent (Copilot)"
+      - "QA/Test Agent (Copilot)"
+      - "Reviewer Agent (Copilot)"
+      - "Release Agent (Copilot)"
+      - "Security Agent (Copilot)"
+      - "Triage Agent (Claude)"
+      - "BA/Product Agent (Claude)"
+      - "Architect Agent (Claude)"
+      - "Developer Agent (Claude)"
+      - "QA/Test Agent (Claude)"
+      - "Reviewer Agent (Claude)"
+      - "Release Agent (Claude)"
+      - "Security Agent (Claude)"
     types: [completed]
 
 permissions:
@@ -22,8 +39,8 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    # Skip if this is itself an orchestrator run (avoid infinite loops)
-    if: ${{ !contains(github.event.sender.login, '[bot]') || github.event_name == 'workflow_run' }}
+    # Don't run when triggered by a bot (prevents cascades from automated commits)
+    if: ${{ github.event.sender.type != 'Bot' || github.event_name == 'workflow_run' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
