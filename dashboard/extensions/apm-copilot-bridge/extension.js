@@ -37,6 +37,7 @@ async function submitPrompt(prompt) {
   try {
     await vscode.commands.executeCommand('workbench.action.chat.open', {
       query: prompt,
+      mode: 'agent',   // open in Copilot Agent mode, not Ask mode
     });
     return true;
   } catch (e1) {
