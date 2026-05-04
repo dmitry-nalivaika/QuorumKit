@@ -1,0 +1,29 @@
+name: Triage Agent (Copilot)
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  models: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Triage Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read `.github/agents/triage-agent.md` in full — it defines your role,
+            label taxonomy, triage workflow, comment format, and hard constraints.
+            Read `.specify/memory/constitution.md` for project scope and principles.
+
+            Your task: triage issue #${{ github.event.issue.number }}.
+            Follow every step in triage-agent.md exactly.

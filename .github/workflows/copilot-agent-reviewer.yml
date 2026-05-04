@@ -1,0 +1,34 @@
+name: Reviewer Agent (Copilot)
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  reviewer:
+    if: |
+      contains(github.event.comment.body, '@reviewer-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Reviewer Agent via GitHub Copilot
+        uses: github/copilot-actions/ask@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Read `.github/agents/reviewer-agent.md` in full — it defines your role,
+            review checklist, labelling convention, and hard constraints.
+            Read `.specify/memory/constitution.md` in full.
+
+            Your task: review PR #${{ github.event.issue.number }} and post your findings.
+            Follow every step in reviewer-agent.md exactly.

@@ -1,0 +1,62 @@
+name: Alert to Issue (Observability Feedback Loop)
+
+# Triggered by a repository_dispatch event from your alerting platform
+# (Sentry, Datadog, CloudWatch, Grafana, PagerDuty, etc.)
+#
+# Configure your alerting platform to POST:
+# POST https://api.github.com/repos/{owner}/{repo}/dispatches
+# {
+#   "event_type": "production-alert",
+#   "client_payload": {
+#     "title": "[ALERT] short description",
+#     "body":  "**Source**: ...\n**Message**: ...\n**Runbook**: ...",
+#     "severity": "critical|high|medium|low"
+#   }
+# }
+
+on:
+  repository_dispatch:
+    types: [production-alert]
+
+permissions:
+  issues: write
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Map severity to priority label
+        id: priority
+        run: |
+          case "${{ github.event.client_payload.severity }}" in
+            critical|p1|sev1) echo "label=priority:critical" >> "$GITHUB_OUTPUT" ;;
+            high|p2|sev2)     echo "label=priority:high"     >> "$GITHUB_OUTPUT" ;;
+            medium|p3|sev3)   echo "label=priority:medium"   >> "$GITHUB_OUTPUT" ;;
+            *)                echo "label=priority:low"       >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Create GitHub Issue from alert
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const payload = context.payload.client_payload;
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: payload.title || '[ALERT] Production alert',
+              body: [
+                payload.body || '',
+                '',
+                '---',
+                '_This issue was automatically created by the observability feedback loop._',
+                '_The Triage Agent will classify and route it._',
+                '',
+                '**Auto-labels applied**: `type:bug`, `source:observability`, `${{ steps.priority.outputs.label }}`',
+              ].join('\n'),
+              labels: [
+                'type:bug',
+                'source:observability',
+                '${{ steps.priority.outputs.label }}'
+              ]
+            });
+            core.info(`Created issue #${issue.data.number}: ${issue.data.html_url}`);
