@@ -33,13 +33,14 @@ function readAgentMarker(rootPath) {
 
 async function submitPrompt(prompt) {
   // Strategy:
-  //   1. Wait until Copilot Chat has actually finished registering its
-  //      commands AND its language model is online. Firing too early causes
-  //      "Language model unavailable".
-  //   2. Switch to Agent mode FIRST, in its own command call. Trying to do it
-  //      in the same chat.open call as the query sometimes lands in Ask mode.
-  //   3. Submit the query as a separate call, after Agent mode has applied.
-  //   4. On failure, retry once after a longer wait.
+  //   1. Wait for Copilot Chat to register its commands AND the LM to wake up.
+  //   2. Log every chat-related command available (helps diagnose mode IDs).
+  //   3. Open the chat in Agent mode WITHOUT a query.
+  //   4. Try every known "switch to agent mode" command — first that wins, wins.
+  //   5. Wait for the mode to actually apply.
+  //   6. Submit the query via a SEPARATE call (not bundled with chat.open),
+  //      which avoids the race where the prompt is sent before the mode
+  //      switch lands.
 
   async function tryCmd(id, ...args) {
     try {
@@ -52,45 +53,80 @@ async function submitPrompt(prompt) {
     }
   }
 
-  // Wait until a known Copilot/chat command is available (max 6s).
+  // Wait until Copilot Chat has registered its commands (max 8s), then a bit
+  // more for the language model to come online.
   async function waitForChatReady() {
-    const known = [
-      'workbench.action.chat.openAgent',
-      'workbench.action.chat.open',
-    ];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       const all = await vscode.commands.getCommands(true);
-      if (known.some(k => all.includes(k))) {
-        // Plus give the language model itself a moment to wake up.
-        await new Promise(r => setTimeout(r, 1500));
-        return;
+      if (all.includes('workbench.action.chat.open')) {
+        // Also wait for any github.copilot.* command (means Copilot Chat ext
+        // has finished activating, not just the built-in chat shell).
+        if (all.some(c => c.startsWith('github.copilot.'))) {
+          await new Promise(r => setTimeout(r, 2000));
+          return true;
+        }
       }
       await new Promise(r => setTimeout(r, 200));
     }
+    return false;
   }
 
-  await waitForChatReady();
+  const ready = await waitForChatReady();
+  console.log(`[APM] chat ready: ${ready}`);
 
-  // Step 1 — Force Agent mode. First command that succeeds wins.
-  const modeSwitched =
-    await tryCmd('workbench.action.chat.openAgent') ||
-    await tryCmd('workbench.action.chat.setMode', 'agent') ||
-    await tryCmd('github.copilot.chat.setMode', 'agent') ||
-    await tryCmd('workbench.action.chat.toggleAgentMode');
+  // Diagnostic: dump all chat / copilot commands so we can see what's there.
+  const all = await vscode.commands.getCommands(true);
+  const interesting = all.filter(c =>
+    /chat|copilot|agent/i.test(c) && !c.startsWith('_')
+  ).sort();
+  console.log(`[APM] chat-related commands (${interesting.length}):`);
+  for (const c of interesting) console.log(`  ${c}`);
+
+  // Step 1 — Open the chat panel in Agent mode (no query yet).
+  await tryCmd('workbench.action.chat.open', { mode: 'agent' });
+  await new Promise(r => setTimeout(r, 400));
+
+  // Step 2 — Force Agent mode through every command name we know about.
+  const modeAttempts = [
+    ['workbench.action.chat.openAgent'],
+    ['workbench.action.chat.newEditSession', { agentMode: true }],
+    ['workbench.action.chat.setMode', 'agent'],
+    ['github.copilot.chat.setMode', 'agent'],
+    ['github.copilot.chat.openAgent'],
+    ['github.copilot.openAgent'],
+    ['workbench.action.chat.toggleAgentMode'],
+  ];
+  let modeSwitched = false;
+  for (const [id, ...args] of modeAttempts) {
+    if (all.includes(id)) {
+      modeSwitched = await tryCmd(id, ...args);
+      if (modeSwitched) break;
+    }
+  }
   console.log(`[APM] agent mode switched: ${modeSwitched}`);
 
-  // Tiny wait so the mode flip lands before the query reaches the panel.
-  await new Promise(r => setTimeout(r, 500));
+  // Wait so the UI actually flips to Agent mode before we submit.
+  await new Promise(r => setTimeout(r, 800));
 
-  // Step 2 — Submit the query. Retry once on failure (handles the
-  // "Language model unavailable" race on cold start).
+  // Step 3 — Submit the query. Prefer the explicit submit path so the prompt
+  // is sent in whatever mode is currently active in the panel.
   async function submitOnce() {
-    return tryCmd('workbench.action.chat.open', { query: prompt, mode: 'agent' });
+    // Path A — direct query in chat.open (newer builds key off this).
+    if (await tryCmd('workbench.action.chat.open', { query: prompt, mode: 'agent' })) {
+      return true;
+    }
+    // Path B — set the input box text, then accept (= press enter / submit).
+    await new Promise(r => setTimeout(r, 200));
+    if (await tryCmd('workbench.action.chat.acceptInput', { text: prompt })) {
+      return true;
+    }
+    return false;
   }
 
   let ok = await submitOnce();
   if (!ok) {
-    await new Promise(r => setTimeout(r, 2500));
+    // Cold-start retry: LM might not be ready yet.
+    await new Promise(r => setTimeout(r, 3000));
     ok = await submitOnce();
   }
 
