@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apm.dev/schemas/pipeline.schema.json",
+  "title": "APM Pipeline",
+  "description": "Declarative pipeline definition for APM Orchestrator",
+  "type": "object",
+  "required": ["name", "version", "trigger", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique pipeline name (kebab-case, matches filename without .yml)"
+    },
+    "version": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Schema version"
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["event"],
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "type": "string",
+          "description": "GitHub event type in dot-notation, e.g. issues.opened, pull_request.opened, issue_comment.created, workflow_run.completed"
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "All listed labels must be present on the issue/PR for the rule to match"
+        },
+        "state": {
+          "type": "string",
+          "description": "Optional issue/PR state predicate (open, closed)"
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "agent"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable step name"
+          },
+          "agent": {
+            "type": "string",
+            "description": "Agent slug matching the agent definition filename (without .md)"
+          },
+          "condition": {
+            "type": "string",
+            "description": "Optional JS-expression evaluated against the current event context. Step is skipped when falsy."
+          },
+          "approval": {
+            "type": "string",
+            "enum": ["required"],
+            "description": "Set to 'required' to insert a human-in-the-loop gate before this step"
+          },
+          "approval_timeout_hours": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 72,
+            "description": "Hours before an unresolved approval gate times out (default 72)"
+          }
+        }
+      }
+    }
+  }
+}
