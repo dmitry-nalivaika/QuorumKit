@@ -35,7 +35,8 @@ permissions:
   issues: write
   pull-requests: write
   actions: write        # needed to trigger workflow_dispatch (agent invocation)
-  members: read         # FR-010: required to call GET /repos/{owner}/{repo}/collaborators/{username}/permission for approval-gate authorisation checks
+  # Note: GET /repos/{owner}/{repo}/collaborators/{username}/permission (FR-010) is
+  # covered by the GITHUB_TOKEN's default repository read access (contents: read above).
 
 jobs:
   orchestrate:
