@@ -10,7 +10,24 @@ on:
   pull_request_review_comment:
     types: [created]
   workflow_run:
-    workflows: ["*"]
+    # Only watch agent workflows completing — not the orchestrator itself
+    workflows:
+      - "Triage Agent (Copilot)"
+      - "BA/Product Agent (Copilot)"
+      - "Architect Agent (Copilot)"
+      - "Developer Agent (Copilot)"
+      - "QA/Test Agent (Copilot)"
+      - "Reviewer Agent (Copilot)"
+      - "Release Agent (Copilot)"
+      - "Security Agent (Copilot)"
+      - "Triage Agent (Claude)"
+      - "BA/Product Agent (Claude)"
+      - "Architect Agent (Claude)"
+      - "Developer Agent (Claude)"
+      - "QA/Test Agent (Claude)"
+      - "Reviewer Agent (Claude)"
+      - "Release Agent (Claude)"
+      - "Security Agent (Claude)"
     types: [completed]
 
 permissions:
@@ -18,26 +35,40 @@ permissions:
   issues: write
   pull-requests: write
   actions: write        # needed to trigger workflow_dispatch (agent invocation)
+  members: read         # FR-010: required to call GET /repos/{owner}/{repo}/collaborators/{username}/permission for approval-gate authorisation checks
 
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    # Skip if this is itself an orchestrator run (avoid infinite loops)
-    if: ${{ !contains(github.event.sender.login, '[bot]') || github.event_name == 'workflow_run' }}
+    # Don't run when triggered by a bot (prevents cascades from automated commits)
+    if: ${{ github.event.sender.type != 'Bot' || github.event_name == 'workflow_run' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check orchestrator is installed
+        id: check
+        run: |
+          if [ ! -f scripts/orchestrator/index.js ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Orchestrator not installed in this repo — skipping. Run scripts/init.sh to install."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install orchestrator dependencies
+        if: steps.check.outputs.skip != 'true'
         run: npm ci
         working-directory: scripts/orchestrator
 
       - name: Run Orchestrator
+        if: steps.check.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -47,13 +78,16 @@ jobs:
         run: node scripts/orchestrator/index.js
 
       - name: Broadcast to dashboard
-        if: ${{ vars.DASHBOARD_WEBHOOK_URL != '' }}
+        if: steps.check.outputs.skip != 'true' && vars.DASHBOARD_WEBHOOK_URL != ''
         env:
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
+          APM_WEBHOOK_SECRET: ${{ secrets.APM_WEBHOOK_SECRET }}
         run: |
           # Payload is written to /tmp/apm-pipeline-event.json by index.js when a state transition occurs
+          # SEC-HIGH-001: X-APM-Webhook-Secret header authenticates the request to the dashboard server
           if [ -f /tmp/apm-pipeline-event.json ]; then
             curl -s -X POST "$DASHBOARD_WEBHOOK_URL/webhook/pipeline-event" \
               -H "Content-Type: application/json" \
+              -H "X-APM-Webhook-Secret: ${APM_WEBHOOK_SECRET}" \
               -d @/tmp/apm-pipeline-event.json || echo "Dashboard broadcast failed (non-fatal)"
           fi

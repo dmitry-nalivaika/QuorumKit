@@ -16,6 +16,7 @@ jobs:
   architect:
     if: |
       contains(github.event.comment.body, '@architect-agent') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (github.event.issue.pull_request != null ||
        github.event_name == 'pull_request_review_comment' ||
        github.event.issue.pull_request == null)
@@ -23,15 +24,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Architect Agent via GitHub Copilot
-        uses: github/copilot-actions/ask@v1
+      - name: Run Architect Agent via GitHub Models
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: |
-            Read `.github/agents/architect-agent.md` in full — it defines your role,
-            ADR format, review checklist, blocker thresholds, and hard constraints.
-            Read `.specify/memory/constitution.md` in full.
-            Read `docs/architecture/` (if it exists) for prior ADRs.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            Your task: perform an architectural review for issue/PR #${{ github.event.issue.number }}.
-            Follow every step in architect-agent.md exactly.
+            const agentInstructions = readSafe('.github/agents/architect-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const issueNumber   = context.payload.issue?.number ?? context.payload.pull_request?.number;
+            const commentBody   = context.payload.comment?.body ?? '';
+            const commentAuthor = context.payload.comment?.user?.login ?? '';
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub architect agent.';
+
+            const userContent =
+              `@${commentAuthor} asked you (via comment on #${issueNumber}) to perform an architectural review.\n` +
+              `Comment:\n${commentBody}`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data  = await res.json();
+            const reply = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Architect agent produced no output.';
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              body:         reply,
+            });

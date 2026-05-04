@@ -16,7 +16,9 @@ jobs:
   incident-response:
     if: |
       (github.event_name == 'issues' && github.event.label.name == 'incident') ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@incident-agent'))
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '@incident-agent') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

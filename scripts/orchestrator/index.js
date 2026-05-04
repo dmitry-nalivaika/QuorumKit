@@ -50,10 +50,14 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
   // ── Route incoming event to a pipeline ─────────────────────────────────
   const pipeline = matchEvent(event, pipelines);
   if (!pipeline) {
-    await postAuditEntry(
-      client, owner, repo, issueNumber,
-      `⚪ Event \`${event.type}\` did not match any pipeline rule. Reason: \`no-rule-match\`. No action taken.`
-    );
+    const msg = `⚪ Event \`${event.type}\` did not match any pipeline rule. Reason: \`no-rule-match\`. No action taken.`;
+    // Only post a comment when there is an issue/PR to comment on.
+    // Events like workflow_run.completed carry no issueNumber — log only.
+    if (issueNumber) {
+      await postAuditEntry(client, owner, repo, issueNumber, msg);
+    } else {
+      console.log(`[orchestrator] ${msg}`);
+    }
     return;
   }
 
@@ -273,6 +277,7 @@ async function main() {
 async function broadcastToDashboard(issueNumber, owner, repo, client) {
   const webhookUrl = process.env.DASHBOARD_WEBHOOK_URL;
   if (!webhookUrl) return; // silently skipped per FR-007
+  if (!issueNumber) return; // no issue context — nothing to broadcast
 
   try {
     const state = await loadState(client, owner, repo, issueNumber);

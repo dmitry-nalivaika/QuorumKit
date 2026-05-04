@@ -14,7 +14,8 @@ jobs:
   compliance-review:
     if: |
       github.event.issue.pull_request != null &&
-      contains(github.event.comment.body, '@compliance-agent')
+      contains(github.event.comment.body, '@compliance-agent') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
