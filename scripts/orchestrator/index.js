@@ -51,8 +51,9 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
   const pipeline = matchEvent(event, pipelines);
   if (!pipeline) {
     const msg = `⚪ Event \`${event.type}\` did not match any pipeline rule. Reason: \`no-rule-match\`. No action taken.`;
-    // Suppress label-noise: every label a triage agent applies fires issues.labeled
-    // — these never match a pipeline rule but would flood the issue with comments.
+    // Suppress noise: issues.labeled fires for every label applied (e.g. priority:low,
+    // agent:ba, status:needs-info). Only the type:* labels match a pipeline rule;
+    // the rest would flood every issue with useless no-rule-match comments.
     if (issueNumber && event.type !== 'issues.labeled') {
       await postAuditEntry(client, owner, repo, issueNumber, msg);
     } else {
@@ -65,6 +66,8 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
   let state = await loadState(client, owner, repo, issueNumber);
 
   // ── Suppress issues.labeled on an active run ────────────────────────────
+  // Triage applies several labels (priority:low, agent:ba, etc.) after the
+  // type:* label that started the pipeline. Guard against re-triggering.
   if (event.type === 'issues.labeled' && state &&
       state.status !== 'completed' && state.status !== 'failed' && state.status !== 'timed-out') {
     console.log(`[orchestrator] Suppressing issues.labeled on active run ${state.runId}`);
@@ -341,7 +344,10 @@ function normaliseEvent(eventName, payload) {
       return {
         type: `workflow_run.${payload.action}`,
         labels,
-        issueNumber,
+        // workflow_run carries no issue number in the event itself.
+        // The orchestrator passes it as a workflow_dispatch input so the
+        // agent workflow has context; recover it from there.
+        issueNumber: Number(payload.workflow_run?.inputs?.issue_number) || issueNumber || null,
         ref,
         workflowName: payload.workflow_run?.name ?? null,
         workflowConclusion: payload.workflow_run?.conclusion ?? null,

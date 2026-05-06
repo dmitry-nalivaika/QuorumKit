@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: 'Issue number to triage (used when triggered by the Orchestrator)'
+        description: 'Issue number to triage (manual re-triage)'
         required: true
 
 permissions:
@@ -85,4 +85,23 @@ jobs:
               repo:         context.repo.repo,
               issue_number: issueNumber,
               body:         reply,
+            });
+
+            // Apply 'triaged' label — this is the signal that triggers pipelines.
+            // Create the label first if it doesn't exist yet.
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                name:  'triaged',
+                color: '0075ca',
+                description: 'Issue has been processed by the triage agent',
+              });
+            } catch { /* label already exists — ignore */ }
+
+            await github.rest.issues.addLabels({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              labels:       ['triaged'],
             });

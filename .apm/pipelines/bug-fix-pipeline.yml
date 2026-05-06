@@ -7,14 +7,12 @@ name: bug-fix-pipeline
 version: "1"
 
 trigger:
-  event: issues.opened
+  event: issues.labeled
   labels:
+    - triaged
     - type:bug
 
 steps:
-  - name: triage
-    agent: triage
-
   - name: dev
     agent: dev
 
