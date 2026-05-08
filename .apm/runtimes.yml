@@ -1,0 +1,27 @@
+# APM Runtime Registry (FR-007, ADR-005)
+#
+# Canonical source of truth for runtimes available to v2 pipelines.
+# Reserved kinds (azure-openai, bedrock, ollama, custom) are NOT enabled in v2;
+# enabling any of them requires a per-kind ADR. See ADR-005.
+#
+# Credentials are referenced BY NAME ONLY. The orchestrator resolves the
+# secret value from `process.env` (i.e. GitHub Actions ${{ secrets.* }})
+# at invocation time. Never inline a secret value here.
+
+default_runtime: copilot-default
+
+agent_defaults:
+  # Per-agent overrides (FR-008). Empty by default.
+  # Example:
+  #   qa-agent: claude-default
+
+runtimes:
+  copilot-default:
+    kind: copilot
+    endpoint: https://models.github.ai/inference
+    credential_ref: GITHUB_TOKEN
+
+  claude-default:
+    kind: claude
+    endpoint: https://api.anthropic.com/v1
+    credential_ref: ANTHROPIC_API_KEY

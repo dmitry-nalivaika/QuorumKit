@@ -1,0 +1,43 @@
+# APM Agent Identity Registry (FR-013)
+#
+# Maps GitHub user / app installation logins to agent slugs.
+# Comments authored by identities NOT listed here are ignored for routing,
+# regardless of `apm-msg` content. Defends against forged messages.
+#
+# `github-actions[bot]` is the default login when an Actions workflow uses
+# the built-in GITHUB_TOKEN to post a comment. Project repos may add their
+# own bot logins as needed.
+
+identities:
+  - agent: triage-agent
+    logins:
+      - github-actions[bot]
+      - apm-triage-bot
+  - agent: ba-agent
+    logins:
+      - github-actions[bot]
+      - apm-ba-bot
+  - agent: architect-agent
+    logins:
+      - github-actions[bot]
+      - apm-architect-bot
+  - agent: dev-agent
+    logins:
+      - github-actions[bot]
+      - apm-dev-bot
+  - agent: qa-agent
+    logins:
+      - github-actions[bot]
+      - apm-qa-bot
+  - agent: reviewer-agent
+    logins:
+      - github-actions[bot]
+      - apm-reviewer-bot
+  - agent: security-agent
+    logins:
+      - github-actions[bot]
+      - apm-security-bot
+  - agent: release-agent
+    logins:
+      - github-actions[bot]
+      - apm-release-bot
