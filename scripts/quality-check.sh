@@ -296,6 +296,25 @@ else
 fi
 
 # =============================================================================
+h1 "14. Every agent workflow declares timeout-minutes (FR-028, ADR-007 §4)"
+# =============================================================================
+agent_workflow_globs=(
+  ".github/workflows/copilot-agent-*.yml"
+  "templates/github/workflows/copilot-agent-*.yml"
+  "templates/github/workflows/agent-*.yml"
+)
+for glob in "${agent_workflow_globs[@]}"; do
+  for f in $glob; do
+    [ -f "$f" ] || continue
+    if grep -q '^\s*timeout-minutes:' "$f"; then
+      ok "$f declares timeout-minutes"
+    else
+      fail "$f missing timeout-minutes (FR-028: every agent workflow must bound runtime)"
+    fi
+  done
+done
+
+# =============================================================================
 echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo -e "${GREEN}${BOLD}✓ All quality gates passed${NC}"

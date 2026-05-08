@@ -16,6 +16,63 @@ jobs:
       - name: Run quality gates
         run: bash scripts/quality-check.sh
 
+  pipeline-validator:
+    name: Pipeline Validator (FR-020)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install orchestrator deps
+        run: npm ci
+        working-directory: scripts/orchestrator
+      - name: Validate every pipeline file under .apm/pipelines/
+        run: node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines
+
+  verify-mirror:
+    name: Verify Mirror (ADR-006)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install orchestrator deps (for js-yaml in verify-mirror.sh)
+        run: npm ci
+        working-directory: scripts/orchestrator
+      - name: Run verify-mirror.sh
+        run: bash scripts/verify-mirror.sh
+
+  orchestrator-tests:
+    name: Orchestrator Tests (FR-023)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install orchestrator deps
+        run: npm ci
+        working-directory: scripts/orchestrator
+      - name: Run vitest suite
+        run: npm test
+        working-directory: scripts/orchestrator
+
+  regulation-lint:
+    name: Regulation Lint (FR-014)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install orchestrator deps
+        run: npm ci
+        working-directory: scripts/orchestrator
+      - name: Lint pipelines against regulation document
+        run: node scripts/orchestrator/regulation-lint.js
+
   markdown-links:
     name: Markdown Link Validator
     runs-on: ubuntu-latest
