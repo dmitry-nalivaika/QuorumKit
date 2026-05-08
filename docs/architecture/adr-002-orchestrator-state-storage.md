@@ -1,4 +1,10 @@
-# ADR-002: Orchestrator State Storage Strategy
+# AD| **ADR Number** | 002 |
+| **Issue** | #2 — Autonomous Agent Orchestration |
+| **Status** | Superseded by ADR-004 (2026-05-08) |
+| **Date** | 2026-05-04 |
+| **Deciders** | BA/Product Agent, Architect Agent |
+| **Supersedes** | — |
+| **Superseded By** | [ADR-004](./adr-004-orchestrator-state-comment-model-v2.md) — Hybrid live-status + append-only audit comment model (Orchestrator v2) | Orchestrator State Storage Strategy
 
 | Field | Value |
 |---|---|
