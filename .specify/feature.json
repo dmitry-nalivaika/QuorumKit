@@ -1,13 +1,13 @@
 {
-  "activeSpec": "specs/002-autonomous-agent-orchestration",
-  "issue": 2,
-  "slug": "002-autonomous-agent-orchestration",
-  "specFile": "specs/002-autonomous-agent-orchestration/spec.md",
-  "adr": "docs/architecture/adr-002-orchestrator-state-storage.md",
-  "status": "ready-for-dev",
+  "activeSpec": "specs/044-orchestrator-v2-design",
+  "issue": 44,
+  "slug": "044-orchestrator-v2-design",
+  "specFile": "specs/044-orchestrator-v2-design/spec.md",
+  "adr": null,
+  "status": "spec-ready",
   "openQuestions": 0,
-  "updatedAt": "2026-05-04",
-  "architectReviewResolved": true,
+  "updatedAt": "2026-05-08",
+  "architectReviewResolved": false,
   "archBlockers": [],
   "archConcerns": []
 }
