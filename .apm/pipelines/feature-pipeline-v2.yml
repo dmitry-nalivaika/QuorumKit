@@ -1,0 +1,86 @@
+# Feature Pipeline (v2 worked example) — issue #44 Orchestrator v2 Design
+#
+# Demonstrates every v2 capability:
+#   • outcome-graph transitions (FR-003)
+#   • backward edges with loop budget (FR-004, FR-005)
+#   • per-step runtime override + project default (FR-007/008, ADR-005)
+#   • approval gate on the release step (FR-009/010)
+#   • per-step timeout_minutes (FR-019, ADR-007 §4)
+#   • optional architect step gated by `needs:adr` label (FR-006)
+#
+# This file lives alongside `feature-pipeline.yml` (v1) so v1 stays the
+# default while teams opt in to v2 by ALSO labelling the issue with
+# `pipeline:v2`. When v2 graduates from preview, this file becomes the
+# single feature-pipeline.yml.
+name: feature-pipeline-v2
+schema_version: "2"
+
+trigger:
+  event: issues.labeled
+  labels:
+    - triaged
+    - type:feature
+    - pipeline:v2
+
+entry: ba
+
+# Defaults if a step doesn't override.
+loop_budget:
+  max_iterations_per_edge: 3
+  max_total_steps: 30
+  max_wallclock_minutes: 720
+
+steps:
+  - name: ba
+    agent: ba-agent
+    timeout_minutes: 60
+
+  - name: architect
+    agent: architect-agent
+    condition: "labels.includes('needs:adr')"
+    timeout_minutes: 60
+
+  - name: dev
+    agent: dev-agent
+    timeout_minutes: 90
+
+  - name: qa
+    agent: qa-agent
+    timeout_minutes: 60
+
+  - name: reviewer
+    agent: reviewer-agent
+    timeout_minutes: 45
+
+  - name: release
+    agent: release-agent
+    approval: required
+    approval_timeout_hours: 72
+    timeout_minutes: 30
+
+transitions:
+  # ── happy path forward ──
+  - { from: ba,        outcome: success,    to: architect }
+  - { from: architect, outcome: success,    to: dev }
+  - { from: dev,       outcome: success,    to: qa }
+  - { from: qa,        outcome: success,    to: reviewer }
+  - { from: reviewer,  outcome: success,    to: release }
+
+  # ── BA can skip architect when no ADR is needed ──
+  - { from: ba,        outcome: spec_gap,   to: ba }            # rework spec on its own input
+  - { from: ba,        outcome: needs-human, to: ba }
+
+  # ── QA failures send work back to dev (backward edge — counted) ──
+  - { from: qa,        outcome: fail,        to: dev }
+  - { from: qa,        outcome: blocker,     to: dev }
+  - { from: qa,        outcome: timeout,     to: dev }
+
+  # ── Reviewer can bounce work back to dev or to QA ──
+  - { from: reviewer,  outcome: fail,        to: dev }
+  - { from: reviewer,  outcome: blocker,     to: dev }
+  - { from: reviewer,  outcome: spec_gap,    to: ba }           # backward across the chain
+
+  # ── Dev outcomes ──
+  - { from: dev,       outcome: spec_gap,    to: ba }
+  - { from: dev,       outcome: blocker,     to: dev }          # self-loop until human attention
+  - { from: dev,       outcome: needs-human, to: dev }

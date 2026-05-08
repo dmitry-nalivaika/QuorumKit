@@ -4,7 +4,7 @@
   "slug": "044-orchestrator-v2-design",
   "specFile": "specs/044-orchestrator-v2-design/spec.md",
   "adr": null,
-  "status": "plan-ready",
+  "status": "pr-open",
   "openQuestions": 0,
   "updatedAt": "2026-05-08",
   "architectReviewResolved": false,

@@ -44,7 +44,7 @@ export function parseRegulation(markdown) {
     let m;
     while ((m = re.exec(labelsSection)) !== null) {
       const t = m[1];
-      if (/^(agent|status|loop|gate|type):/i.test(t) || t === 'triaged') {
+      if (/^(agent|status|loop|gate|type|pipeline):/i.test(t) || t === 'triaged') {
         labels.add(t);
       }
     }
