@@ -210,4 +210,4 @@ declared outcome in the regulation document), distinct from `protocol-violation`
 - ADR-006 (`.apm/` SoT + mirror — `verify-mirror.sh` referenced as required check)
 - Constitution §VI (Observable, Auditable Automation), §VIII (Orchestrator as control plane)
 - `.github/agents/devops-agent.md` — infrastructure review checklist
-- GitHub Actions docs — [`concurrency`](https://docs.github.com/en/actions/using-jobs/using-concurrency), [`timeout-minutes`](https://docs.github.com/en/actions/using-jobs/setting-a-maximum-execution-time-for-a-job) (cap: 360 min)
+- GitHub Actions docs — [`concurrency`](https://docs.github.com/en/actions/using-jobs/using-concurrency), [`timeout-minutes`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes) (cap: 360 min)

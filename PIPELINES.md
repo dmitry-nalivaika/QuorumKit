@@ -4,7 +4,7 @@
 > Orchestrator drives the right AI agents through your SDLC loop — including
 > rework cycles, runtime selection, approval gates, and timeouts.
 
-The Orchestrator is **schema-version 2** as of [#44]. v1 files still load via a
+The Orchestrator is **schema-version 2** as of issue #44. v1 files still load via a
 backward-compat adapter, but every shipped pipeline is now v2.
 
 ---
@@ -269,7 +269,6 @@ All four are wired into `.github/workflows/quality.yml`.
 - `docs/architecture/adr-007-orchestrator-github-actions-substrate-contract.md` — concurrency, dedup, timeouts
 - `specs/044-orchestrator-v2-design/spec.md` — full v2 functional spec
 
-[#44]: https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/44
 [ADR-004]: docs/architecture/adr-004-orchestrator-state-comment-model-v2.md
 [ADR-005]: docs/architecture/adr-005-pluggable-runtime-registry-interface.md
 [ADR-006]: docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md

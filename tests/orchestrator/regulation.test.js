@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { parseRegulation, loadRegulation } from '../../scripts/orchestrator/regulation.js';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 describe('regulation.parseRegulation', () => {
   it('returns empty sets for empty input', () => {
@@ -58,7 +62,7 @@ irrelevant.
 
 describe('regulation.loadRegulation', () => {
   it('parses the shipped docs/AGENT_PROTOCOL.md', async () => {
-    const r = await loadRegulation('/Users/Dmitry_Nalivaika/Documents/Projects/APM');
+    const r = await loadRegulation(REPO_ROOT);
     expect(r.found).toBe(true);
     // Spot-check a few canonical identifiers we shipped in Phase 1.
     expect(r.labels.has('status:needs-human')).toBe(true);

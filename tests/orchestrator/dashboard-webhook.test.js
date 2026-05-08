@@ -11,7 +11,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { WebSocket } from 'ws';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const DASHBOARD_DIR = resolve(REPO_ROOT, 'dashboard');
 
 const TEST_WEBHOOK_SECRET = 'test-secret-abc123';
 
@@ -76,7 +81,7 @@ beforeAll(async () => {
     process.execPath,          // node binary
     ['server.js', '--port', String(port)],
     {
-      cwd: '/Users/Dmitry_Nalivaika/Documents/Projects/APM/dashboard',
+      cwd: DASHBOARD_DIR,
       env: { ...process.env, APM_PORT: String(port), APM_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
