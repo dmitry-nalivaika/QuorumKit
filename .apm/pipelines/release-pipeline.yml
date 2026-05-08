@@ -1,10 +1,10 @@
-# Release Pipeline
-# Triggered when a PR is merged to main (workflow_run completed + label type:release).
-# The release step requires explicit human approval before the release-agent publishes.
+# Release Pipeline (v2)
+# Triggered when an issue is labelled `triaged` + `type:release`.
+# Chain: qa → security → reviewer → release (gated by approval)
 #
 # Customise this file freely — changes take effect on the next Orchestrator run.
 name: release-pipeline
-version: "1"
+schema_version: "2"
 
 trigger:
   event: issues.labeled
@@ -12,17 +12,47 @@ trigger:
     - triaged
     - type:release
 
+entry: qa
+
+loop_budget:
+  max_iterations_per_edge: 2
+  max_total_steps: 15
+  max_wallclock_minutes: 480
+
 steps:
   - name: qa
-    agent: qa
+    agent: qa-agent
+    timeout_minutes: 60
 
   - name: security
-    agent: security
+    agent: security-agent
+    timeout_minutes: 60
 
   - name: reviewer
-    agent: reviewer
+    agent: reviewer-agent
+    timeout_minutes: 45
 
   - name: release
-    agent: release
+    agent: release-agent
     approval: required
     approval_timeout_hours: 72
+    timeout_minutes: 30
+
+transitions:
+  # ── happy path forward ──
+  - { from: qa,       outcome: success,     to: security }
+  - { from: security, outcome: success,     to: reviewer }
+  - { from: reviewer, outcome: success,     to: release }
+
+  # ── QA / Security / Reviewer regressions block the release ──
+  - { from: qa,       outcome: fail,        to: qa }
+  - { from: qa,       outcome: blocker,     to: qa }
+  - { from: qa,       outcome: needs-human, to: qa }
+
+  - { from: security, outcome: fail,        to: security }
+  - { from: security, outcome: blocker,     to: security }
+  - { from: security, outcome: needs-human, to: security }
+
+  - { from: reviewer, outcome: fail,        to: reviewer }
+  - { from: reviewer, outcome: blocker,     to: reviewer }
+  - { from: reviewer, outcome: needs-human, to: reviewer }

@@ -1,10 +1,17 @@
-# Feature Pipeline
-# Triggered when a new issue is opened with label type:feature.
-# Chain: triage → ba → architect (if ADR needed) → dev → qa → reviewer → release
+# Feature Pipeline (v2)
+# Triggered when a new issue is labelled `triaged` + `type:feature`.
+# Chain: ba → architect (if ADR needed) → dev → qa → reviewer → release
 #
-# Customise this file freely — changes take effect on the next Orchestrator run.
+# v2 features in use:
+#   • outcome-graph transitions (FR-003) — every step's outcomes are explicit
+#   • backward edges (FR-004) — qa/reviewer can bounce work back to dev/ba
+#   • loop budget (FR-005) — caps runaway BA↔DEV↔QA cycles
+#   • per-step runtime resolution (FR-007/008, ADR-005) via .apm/runtimes.yml
+#   • approval gate on release (FR-009/010)
+#   • per-step timeout_minutes (FR-019, ADR-007 §4)
+#   • optional architect step gated by `needs:adr` label (FR-006)
 name: feature-pipeline
-version: "1"
+schema_version: "2"
 
 trigger:
   event: issues.labeled
@@ -12,24 +19,65 @@ trigger:
     - triaged
     - type:feature
 
+entry: ba
+
+# Defaults if a step doesn't override.
+loop_budget:
+  max_iterations_per_edge: 3
+  max_total_steps: 30
+  max_wallclock_minutes: 720
+
 steps:
   - name: ba
-    agent: ba
+    agent: ba-agent
+    timeout_minutes: 60
 
   - name: architect
-    agent: architect
+    agent: architect-agent
     condition: "labels.includes('needs:adr')"
+    timeout_minutes: 60
 
   - name: dev
-    agent: dev
+    agent: dev-agent
+    timeout_minutes: 90
 
   - name: qa
-    agent: qa
+    agent: qa-agent
+    timeout_minutes: 60
 
   - name: reviewer
-    agent: reviewer
+    agent: reviewer-agent
+    timeout_minutes: 45
 
   - name: release
-    agent: release
+    agent: release-agent
     approval: required
     approval_timeout_hours: 72
+    timeout_minutes: 30
+
+transitions:
+  # ── happy path forward ──
+  - { from: ba,        outcome: success,    to: architect }
+  - { from: architect, outcome: success,    to: dev }
+  - { from: dev,       outcome: success,    to: qa }
+  - { from: qa,        outcome: success,    to: reviewer }
+  - { from: reviewer,  outcome: success,    to: release }
+
+  # ── BA can skip architect when no ADR is needed ──
+  - { from: ba,        outcome: spec_gap,   to: ba }            # rework spec on its own input
+  - { from: ba,        outcome: needs-human, to: ba }
+
+  # ── QA failures send work back to dev (backward edge — counted) ──
+  - { from: qa,        outcome: fail,        to: dev }
+  - { from: qa,        outcome: blocker,     to: dev }
+  - { from: qa,        outcome: timeout,     to: dev }
+
+  # ── Reviewer can bounce work back to dev or to QA ──
+  - { from: reviewer,  outcome: fail,        to: dev }
+  - { from: reviewer,  outcome: blocker,     to: dev }
+  - { from: reviewer,  outcome: spec_gap,    to: ba }           # backward across the chain
+
+  # ── Dev outcomes ──
+  - { from: dev,       outcome: spec_gap,    to: ba }
+  - { from: dev,       outcome: blocker,     to: dev }          # self-loop until human attention
+  - { from: dev,       outcome: needs-human, to: dev }

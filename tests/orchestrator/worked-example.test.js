@@ -23,7 +23,7 @@ const fastClock = { now: () => 0, sleep: vi.fn(async () => {}) };
 const env = { GITHUB_TOKEN: 'gh_xxx', ANTHROPIC_API_KEY: 'ak_xxx' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PIPELINE_PATH = path.resolve(__dirname, '../../.apm/pipelines/feature-pipeline-v2.yml');
+const PIPELINE_PATH = path.resolve(__dirname, '../../.apm/pipelines/feature-pipeline.yml');
 
 async function loadV2WorkedExample() {
   const raw = await readFile(PIPELINE_PATH, 'utf8');
@@ -118,11 +118,11 @@ async function startRun({ client, pipeline, runtimeRegistry, issueNumber, extraL
     client,
     event: {
       type: 'issues.labeled',
-      labels: ['triaged', 'type:feature', 'pipeline:v2', ...extraLabels],
+      labels: ['triaged', 'type:feature', ...extraLabels],
       issueNumber, ref: 'main',
       _rawEventName: 'issues',
       _rawPayload: {
-        action: 'labeled', label: { name: 'pipeline:v2' },
+        action: 'labeled', label: { name: 'type:feature' },
         issue: { number: issueNumber, updated_at: new Date().toISOString() },
       },
     },

@@ -67,12 +67,6 @@ labels do not scale to N counters.)
 Their semantics are owned by the Triage Agent's role definition and reproduced
 here for completeness.
 
-### 1.6 `pipeline:*` — Pipeline opt-in selectors
-
-| Label | Applied by | Effect |
-|---|---|---|
-| `pipeline:v2` | Triage Agent | Opt-in marker: routes the issue through `feature-pipeline-v2.yml` instead of the v1 default. Removed automatically when v2 graduates. |
-
 ---
 
 ## 2. `apm-msg` Outcomes
