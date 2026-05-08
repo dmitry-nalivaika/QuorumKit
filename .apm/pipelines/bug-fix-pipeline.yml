@@ -1,10 +1,10 @@
-# Bug Fix Pipeline
-# Triggered when a new issue is opened with label type:bug.
-# Chain: triage → dev → qa → reviewer
+# Bug Fix Pipeline (v2)
+# Triggered when a new issue is labelled `triaged` + `type:bug`.
+# Chain: dev → qa → reviewer
 #
 # Customise this file freely — changes take effect on the next Orchestrator run.
 name: bug-fix-pipeline
-version: "1"
+schema_version: "2"
 
 trigger:
   event: issues.labeled
@@ -12,12 +12,41 @@ trigger:
     - triaged
     - type:bug
 
+entry: dev
+
+loop_budget:
+  max_iterations_per_edge: 3
+  max_total_steps: 20
+  max_wallclock_minutes: 480
+
 steps:
   - name: dev
-    agent: dev
+    agent: dev-agent
+    timeout_minutes: 90
 
   - name: qa
-    agent: qa
+    agent: qa-agent
+    timeout_minutes: 60
 
   - name: reviewer
-    agent: reviewer
+    agent: reviewer-agent
+    timeout_minutes: 45
+
+transitions:
+  # ── happy path forward ──
+  - { from: dev,      outcome: success,     to: qa }
+  - { from: qa,       outcome: success,     to: reviewer }
+
+  # ── QA bounces back to dev ──
+  - { from: qa,       outcome: fail,        to: dev }
+  - { from: qa,       outcome: blocker,     to: dev }
+  - { from: qa,       outcome: timeout,     to: dev }
+
+  # ── Reviewer bounces back to dev ──
+  - { from: reviewer, outcome: fail,        to: dev }
+  - { from: reviewer, outcome: blocker,     to: dev }
+
+  # ── Dev needs-human / spec gap surfaces back to humans ──
+  - { from: dev,      outcome: blocker,     to: dev }
+  - { from: dev,      outcome: needs-human, to: dev }
+  - { from: dev,      outcome: spec_gap,    to: dev }

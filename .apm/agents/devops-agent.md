@@ -254,6 +254,14 @@ and triggers the Triage Agent.
 - MUST NOT use environment-specific names that contradict the constitution's environment definitions
 - MUST NOT deploy to edge devices without a signed OTA package (if edge layer defined in constitution)
 - MUST raise COST-BLOCKER if projected spend exceeds the constitution budget by > 20% (if budget defined)
+- MUST declare `timeout-minutes:` on every agent-dispatching workflow under
+  `.github/workflows/` and `templates/github/workflows/` (FR-028, ADR-007 §4).
+  The orchestrator's quality-check.sh gate #14 will fail PRs that omit it.
+- MUST keep the orchestrator workflow's `concurrency:` block keyed on issue/PR
+  (FR-027, ADR-007 §2). Removing it allows races on the audit channel.
+- MUST keep `.github/workflows/orchestrator.yml`'s outer continue-on-error +
+  fallback `orchestrator-failure` audit step intact (FR-029, ADR-007 §6) so
+  silent crashes are impossible.
 
 ## Context Files to Read at Session Start
 

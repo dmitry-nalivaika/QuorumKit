@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apm.dev/schemas/apm-msg.schema.json",
+  "title": "APM Agent Message (apm-msg)",
+  "description": "Single machine-readable message emitted by an agent at the end of a step (FR-011, FR-012).",
+  "type": "object",
+  "required": ["version", "runId", "step", "agent", "iteration", "outcome", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["2"],
+      "description": "apm-msg schema version. v2 is the only supported value."
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pipeline run UUID; must equal the active run."
+    },
+    "step": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Step name as declared in the pipeline."
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent slug (e.g. 'qa-agent', 'dev-agent') matching the agent identity registry."
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based iteration counter for the step on the current edge."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "success",
+        "fail",
+        "blocker",
+        "spec_gap",
+        "timeout",
+        "needs-human",
+        "runtime-error",
+        "protocol-violation",
+        "orchestrator-failure"
+      ],
+      "description": "Declared outcome enum. Source of truth: docs/AGENT_PROTOCOL.md."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 280,
+      "description": "Single-line human summary (max 280 chars)."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Optional per-outcome payload. Schema is per-outcome; see regulation document.",
+      "additionalProperties": true
+    }
+  }
+}

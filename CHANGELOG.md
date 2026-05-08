@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### ✨ Features — Orchestrator v2 (#44)
+
+- **v2 dispatch** wired into `runOrchestrator`: declarative `entry` / `transitions` graph with backward edges (loops), replacing v1's linear `steps[]` chain.
+- **Runtime registry** (`.apm/runtimes.yml`, ADR-005): pluggable adapters; v2 ships with `claude` and `copilot` kinds enabled. `azure-openai`, `bedrock`, `ollama`, `custom` are reserved pending per-kind ADRs.
+- **Two-channel state** (ADR-004): public append-only timeline comments + a single idempotent `<!-- apm-state -->` block per Issue/PR. Timeline reconstructor rebuilds run history on resume.
+- **`apm-msg` protocol**: agents emit `<!-- apm-msg v="1" outcome="…" -->…<!-- /apm-msg -->` blocks; outcomes drive transitions (FR-014).
+- **Loop budget** (FR-018): per-pipeline cap (`loop_budget`) prevents infinite ping-pongs; over-budget runs halt with a regulator comment.
+- **Per-step timeout** (FR-019): `timeout_minutes` enforced on every step; expiry triggers an `orchestrator-failure` fallback transition.
+- **Regulation lint** (`scripts/orchestrator/regulation-lint.js`): validates that every label / outcome / trigger referenced by pipelines is declared in `docs/AGENT_PROTOCOL.md`.
+- **`verify-mirror.sh`** + CI gate: enforces ADR-006 — `.apm/` is canonical, Copilot tree is mirrored and verified.
+- **Pipeline validator CLI** (`pipeline-validator-cli.js`): JSON Schema validation of v2 pipelines; failures fail PR CI.
+- **Dedup-key** module: stable hash for transition idempotency; safe replay on workflow restarts.
+
+### 🔄 Cutover
+
+- All shipped pipelines (`feature-pipeline.yml`, `bug-fix-pipeline.yml`, `release-pipeline.yml`) rewritten in the v2 schema. The `feature-pipeline-v2.yml` worked example was folded into the canonical `feature-pipeline.yml`.
+- Removed the `pipeline:v2` opt-in label from `docs/AGENT_PROTOCOL.md`; v2 is the only schema in shipped pipelines.
+- The v1 backward-compat adapter remains in code but is unused by shipped pipelines.
+
+### 🧪 Tests
+
+- 175/175 orchestrator tests green (vitest): adds `agent-invoker-v2`, `apm-msg-parser`, `dedup-key`, `index-v2`, `loop-budget`, `regulation`, `retry`, `router-v2`, `runtime-adapters`, `runtime-registry`, `state-manager-v2`, `timeline-reconstructor`, `worked-example`.
+- 4 CI quality gates pass: `quality-check.sh`, `verify-mirror.sh`, pipeline-validator, regulation-lint.
+
+### 📖 Documentation
+
+- **`docs/AGENT_PROTOCOL.md`** (FR-014): single canonical regulation document declaring every label, `apm-msg` outcome, and transition trigger.
+- **`PIPELINES.md`** rewritten for v2: how-it-works diagram, full YAML reference, runtime registry, two-channel state, `apm-msg` protocol with worked example, CI gates, troubleshooting.
+- **`README.md`** trimmed and restructured around the v2 orchestrator; added a documentation map.
+- **Renamed `ORCHESTRATOR.md` → `DASHBOARD.md`** to remove the name collision with the GHA Orchestrator. Content unchanged; new title clarifies scope.
+- **`ENHANCEMENTS.md`** de-duplicated (the bottom half repeated the upper Gap Analysis / Roadmap content).
+- **ADR-004 / 005 / 006 / 007** authored under #44; ADR-002 marked Superseded by ADR-004 with corrupted header fixed.
+- Spec & plan: `specs/044-orchestrator-v2-design/{spec,plan,tasks}.md`.
+
+---
+
 ## [2.1.0] — 2026-05-04
 
 ### ✨ Features

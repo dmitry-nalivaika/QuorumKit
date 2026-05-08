@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apm.dev/schemas/runtimes.schema.json",
+  "title": "APM Runtime Registry",
+  "description": "Declares named runtimes available to v2 pipelines (FR-007, ADR-005).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runtimes"],
+  "properties": {
+    "default_runtime": { "type": "string", "minLength": 1 },
+    "agent_defaults": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "runtimes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/definitions/runtime" }
+    }
+  },
+  "definitions": {
+    "runtime": {
+      "type": "object",
+      "required": ["kind", "endpoint", "credential_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Runtime adapter kind. Allowlist enforced by runtime-registry.js (claude, copilot)."
+        },
+        "endpoint": { "type": "string", "minLength": 1 },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the secret to resolve at invocation time (NEVER an inline value)."
+        },
+        "model": { "type": "string" },
+        "region": { "type": "string" },
+        "parameters": { "type": "object", "additionalProperties": true }
+      }
+    }
+  }
+}
