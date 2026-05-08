@@ -404,6 +404,7 @@ async function advanceV2Pipeline({
 
   state.status = 'awaiting-agent';
   state.updatedAt = now();
+  state.awaitingSince = now();
   await persistV2(client, owner, repo, issueNumber, event, state,
     `⏳ Waiting for **${stepDef.agent}** to post an apm-msg result (step \`${stepDef.name}\`, iteration ${state.currentIteration}).`);
 }
@@ -421,7 +422,13 @@ async function handleV2WorkflowRunCompleted({
     return;
   }
 
-  // The workflow itself failing is a runtime-error, distinct from apm-msg outcomes.
+  // FR-019: per-step timeout — if the awaiting window exceeded the step's
+  // declared timeout_minutes, synthesize a `timeout` outcome and let the
+  // pipeline's transition table decide what to do next.
+  if (await maybeTimeoutStep({ client, event, pipeline, state, stepDef, owner, repo, identities, env, clock, runtimeRegistry })) {
+    return;
+  }
+
   if (event.workflowConclusion === 'failure' || event.workflowConclusion === 'cancelled') {
     state.status = 'failed';
     state.outcome = 'runtime-error';
@@ -448,6 +455,14 @@ async function handleAgentComment({ client, event, pipelines, owner, repo, runti
 
   const stepDef = pipeline.steps.find(s => s.name === state.currentStep);
   if (!stepDef) return;
+
+  // FR-019: per-step timeout — synthesize `timeout` outcome if the agent
+  // has been silent past the step's declared `timeout_minutes`. Runs before
+  // the identity check so a stale gate doesn't block forever on non-agent
+  // chatter.
+  if (await maybeTimeoutStep({ client, event, pipeline, state, stepDef, owner, repo, identities, env, clock, runtimeRegistry })) {
+    return;
+  }
 
   // FR-013: Identity check — comment author must map to the expected agent.
   const identityAgent = resolveLogin(identities, author);
@@ -562,6 +577,91 @@ async function handleAgentComment({ client, event, pipelines, owner, repo, runti
     pipeline, state, owner, repo,
     runtimeRegistry, identities, env, clock,
   });
+}
+
+/**
+ * FR-019: per-step timeout. If the run has been waiting for the active step
+ * past its declared `timeout_minutes` (default `STEP_TIMEOUT_DEFAULT_MINUTES`),
+ * synthesize a `timeout` outcome and let the pipeline's transitions decide
+ * what happens next. If no transition is declared for `timeout`, the run is
+ * marked `timed-out` (terminal). Returns true when the timeout fired and the
+ * caller should stop processing the original event.
+ */
+async function maybeTimeoutStep({
+  client, event, pipeline, state, stepDef, owner, repo,
+  identities, env, clock, runtimeRegistry,
+}) {
+  if (state.status !== 'awaiting-agent') return false;
+  const timeoutMinutes = stepDef.timeout_minutes ?? STEP_TIMEOUT_DEFAULT_MINUTES;
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) return false;
+
+  const baseline = state.awaitingSince
+    ?? state.updatedAt
+    ?? (await getRunStartedAt(client, owner, repo, event.issueNumber));
+  if (!baseline) return false;
+
+  const elapsedMs = Date.now() - new Date(baseline).getTime();
+  if (elapsedMs <= timeoutMinutes * 60_000) return false;
+
+  const next = resolveTransition(pipeline, stepDef.name, 'timeout');
+  state.outcome = 'timeout';
+  state.updatedAt = now();
+  state.awaitingSince = null;
+
+  if (!next) {
+    state.status = 'timed-out';
+    if (typeof client.addLabels === 'function') {
+      await client.addLabels(owner, repo, event.issueNumber, ['status:needs-human', 'status:step-timeout']);
+    }
+    await persistV2(client, owner, repo, event.issueNumber, event, state,
+      `⏰ Step **${stepDef.name}** timed out after ${timeoutMinutes} minutes — no \`timeout\` transition declared. Run \`timed-out\`.`);
+    return true;
+  }
+
+  // Re-use the loop-budget gate so a runaway timeout-fail-loop still trips.
+  const budget = mergeBudget(pipeline.loopBudget);
+  const verdict = evaluateLoopBudget({
+    budget,
+    iterations: state.iterations ?? {},
+    totalSteps: state.totalSteps ?? 0,
+    runStartedAt: (await getRunStartedAt(client, owner, repo, event.issueNumber)) ?? state.updatedAt,
+    now: now(),
+    fromStep: stepDef.name,
+    toStep: next.to,
+    isBackward: next.isBackward,
+  });
+
+  if (!verdict.allowed) {
+    state.status = 'loop-budget-exceeded';
+    if (typeof client.addLabels === 'function') {
+      await client.addLabels(owner, repo, event.issueNumber, ['status:needs-human', 'status:loop-budget-exceeded']);
+    }
+    await persistV2(client, owner, repo, event.issueNumber, event, state,
+      `🛑 Step **${stepDef.name}** timed out and the \`timeout\` transition would exceed the loop budget (\`${verdict.reason}\` on \`${verdict.edgeKey}\`).`);
+    return true;
+  }
+
+  if (next.isBackward) {
+    state.iterations = { ...(state.iterations ?? {}), [verdict.edgeKey]: verdict.nextEdgeIteration };
+    state.currentIteration = verdict.nextEdgeIteration;
+    state.currentEdgeKey = verdict.edgeKey;
+  } else {
+    state.currentIteration = 1;
+    state.currentEdgeKey = null;
+  }
+  state.currentStep = next.to;
+  state.status = 'running';
+
+  await persistV2(client, owner, repo, event.issueNumber, event, state,
+    `⏰ Step **${stepDef.name}** timed out after ${timeoutMinutes} minutes — transitioning to **${next.to}** via \`timeout\`.`);
+
+  await advanceV2Pipeline({
+    client,
+    event: { ...event, type: 'orchestrator.timeout' },
+    pipeline, state, owner, repo,
+    runtimeRegistry, identities, env, clock,
+  });
+  return true;
 }
 
 /**

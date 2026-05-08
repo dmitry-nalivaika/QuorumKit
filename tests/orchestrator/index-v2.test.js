@@ -397,4 +397,73 @@ describe('runOrchestrator — v2 dispatch path', () => {
       'o', 'r', 'copilot-agent-ba.yml', 'main', expect.any(Object)
     );
   });
+
+  it('synthesises a timeout outcome and ends the run when no `timeout` transition is declared (FR-019)', async () => {
+    // Pipeline whose ba step has a 1-minute timeout and no timeout transition.
+    const pipeline = {
+      name: 'tight-timeout-pipeline',
+      schemaVersion: '2',
+      trigger: { event: 'issues.labeled', labels: ['triaged', 'type:feature'] },
+      entry: 'ba',
+      steps: [
+        { name: 'ba',  agent: 'ba-agent', timeout_minutes: 1 },
+        { name: 'dev', agent: 'dev-agent' },
+      ],
+      transitions: [{ from: 'ba', outcome: 'success', to: 'dev' }],
+      loopBudget: null,
+    };
+
+    const client = makeMutableClient();
+
+    // Start the run.
+    await runOrchestrator({
+      client,
+      event: {
+        type: 'issues.labeled',
+        labels: ['triaged', 'type:feature'],
+        issueNumber: 60, ref: 'main',
+        _rawEventName: 'issues',
+        _rawPayload: { action: 'labeled', label: { name: 'type:feature' }, issue: { number: 60, updated_at: '2026-05-08T10:00:00Z' } },
+      },
+      pipelines: [pipeline], owner: 'o', repo: 'r',
+      runtimeRegistry, identities, env, clock: fastClock,
+    });
+
+    // Backdate the awaitingSince marker on the latest state so the next event
+    // crosses the 1-minute threshold without sleeping in real time.
+    const stateComments = client._comments
+      .filter(c => c.body.includes('apm-pipeline-state'))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const top = stateComments[0];
+    const m = top.body.match(/<!-- apm-pipeline-state: (.*?) -->/s);
+    const parsed = JSON.parse(m[1]);
+    parsed.awaitingSince = new Date(Date.now() - 5 * 60_000).toISOString();
+    parsed.updatedAt = parsed.awaitingSince;
+    top.body = top.body.replace(/<!-- apm-pipeline-state: (.*?) -->/s,
+      `<!-- apm-pipeline-state: ${JSON.stringify(parsed)} -->`);
+
+    // Now any agent comment (or workflow_run.completed) on the issue should
+    // trip the timeout. Use a non-agent comment so the identity check would
+    // otherwise short-circuit; the timeout fires before identity check.
+    await runOrchestrator({
+      client,
+      event: {
+        type: 'issue_comment.created',
+        issueNumber: 60, ref: 'main', labels: [],
+        comment: { body: 'Are we still waiting?', user: 'random-bystander' },
+        _rawEventName: 'issue_comment',
+        _rawPayload: { action: 'created', issue: { number: 60 }, comment: { id: 12121 } },
+      },
+      pipelines: [pipeline], owner: 'o', repo: 'r',
+      runtimeRegistry, identities, env, clock: fastClock,
+    });
+
+    const after = parseLatestState(client);
+    expect(after.outcome).toBe('timeout');
+    expect(after.status).toBe('timed-out');
+    // status:step-timeout label should have been applied
+    expect(client.addLabels).toHaveBeenCalledWith(
+      'o', 'r', 60, expect.arrayContaining(['status:step-timeout']),
+    );
+  });
 });
