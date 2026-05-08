@@ -406,13 +406,6 @@ Periodic (scheduled):
 
 ---
 
-## How to Contribute an Enhancement
-
-1. Open a GitHub Issue using the Feature Request template
-2. Reference this document and the specific gap number (e.g. "Gap 21 — Release Agent")
-3. The Triage Agent will label it; the BA Agent will spec it
-4. Follow the [CONTRIBUTING.md](CONTRIBUTING.md) agent enhancement workflow
-
 ### Gap 1 — No OT-aware agents
 
 The current agents are software-only. Dark factory projects have a second
@@ -527,130 +520,10 @@ A dark factory platform often manages multiple factory sites.
 
 ---
 
-## Gap Analysis: General Agent Stack
-
-### Gap 8 — No dependency update agent
-
-No agent handles automated dependency updates (Dependabot / Renovate review).
-
-**Proposed**: Extend the Security Agent with a `## Dependency Update Review`
-section — when a Dependabot/Renovate PR arrives, the Security Agent verifies
-the update does not introduce breaking changes or new CVEs.
-
-**Status**: Small addition to `security-agent.md` — low effort.
-
----
-
-### Gap 9 — No database migration agent
-
-Database migrations are high-risk. No agent currently specialises in reviewing
-migration scripts.
-
-**Proposed**: Extend the Reviewer Agent's migration checklist (already present)
-with:
-- [ ] Migration is reversible (down migration exists)
-- [ ] Migration tested against a production-size dataset in staging
-- [ ] No table locks that would cause downtime on large tables
-- [ ] Foreign key constraints not violated by migration order
-- [ ] Migration idempotent (safe to re-run)
-
-**Status**: Small addition to `reviewer-agent.md` — low effort.
-
----
-
-### Gap 10 — No spec quality scoring
-
-The BA Agent produces specs but there is no automated quality check on them.
-
-**Proposed**: Add a `/speckit-checklist` step to the BA Agent's handoff —
-run the spec through the speckit checklist before the Developer Agent picks
-it up. The checklist verifies:
-- All required sections present
-- No `TODO` items remaining
-- At least 2 acceptance scenarios per user story
-- Success criteria are measurable
-
-**Status**: BA Agent update — low effort.
-
----
-
-### Gap 11 — No onboarding agent / wizard
-
-New team members have no guided onboarding path through the stack.
-
-**Proposed**: Add a `/onboard` skill that walks a new developer through:
-1. Reading the constitution
-2. Picking up their first issue
-3. Using the BA Agent to understand the spec
-4. First commit with the Developer Agent
-
-**Status**: New skill — medium effort.
-
----
-
-### Gap 12 — No cost monitoring agent
-
-The DevOps Agent mentions cost but there is no agent that actively monitors
-spend against the constitution's budget limit.
-
-**Proposed**: Add a `## Cost Gate` section to the DevOps Agent — on deploy,
-compare current cloud spend projection against the constitution budget. Block
-deploys if projected monthly spend exceeds limit by > 20%.
-
-**Status**: DevOps Agent update — medium effort (requires cloud cost API access).
-
----
-
-## Prioritised Roadmap
-
-### ✅ Implemented — Priority 1 (Quick wins)
-
-| # | Enhancement | Status |
-|---|-------------|--------|
-| 1 | QA Agent: performance test checklist | ✅ Done |
-| 2 | BA Agent: data pipeline spec template | ✅ Done |
-| 3 | Reviewer Agent: migration checklist additions | ✅ Done |
-| 4 | Security Agent: dependency update review section | ✅ Done |
-| 5 | DARK_FACTORY_GUIDE: simulation test harness | ✅ Done |
-| 10 | BA Agent: `/speckit-checklist` quality gate at handoff | ✅ Done |
-
-### ✅ Implemented — Priority 2 (Medium effort)
-
-| # | Enhancement | Status |
-|---|-------------|--------|
-| 6 | DevOps Agent: edge deployment checklist | ✅ Done |
-| 7 | DARK_FACTORY_GUIDE: multi-site guidance | ✅ Done |
-| 8 | Onboarding skill (`/onboard`) | ✅ Done |
-| 9 | DevOps Agent: cost gate (COST-BLOCKER / COST-WARN) | ✅ Done |
-
-### ✅ Implemented — Priority 3 (New agents)
-
-| # | Enhancement | Status |
-|---|-------------|--------|
-| 10 | OT Integration Agent | ✅ Done |
-| 11 | Digital Twin Agent | ✅ Done |
-| 12 | Compliance Agent (IEC 62443 / ISA-95 / SIL) | ✅ Done |
-| 13 | Incident Agent | ✅ Done |
-
-### Next Horizon — Future Enhancements
-
-These are not yet implemented but are the natural next step:
-
-| # | Enhancement | Effort | Notes |
-|---|-------------|--------|-------|
-| 14 | Spec lint gate in quality-check.sh (validate spec sections present) | S | Add to `quality-check.sh` |
-| 15 | Markdown link validator in CI | S | Catch broken cross-doc links |
-| 16 | `infracost` integration in DevOps Agent | M | Automate cost estimation in PRs |
-| 17 | DTDL / RDF schema validator for Digital Twin Agent | M | Automated schema diff tool |
-| 18 | OPC-UA endpoint security scanner | M | Automated `SecurityMode=None` detection |
-| 19 | Incident severity auto-classification from issue body | M | NLP-based SEV-1/2/3 detection |
-| 20 | Deployment ring model enforcement in DevOps Agent | M | Block full-fleet deploy without canary soak |
-
----
 
 ## How to Contribute an Enhancement
 
-1. Open a GitHub Issue using the Feature Request template
-2. Reference this document and the specific gap number
-3. The Triage Agent will label it; the BA Agent will spec it
-4. Follow the [CONTRIBUTING.md](CONTRIBUTING.md) agent enhancement workflow
+1. Open a GitHub Issue using the Feature Request template.
+2. Reference this document and the specific gap number (e.g. "Gap 21 — Release Agent").
+3. The Triage Agent will label it; the BA Agent will spec it.
+4. Follow the [CONTRIBUTING.md](CONTRIBUTING.md) agent enhancement workflow.

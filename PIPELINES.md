@@ -1,243 +1,275 @@
-# APM — Autonomous Agent Pipelines
+# APM Pipelines (v2)
 
-> **TL;DR** — Drop a YAML file in `.apm/pipelines/`, label a GitHub Issue, and the Orchestrator automatically chains your AI agents from triage through to release.
+> **TL;DR** — Drop a YAML file in `.apm/pipelines/`, label a GitHub issue, and the
+> Orchestrator drives the right AI agents through your SDLC loop — including
+> rework cycles, runtime selection, approval gates, and timeouts.
 
----
-
-## How It Works
-
-```
-GitHub Event (issue opened, comment posted, PR merged…)
-        │
-        ▼
-.github/workflows/orchestrator.yml   ← fires on every relevant event
-        │
-        ▼
-scripts/orchestrator/index.js        ← loads pipelines, matches event, advances state
-        │
-        ├─ pipeline-loader.js        ← reads .apm/pipelines/*.yml, validates schema
-        ├─ router.js                 ← picks the right pipeline for this event
-        ├─ state-manager.js          ← saves current step in a GitHub comment
-        ├─ agent-invoker.js          ← fires the next agent via workflow_dispatch
-        ├─ approval-gate.js          ← waits for /approve before continuing
-        └─ github-client.js          ← GitHub REST with auto-retry
-```
-
-State is stored as an `<!-- apm-pipeline-state: {...} -->` HTML comment on the Issue.
-Every run appends a new comment — full immutable audit trail, no external DB needed.
+The Orchestrator is **schema-version 2** as of [#44]. v1 files still load via a
+backward-compat adapter, but every shipped pipeline is now v2.
 
 ---
 
-## Quick Start
-
-### 1 — Install the orchestrator workflow (first-time setup)
-
-If you used `scripts/init.sh` this is already done. Otherwise copy manually:
-
-```bash
-cp templates/github/workflows/orchestrator.yml .github/workflows/orchestrator.yml
-cp -r templates/.apm/pipelines .apm/pipelines
-```
-
-Add these secrets to your GitHub repository (`Settings → Secrets → Actions`):
-
-| Secret | Value |
-|--------|-------|
-| `GITHUB_TOKEN` | Auto-provided by GitHub Actions |
-| `DASHBOARD_WEBHOOK_URL` | Optional — URL of your running dashboard, e.g. `http://your-server:4000/webhook/pipeline-event` |
-
-### 2 — Trigger a pipeline
-
-Open a GitHub Issue and add the label that matches a pipeline trigger:
-
-| Label on Issue | Pipeline fired |
-|----------------|----------------|
-| `type:feature` | `feature-pipeline.yml` (triage → ba → architect → dev → qa → reviewer → release) |
-| `type:bug` | `bug-fix-pipeline.yml` (triage → dev → qa → reviewer) |
-| `type:release` | `release-pipeline.yml` (qa → security → reviewer → release) |
-
-The Orchestrator posts an audit comment, then dispatches the first agent automatically.
-
-### 3 — Watch progress
-
-Each step posts a comment like:
+## How it works
 
 ```
-🤖 APM Orchestrator
-Pipeline:  feature-pipeline  |  Run: run-abc123
-Step 2/7:  ba-product-agent  →  status: running
+GitHub event ─► .github/workflows/orchestrator.yml ─► scripts/orchestrator/index.js
+                                                            │
+              ┌─────────────────────────────────────────────┤
+              ▼                                             │
+     pipeline-loader  ──► validates + normalises YAML       │
+     router-v2       ──► matches event → pipeline           │
+     runtime-registry─► resolves runtime per step           │
+     agent-invoker-v2─► dispatches workflow_dispatch        │
+              ▲                                             │
+              │      (agent posts an apm-msg comment)       │
+              │                                             ▼
+     apm-msg-parser  ◄── identity check, schema check, outcome
+              │
+              ▼
+     router-v2.resolveTransition  ──► next step (forward or backward)
+              │
+              ▼
+     loop-budget.evaluate  ──► gate runaway loops
+              │
+              ▼
+     state-manager  ──► append audit comment + upsert live-status
 ```
 
-The dashboard (if running) shows a live `pipeline-event` card on the Kanban board.
+State is stored on the triggering issue/PR as **two channels** ([ADR-004]):
 
-### 4 — Approve a gated step
+- **Audit channel** — `<!-- apm-pipeline-state: {…} -->` appended on every
+  transition. Authoritative, append-only, tamper-evident.
+- **Live-status channel** — single mutable comment that mirrors the latest
+  state for humans. Re-derivable from the audit channel.
 
-Steps with `approval: required` pause and post:
-
-```
-⏸ Awaiting approval to proceed to: release-agent
-Post /approve to continue (timeout: 72 h)
-```
-
-Any collaborator with **write / maintain / admin** permission comments `/approve` and the pipeline resumes.
+No external database. The orchestrator is fully restartable.
 
 ---
 
-## Pipeline YAML Reference
+## Quick start
+
+### 1. Install (greenfield or brownfield)
+
+`scripts/init.sh` ships:
+
+- `.github/workflows/orchestrator.yml` — the Actions entry point
+- `.apm/pipelines/{feature,bug-fix,release}-pipeline.yml` — three v2 pipelines
+- `.apm/runtimes.yml` — runtime registry (claude + copilot enabled)
+- `.apm/agent-identities.yml` — login → agent slug map (FR-013)
+
+### 2. Trigger a pipeline
+
+Label any issue and the matching pipeline starts:
+
+| Label combination | Pipeline |
+|---|---|
+| `triaged` + `type:feature` | `feature-pipeline` |
+| `triaged` + `type:bug` | `bug-fix-pipeline` |
+| `triaged` + `type:release` | `release-pipeline` |
+
+The orchestrator posts a "Pipeline started" audit comment, resolves the runtime
+for the entry step, and dispatches the agent.
+
+### 3. Approve the release gate
+
+Steps with `approval: required` pause until any user with `write`/`maintain`/`admin`
+permission comments `/approve`. Times out after `approval_timeout_hours` (default 72).
+
+---
+
+## Built-in pipelines
+
+| File | Trigger | Chain |
+|---|---|---|
+| `feature-pipeline.yml` | `triaged` + `type:feature` | `ba → architect? → dev → qa → reviewer → release[approve]` with QA→DEV and reviewer→BA backward edges |
+| `bug-fix-pipeline.yml` | `triaged` + `type:bug` | `dev → qa → reviewer` with QA/reviewer→DEV backward edges |
+| `release-pipeline.yml` | `triaged` + `type:release` | `qa → security → reviewer → release[approve]` with self-loops on failure |
+
+The `architect` step in `feature-pipeline.yml` runs only when the issue also
+carries the `needs:adr` label (`condition`).
+
+---
+
+## Pipeline YAML reference (v2)
 
 ```yaml
-name: my-pipeline          # unique identifier (matches filename)
-version: "1"               # schema version — always "1" for now
+name: my-pipeline                  # unique identifier (matches the file)
+schema_version: "2"                # required for v2
 
 trigger:
-  event: issues.opened     # GitHub event + action, dot-separated
-                           # e.g. issues.labeled, pull_request.opened,
-                           #      issue_comment.created, workflow_run.completed
-  labels:                  # ALL listed labels must be present on the issue/PR
-    - type:feature
-  state: open              # optional: issue/PR state filter (open | closed)
+  event: issues.labeled            # GitHub event . action
+  labels: [triaged, type:feature]  # ALL must be present (case-sensitive)
+
+entry: ba                          # step name to start at
+
+loop_budget:                       # caps backward-edge spirals (FR-005)
+  max_iterations_per_edge: 3
+  max_total_steps: 30
+  max_wallclock_minutes: 720
 
 steps:
-  - name: triage                  # human-readable step name (unique in pipeline)
-    agent: triage-agent           # matches workflow filename:
-                                  #   copilot → copilot-agent-triage-agent.yml
-                                  #   claude  → agent-triage-agent.yml
+  - name: ba                       # step name (referenced by transitions)
+    agent: ba-agent                # agent slug → workflow file lookup
+    timeout_minutes: 60            # FR-019, ADR-007 §4
 
   - name: architect
     agent: architect-agent
-    condition: "labels.includes('needs:adr')"   # JS expression; step skipped if false
+    condition: "labels.includes('needs:adr')"
+    runtime: claude-default        # optional override of registry default
 
   - name: release
     agent: release-agent
-    approval: required            # pipeline pauses here until /approve
-    approval_timeout_hours: 72    # auto-fail after this many hours (default: 48)
+    approval: required             # pause for /approve
+    approval_timeout_hours: 72
+    timeout_minutes: 30
+
+transitions:
+  - { from: ba,        outcome: success,    to: architect }
+  - { from: architect, outcome: success,    to: dev }
+  - { from: qa,        outcome: fail,       to: dev }    # backward edge
+  - { from: reviewer,  outcome: spec_gap,   to: ba }     # cross-chain rework
 ```
 
-### Supported `trigger.event` values
+### Allowed `outcome` values
 
-| Value | Fires when |
-|-------|-----------|
-| `issues.opened` | New issue created |
-| `issues.labeled` | Label added to issue |
-| `issues.closed` | Issue closed |
-| `issue_comment.created` | Comment posted on issue or PR |
-| `pull_request.opened` | PR opened |
-| `pull_request.closed` | PR closed (merged or not) |
-| `workflow_run.completed` | A child workflow finishes |
+Declared in `docs/AGENT_PROTOCOL.md` §2 (single source of truth):
+
+`success`, `fail`, `blocker`, `spec_gap`, `timeout`, `needs-human`,
+`runtime-error`, `protocol-violation`, `orchestrator-failure`.
+
+Any pipeline referencing an outcome **not** declared there is rejected by
+`regulation-lint` (FR-014, FR-024).
+
+### Forward vs backward edges
+
+A transition is **backward** iff the target step's index in `steps[]` is
+≤ the source step's index. Backward edges count against
+`max_iterations_per_edge`; forward edges don't. The wallclock and
+total-step ceilings apply to all transitions.
 
 ---
 
-## Built-in Pipelines
+## The `apm-msg` protocol
 
-### `feature-pipeline.yml`
-Triggered by: `issues.opened` + label `type:feature`
+Agents end every step by posting a comment whose final fenced block is the
+machine-readable result:
 
-```
-triage-agent → ba-product-agent → architect-agent* → developer-agent
-    → qa-test-agent → reviewer-agent → [APPROVE] → release-agent
-```
-`*` architect step is conditional on label `needs:adr`
+````markdown
+The QA suite found 2 regressions and a missing acceptance criterion.
 
----
-
-### `bug-fix-pipeline.yml`
-Triggered by: `issues.opened` + label `type:bug`
-
-```
-triage-agent → developer-agent → qa-test-agent → reviewer-agent
-```
-
----
-
-### `release-pipeline.yml`
-Triggered by: `issues.opened` + label `type:release`
-
-```
-qa-test-agent → security-agent → reviewer-agent → [APPROVE] → release-agent
-```
-
----
-
-## Adding a Custom Pipeline
-
-1. Create `.apm/pipelines/my-pipeline.yml` (copy a template as a starting point)
-2. Set a unique `name` and the `trigger` that should fire it
-3. List your `steps` in order
-4. Push — the orchestrator picks up new pipelines on the next run, no restart needed
-
-**Example — documentation-only pipeline:**
-
-```yaml
-name: docs-pipeline
-version: "1"
-
-trigger:
-  event: issues.labeled
-  labels:
-    - type:docs
-
-steps:
-  - name: docs
-    agent: docs-agent
-
-  - name: reviewer
-    agent: reviewer-agent
-```
-
----
-
-## State Storage
-
-All pipeline state is stored as hidden HTML comments in the Issue timeline:
-
-```html
-<!-- apm-pipeline-state: {"runId":"run-abc","pipeline":"feature-pipeline","currentStep":2,"status":"running","updatedAt":"2026-05-04T10:00:00Z"} -->
-```
-
-- Every `saveState` call **appends a new comment** — nothing is edited or deleted
-- This gives a full, tamper-evident audit log
-- The Orchestrator always reads the **most recent** state comment
-
----
-
-## Dashboard Integration
-
-When `DASHBOARD_WEBHOOK_URL` is set, each state transition POSTs:
-
-```json
-POST /webhook/pipeline-event
+```apm-msg
 {
-  "runId": "run-abc123",
-  "pipeline": "feature-pipeline",
-  "status": "running",
-  "currentStep": 2,
-  "steps": ["triage", "ba", "architect", "dev", "qa", "reviewer", "release"],
-  "updatedAt": "2026-05-04T10:00:00Z"
+  "version": "2",
+  "runId": "550e8400-e29b-41d4-a716-446655440000",
+  "step": "qa",
+  "agent": "qa-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "2 regressions in cart checkout; missing AC for guest flow.",
+  "payload": { "failed_tests": ["cart.spec.ts:42", "guest.spec.ts:17"] }
 }
 ```
+````
 
-The dashboard broadcasts this as a `pipeline-event` WebSocket message and shows it on the Kanban board in real time.
+The orchestrator:
+
+1. Verifies the comment author maps to the active step's agent (FR-013, via
+   `.apm/agent-identities.yml`). Comments from unmapped logins are ignored.
+2. Validates the JSON against `apm-msg.schema.json`. Malformed → `protocol-violation`.
+3. Resolves the transition for `(currentStep, outcome)`.
+4. Increments the per-edge counter if backward, evaluates loop budget.
+5. Appends an audit state and dispatches the next agent (or stops).
+
+Full schema and worked examples in [`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md).
 
 ---
 
-## Dual AI Runtime
+## Runtime registry (FR-007/008, [ADR-005])
 
-The `aiTool` field in `.apm-project.json` (set via the dashboard ⚙ Settings) controls which workflow is triggered per step:
+`.apm/runtimes.yml` declares the named runtimes available to pipelines:
 
-| `aiTool` | Workflow dispatched |
-|----------|-------------------|
-| `copilot` (default) | `copilot-agent-{agent-name}.yml` |
-| `claude` | `agent-{agent-name}.yml` |
+```yaml
+default_runtime: copilot-default
+agent_defaults:
+  qa-agent: claude-default        # use claude for QA across all pipelines
+
+runtimes:
+  copilot-default:
+    kind: copilot                 # only `claude` and `copilot` are enabled
+    endpoint: https://api.github.com
+    credential_ref: GITHUB_TOKEN  # secret name — never an inline value
+
+  claude-default:
+    kind: claude
+    endpoint: https://api.anthropic.com
+    credential_ref: ANTHROPIC_API_KEY
+```
+
+**Resolution precedence per step**: `step.runtime` → `agent_defaults[agent]`
+→ `default_runtime`.
+
+`azure-openai`, `bedrock`, `ollama`, `custom` are **reserved** kinds — the
+validator emits `RUNTIME_KIND_NOT_ENABLED` until each gets its own ADR.
+
+---
+
+## Adding your own pipeline
+
+1. Drop `.apm/pipelines/my-pipeline.yml` (v2 schema; copy any built-in as a
+   starting point).
+2. Make sure every label in `trigger.labels`, every `outcome` in `transitions`,
+   and every agent slug in `steps` is declared in `docs/AGENT_PROTOCOL.md` —
+   otherwise `regulation-lint` will fail in CI.
+3. Run the validator locally:
+
+   ```zsh
+   node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines/my-pipeline.yml
+   node scripts/orchestrator/regulation-lint.js
+   ```
+
+4. Commit. The orchestrator picks up new pipelines on the next event — no
+   restart needed.
+
+---
+
+## CI gates (required status checks on `main`)
+
+| Check | Command | Reference |
+|---|---|---|
+| `pipeline-validator` | `node scripts/orchestrator/pipeline-validator-cli.js` | FR-020 |
+| `verify-mirror` | `bash scripts/verify-mirror.sh` | [ADR-006] |
+| `orchestrator-tests` | `cd scripts/orchestrator && npm test` | FR-023 |
+| `regulation-lint` | `node scripts/orchestrator/regulation-lint.js` | FR-014 |
+
+All four are wired into `.github/workflows/quality.yml`.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| No pipeline fires on new issue | Check the issue has the correct label; check `orchestrator.yml` is in `.github/workflows/` |
-| Step stuck at `awaiting-approval` | Comment `/approve` on the issue (needs write/maintain/admin permission) |
-| Step skipped unexpectedly | Check the `condition` expression — it must evaluate to `true` |
-| `INVALID_AI_TOOL` error in comments | Set `aiTool` to `copilot` or `claude` in dashboard Settings |
-| Orchestrator not running | Check Actions tab → `APM Orchestrator` workflow; ensure `GITHUB_TOKEN` has `issues: write` and `actions: write` permissions |
-| Pipeline YAML rejected | Run `node scripts/orchestrator/pipeline-loader.js` locally — it logs schema validation errors |
+| Symptom | Likely cause |
+|---|---|
+| No pipeline fires | Issue is missing one of the trigger labels; or `orchestrator.yml` is not installed |
+| `RUNTIME_KIND_NOT_ENABLED` | Pipeline references a reserved kind; pick `claude` or `copilot` |
+| `protocol-violation` audit comment | Agent's apm-msg block is missing, malformed, or has the wrong `runId`/`step`/`iteration` |
+| `loop-budget-exceeded` label applied | Backward edge crossed `max_iterations_per_edge` — humans must intervene |
+| Step stuck `awaiting-approval` | Post `/approve`; requires `write`+ permission |
+| Step stuck `awaiting-agent` past `timeout_minutes` | Next event arrival auto-synthesises a `timeout` outcome (FR-019) |
+| Agent comment ignored | Author login isn't in `.apm/agent-identities.yml` for that agent slug |
+| `dedup hit … skipping` in logs | Same GitHub delivery received twice — by design (FR-016, FR-026) |
+
+---
+
+## See also
+
+- `docs/AGENT_PROTOCOL.md` — labels, outcomes, transition triggers (regulation)
+- `docs/architecture/adr-004-orchestrator-state-comment-model-v2.md` — two-channel state
+- `docs/architecture/adr-005-pluggable-runtime-registry-interface.md` — runtime kinds
+- `docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md` — `.apm/` is canonical
+- `docs/architecture/adr-007-orchestrator-github-actions-substrate-contract.md` — concurrency, dedup, timeouts
+- `specs/044-orchestrator-v2-design/spec.md` — full v2 functional spec
+
+[#44]: https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/44
+[ADR-004]: docs/architecture/adr-004-orchestrator-state-comment-model-v2.md
+[ADR-005]: docs/architecture/adr-005-pluggable-runtime-registry-interface.md
+[ADR-006]: docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md

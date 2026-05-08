@@ -289,10 +289,10 @@ if [ -f "dashboard/server.js" ]; then
 else
   fail "Missing dashboard/server.js — orchestrator backend missing"
 fi
-if [ -f "ORCHESTRATOR.md" ]; then
-  ok "ORCHESTRATOR.md present"
+if [ -f "DASHBOARD.md" ]; then
+  ok "DASHBOARD.md present"
 else
-  fail "Missing ORCHESTRATOR.md"
+  fail "Missing DASHBOARD.md"
 fi
 
 # =============================================================================

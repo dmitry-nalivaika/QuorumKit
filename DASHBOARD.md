@@ -1,8 +1,12 @@
-# APM Orchestrator — Complete Guide
+# APM Dashboard — Complete Guide
 
-> **The Orchestrator Dashboard** is the command centre for the APM Dark Factory.
-> It turns the 15 AI agents from a set of Markdown definitions into a live, interactive
-> system you can watch, steer, and control — all from one browser tab.
+> **The APM Dashboard** is the local browser control centre for the APM
+> Dark Factory. It turns the 15 AI agents from a set of Markdown definitions
+> into a live, interactive system you can watch, steer, and control — all
+> from one browser tab.
+>
+> *Not to be confused with the **GitHub Actions Orchestrator** (workflow
+> driving agent chains in CI) — see [`PIPELINES.md`](PIPELINES.md).*
 
 ---
 
