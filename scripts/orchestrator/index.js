@@ -13,22 +13,57 @@ import { randomUUID } from 'crypto';
 
 import { loadPipelines } from './pipeline-loader.js';
 import { matchEvent } from './router.js';
-import { loadState, saveState, postAuditEntry } from './state-manager.js';
-import { invokeAgent } from './agent-invoker.js';
+import {
+  loadState, saveState, postAuditEntry,
+  upsertLiveStatus, findDedupKeyHit, getRunStartedAt,
+} from './state-manager.js';
+import { invokeAgent, invokeAgentV2 } from './agent-invoker.js';
 import { isApproveCommand, checkApprovalTimeout, verifyApproverPermission } from './approval-gate.js';
 import { createGitHubClient } from './github-client.js';
+import { computeDedupKey } from './dedup-key.js';
+import { resolveTransition } from './router-v2.js';
+import { evaluate as evaluateLoopBudget, mergeBudget } from './loop-budget.js';
+import { resolveRuntime } from './runtime-registry.js';
+import { parseApmMsg, validateContext as validateMsgContext } from './apm-msg-parser.js';
+import { resolveLogin } from './identity-registry.js';
 
 const APPROVAL_TIMEOUT_DEFAULT_HOURS = 72;
+const STEP_TIMEOUT_DEFAULT_MINUTES = 60;     // FR-019, ADR-007 §4
 
 // ─── Exported core (fully testable with injected dependencies) ───────────────
 
-export async function runOrchestrator({ client, event, pipelines, owner, repo, aiTool }) {
+export async function runOrchestrator({
+  client, event, pipelines, owner, repo, aiTool,
+  // v2-specific (optional — pure dependency injection for tests):
+  runtimeRegistry, identities, env, clock,
+}) {
   const { issueNumber } = event;
+
+  // ── FR-016/FR-026: per-event idempotency (audit-channel dedup) ──────────
+  // Compute the dedup key from the raw event payload if the caller passed one.
+  // The CLI normaliseEvent attaches `_rawEventName` and `_rawPayload` for this.
+  if (event._rawEventName && issueNumber) {
+    const dedupKey = computeDedupKey(event._rawEventName, event._rawPayload ?? {});
+    if (dedupKey) {
+      const hit = await findDedupKeyHit(client, owner, repo, issueNumber, dedupKey);
+      if (hit) {
+        console.log(`[orchestrator] dedup hit for ${dedupKey} — skipping`);
+        return;
+      }
+      // Stash on event so downstream helpers can persist it on the audit comment.
+      event._dedupKey = dedupKey;
+    }
+  }
 
   // ── Handle /approve comment ─────────────────────────────────────────────
   if (event.type === 'issue_comment.created' && event.comment) {
     if (isApproveCommand(event.comment.body)) {
       await handleApproveComment({ client, event, pipelines, owner, repo, aiTool });
+      return;
+    }
+    // ── v2 apm-msg ingestion path ────────────────────────────────────────
+    if (identities && pipelines.some(p => p.schemaVersion === '2')) {
+      await handleAgentComment({ client, event, pipelines, owner, repo, runtimeRegistry, identities, env, clock });
     }
     return;
   }
@@ -41,7 +76,14 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
     if (state && state.status === 'awaiting-agent') {
       const pipeline = pipelines.find(p => p.name === state.pipelineName);
       if (pipeline) {
-        await handleWorkflowRunCompleted({ client, event, pipeline, state, owner, repo, aiTool });
+        if (pipeline.schemaVersion === '2') {
+          await handleV2WorkflowRunCompleted({
+            client, event, pipeline, state, owner, repo,
+            runtimeRegistry, identities, env, clock,
+          });
+        } else {
+          await handleWorkflowRunCompleted({ client, event, pipeline, state, owner, repo, aiTool });
+        }
       }
     }
     return;
@@ -83,6 +125,14 @@ export async function runOrchestrator({ client, event, pipelines, owner, repo, a
   }
 
   if (state.status === 'completed' || state.status === 'timed-out' || state.status === 'failed') {
+    return;
+  }
+
+  if (pipeline.schemaVersion === '2') {
+    await advanceV2Pipeline({
+      client, event, pipeline, state, owner, repo,
+      runtimeRegistry, identities, env, clock,
+    });
     return;
   }
 
@@ -251,6 +301,314 @@ function newRunState(pipeline, triggerEvent) {
     approvalGate: { requestedAt: null, timeoutAt: null, approvedBy: null },
     updatedAt: now(),
   };
+}
+
+// ─── v2 dispatch ───────────────────────────────────────────────────────────
+
+function newV2RunState(pipeline, triggerEvent) {
+  return {
+    runId: randomUUID(),
+    pipelineName: pipeline.name,
+    triggerEvent,
+    schemaVersion: '2',
+    status: 'pending',
+    currentStep: pipeline.entry,
+    currentIteration: 1,
+    iterations: {},      // edgeKey → count
+    totalSteps: 0,
+    runtime_used: null,
+    outcome: null,
+    approvalGate: { requestedAt: null, timeoutAt: null, approvedBy: null },
+    updatedAt: now(),
+  };
+}
+
+async function advanceV2Pipeline({
+  client, event, pipeline, state, owner, repo,
+  runtimeRegistry, identities, env, clock,
+}) {
+  const { issueNumber, ref } = event;
+
+  // First time? Adopt v2 fields.
+  if (!state.schemaVersion) {
+    Object.assign(state, newV2RunState(pipeline, event.type), {
+      runId: state.runId, pipelineName: state.pipelineName,
+    });
+  }
+
+  const stepDef = pipeline.steps.find(s => s.name === state.currentStep);
+  if (!stepDef) {
+    state.status = 'completed';
+    state.updatedAt = now();
+    await persistV2(client, owner, repo, issueNumber, event, state, `✅ Pipeline **${pipeline.name}** completed (run \`${state.runId}\`).`);
+    return;
+  }
+
+  // ── Approval gate ─────────────────────────────────────────────────────
+  if (stepDef.approval === 'required' && state.status !== 'awaiting-approval') {
+    const timeoutHours = stepDef.approval_timeout_hours ?? APPROVAL_TIMEOUT_DEFAULT_HOURS;
+    const timeoutAt = new Date(Date.now() + timeoutHours * 3600 * 1000).toISOString();
+    state.status = 'awaiting-approval';
+    state.approvalGate = { requestedAt: now(), timeoutAt, approvedBy: null };
+    state.updatedAt = now();
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `🔐 Approval required before step **${stepDef.name}**. Post \`/approve\` to continue. Gate expires at \`${timeoutAt}\`.`);
+    return;
+  }
+
+  // ── Resolve runtime ───────────────────────────────────────────────────
+  const resolution = runtimeRegistry
+    ? resolveRuntime({ registry: runtimeRegistry, agent: stepDef.agent, stepRuntime: stepDef.runtime })
+    : { error: 'runtime-unresolved', detail: { agent: stepDef.agent, tried: { step: stepDef.runtime ?? null, agent: null, project: null } } };
+
+  if (resolution.error === 'runtime-unresolved') {
+    state.status = 'failed';
+    state.outcome = 'runtime-unresolved';
+    state.updatedAt = now();
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `❌ Runtime unresolved for agent **${stepDef.agent}**. Tried (step: ${resolution.detail.tried.step ?? '∅'}, agent: ${resolution.detail.tried.agent ?? '∅'}, project: ${resolution.detail.tried.project ?? '∅'}).`);
+    return;
+  }
+
+  state.runtime_used = resolution.name;
+  state.status = 'running';
+  state.totalSteps = (state.totalSteps ?? 0) + 1;
+  state.updatedAt = now();
+
+  await persistV2(client, owner, repo, issueNumber, event, state,
+    `⚙️ Invoking **${stepDef.agent}** (step \`${stepDef.name}\`, iteration ${state.currentIteration}, runtime \`${resolution.name}\`).`);
+
+  try {
+    const r = await invokeAgentV2({
+      client, owner, repo, agent: stepDef.agent, ref: ref ?? 'main',
+      issueNumber, runId: state.runId, step: stepDef.name,
+      iteration: state.currentIteration,
+      runtime: resolution.runtime, runtimeName: resolution.name,
+      env, clock,
+    });
+    state.runtime_retries = r.retries;
+  } catch (err) {
+    state.status = 'failed';
+    state.outcome = err.code === 'runtime-credential-missing' ? 'runtime-credential-missing'
+                  : err.code === 'runtime-error' ? 'runtime-error'
+                  : err.code === 'RUNTIME_KIND_NOT_ENABLED' ? 'runtime-error'
+                  : 'failed';
+    state.updatedAt = now();
+    const detail = err.code === 'runtime-credential-missing'
+      ? `secret reference \`${err.credential_ref}\` could not be resolved`
+      : err.message;
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `❌ Step **${stepDef.name}** failed: ${state.outcome} — ${detail}`);
+    return;
+  }
+
+  state.status = 'awaiting-agent';
+  state.updatedAt = now();
+  await persistV2(client, owner, repo, issueNumber, event, state,
+    `⏳ Waiting for **${stepDef.agent}** to post an apm-msg result (step \`${stepDef.name}\`, iteration ${state.currentIteration}).`);
+}
+
+async function handleV2WorkflowRunCompleted({
+  client, event, pipeline, state, owner, repo,
+  runtimeRegistry, identities, env, clock,
+}) {
+  const { issueNumber } = event;
+  if (state.status !== 'awaiting-agent') return;
+
+  const stepDef = pipeline.steps.find(s => s.name === state.currentStep);
+  if (!stepDef) return;
+  if (event.workflowName && !event.workflowName.toLowerCase().includes(stepDef.agent.toLowerCase())) {
+    return;
+  }
+
+  // The workflow itself failing is a runtime-error, distinct from apm-msg outcomes.
+  if (event.workflowConclusion === 'failure' || event.workflowConclusion === 'cancelled') {
+    state.status = 'failed';
+    state.outcome = 'runtime-error';
+    state.updatedAt = now();
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `❌ Agent workflow for **${stepDef.agent}** finished with \`${event.workflowConclusion}\` — outcome \`runtime-error\`.`);
+    return;
+  }
+
+  // Otherwise we wait for the agent's apm-msg comment to drive the transition;
+  // no state change here. The comment-handler does the work.
+}
+
+async function handleAgentComment({ client, event, pipelines, owner, repo, runtimeRegistry, identities, env, clock }) {
+  const { issueNumber } = event;
+  const author = event.comment.user;
+
+  const state = await loadState(client, owner, repo, issueNumber);
+  if (!state || state.schemaVersion !== '2') return; // v1 doesn't ingest apm-msg
+  if (state.status === 'completed' || state.status === 'failed' || state.status === 'timed-out') return;
+
+  const pipeline = pipelines.find(p => p.name === state.pipelineName);
+  if (!pipeline) return;
+
+  const stepDef = pipeline.steps.find(s => s.name === state.currentStep);
+  if (!stepDef) return;
+
+  // FR-013: Identity check — comment author must map to the expected agent.
+  const identityAgent = resolveLogin(identities, author);
+  const expectedAgent = stepDef.agent;
+  // Agent slugs in identities map can be e.g. "qa-agent", but step.agent may be "qa".
+  // We accept either exact match or matching after stripping "-agent" suffix.
+  const matches = identityAgent === expectedAgent
+                || identityAgent === `${expectedAgent}-agent`
+                || identityAgent?.replace(/-agent$/, '') === expectedAgent;
+  if (!identityAgent || !matches) {
+    // Silent for non-agent authors (FR-011 acceptance: protocol-ignored: non-agent-author)
+    if (!identityAgent) return;
+    // Wrong agent posted — treat as protocol-violation only if a fence is present.
+  }
+
+  // Parse the apm-msg block.
+  const parsed = parseApmMsg(event.comment.body);
+  if (!parsed.ok) {
+    if (parsed.reason === 'no-block' && !identityAgent) return; // ordinary human comment
+    state.status = 'failed';
+    state.outcome = 'protocol-violation';
+    state.updatedAt = now();
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `❌ Protocol violation (\`${parsed.reason}\`) on step **${stepDef.name}**. Redacted excerpt: \`\`\`\n${parsed.redacted}\n\`\`\``);
+    return;
+  }
+
+  // Context check (runId, step, agent, iteration)
+  const ctxErr = validateMsgContext(parsed.message, {
+    runId: state.runId,
+    expectedStep: stepDef.name,
+    expectedAgent: parsed.message.agent, // accept whatever the agent claims if it parses
+    expectedIteration: state.currentIteration,
+  });
+  if (ctxErr) {
+    state.status = 'failed';
+    state.outcome = 'protocol-violation';
+    state.updatedAt = now();
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `❌ Protocol violation (\`${ctxErr}\`) on step **${stepDef.name}**.`);
+    return;
+  }
+
+  const outcome = parsed.message.outcome;
+  state.outcome = outcome;
+  state.lastSummary = parsed.message.summary;
+
+  // Resolve transition for this outcome.
+  const next = resolveTransition(pipeline, stepDef.name, outcome);
+  if (!next) {
+    // Terminal outcomes without a transition end the run.
+    state.status = (outcome === 'success') ? 'completed'
+                 : (outcome === 'needs-human') ? 'failed'
+                 : 'failed';
+    state.updatedAt = now();
+    if (outcome === 'needs-human' && typeof client.addLabels === 'function') {
+      await client.addLabels(owner, repo, issueNumber, ['status:needs-human']);
+    }
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `🏁 Step **${stepDef.name}** outcome \`${outcome}\` — no transition declared; run ${state.status}.`);
+    return;
+  }
+
+  // Loop-budget check on backward edges (FR-005).
+  const budget = mergeBudget(pipeline.loopBudget);
+  const runStartedAt = await getRunStartedAt(client, owner, repo, issueNumber);
+  const verdict = evaluateLoopBudget({
+    budget,
+    iterations: state.iterations ?? {},
+    totalSteps: state.totalSteps ?? 0,
+    runStartedAt: runStartedAt ?? state.updatedAt,
+    now: now(),
+    fromStep: stepDef.name,
+    toStep: next.to,
+    isBackward: next.isBackward,
+  });
+
+  if (!verdict.allowed) {
+    state.status = 'loop-budget-exceeded';
+    state.updatedAt = now();
+    if (typeof client.addLabels === 'function') {
+      await client.addLabels(owner, repo, issueNumber, ['status:needs-human', 'status:loop-budget-exceeded']);
+    }
+    const history = Object.entries(state.iterations ?? {})
+      .map(([k, v]) => `\n  - \`${k}\`: ${v}`).join('') || ' _(none)_';
+    await persistV2(client, owner, repo, issueNumber, event, state,
+      `🛑 **Loop budget exceeded** (\`${verdict.reason}\`) on edge \`${verdict.edgeKey}\`. Iteration history:${history}\n\nDetails: \`${JSON.stringify(verdict.detail)}\``);
+    return;
+  }
+
+  // Increment edge iteration if backward.
+  if (next.isBackward) {
+    state.iterations = { ...(state.iterations ?? {}), [verdict.edgeKey]: verdict.nextEdgeIteration };
+    state.currentIteration = verdict.nextEdgeIteration;
+    state.currentEdgeKey = verdict.edgeKey;
+  } else {
+    state.currentIteration = 1;
+    state.currentEdgeKey = null;
+  }
+
+  state.currentStep = next.to;
+  state.status = 'running';
+  state.updatedAt = now();
+
+  await persistV2(client, owner, repo, issueNumber, event, state,
+    `✅ Step **${stepDef.name}** → **${next.to}** (\`${outcome}\`${next.isBackward ? `, iteration ${state.currentIteration}` : ''}).`);
+
+  // Continue dispatching.
+  await advanceV2Pipeline({
+    client,
+    event: { ...event, type: 'orchestrator.continue' },
+    pipeline, state, owner, repo,
+    runtimeRegistry, identities, env, clock,
+  });
+}
+
+/**
+ * Persist v2 state: append audit comment, then upsert the live-status comment.
+ * The audit channel is authoritative; the live-status PATCH is best-effort.
+ */
+async function persistV2(client, owner, repo, issueNumber, event, state, auditMessage) {
+  const enriched = {
+    ...state,
+    dedup_key: event._dedupKey ?? state.dedup_key ?? null,
+  };
+  await saveState(client, owner, repo, issueNumber, enriched, auditMessage);
+  if (typeof client.updateComment === 'function') {
+    const summary =
+      `### Pipeline \`${state.pipelineName}\` — run \`${state.runId}\`\n\n` +
+      `- **Step:** \`${state.currentStep}\`\n` +
+      `- **Iteration:** ${state.currentIteration}\n` +
+      `- **Runtime:** \`${state.runtime_used ?? '—'}\`\n` +
+      `- **Status:** \`${state.status}\`\n` +
+      (state.outcome ? `- **Last outcome:** \`${state.outcome}\`\n` : '');
+    try {
+      await upsertLiveStatus(client, owner, repo, issueNumber, state.runId, summary);
+    } catch (err) {
+      console.warn(`[orchestrator] live-status upsert failed (non-fatal): ${err.message}`);
+    }
+  }
+
+  // Dashboard broadcast payload — write to /tmp for the GHA workflow
+  // to forward (FR-021, US-9). Includes loop iteration + runtime per step.
+  await writeDashboardPayload(state).catch(() => { /* non-fatal */ });
+}
+
+async function writeDashboardPayload(state) {
+  if (typeof globalThis.__APM_TEST_NO_FS === 'boolean' && globalThis.__APM_TEST_NO_FS) return;
+  try {
+    const { writeFile } = await import('fs/promises');
+    await writeFile('/tmp/apm-pipeline-event.json', JSON.stringify({
+      runId: state.runId,
+      pipelineName: state.pipelineName,
+      status: state.status,
+      step: state.currentStep,
+      iteration: state.currentIteration,
+      edgeKey: state.currentEdgeKey ?? null,
+      runtime: state.runtime_used ?? null,
+      outcome: state.outcome ?? null,
+    }), 'utf8');
+  } catch { /* non-fatal */ }
 }
 
 function now() {
