@@ -41,8 +41,15 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    # Don't run when triggered by a bot (prevents cascades from automated commits)
-    if: ${{ github.event.sender.type != 'Bot' || github.event_name == 'workflow_run' }}
+    # Suppress bot-driven events to prevent infinite cascades, BUT allow:
+    #   • workflow_run.completed — needed to advance pipelines after agent finishes
+    #   • issues.labeled         — triage agent (bot) applies labels that trigger pipelines
+    if: >-
+      ${{
+        github.event_name == 'workflow_run' ||
+        github.event.sender.type != 'Bot' ||
+        (github.event_name == 'issues' && github.event.action == 'labeled')
+      }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

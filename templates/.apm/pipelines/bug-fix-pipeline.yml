@@ -1,6 +1,8 @@
 # Bug Fix Pipeline
-# Triggered when a new issue is opened with label type:bug.
-# Chain: triage → dev → qa → reviewer
+# Triggered after the Triage Agent has processed the issue.
+# The Triage Agent (fired on issues.opened) applies both labels; the orchestrator
+# picks this up once BOTH are present, guaranteeing triage always runs first.
+# Chain: dev → qa → reviewer
 #
 # Customise this file freely — changes take effect on the next Orchestrator run.
 name: bug-fix-pipeline
