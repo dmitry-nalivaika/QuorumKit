@@ -101,7 +101,7 @@ Every feature flows through a single number that ties everything together:
 | GitHub Issue | auto-assigned by GitHub | `#42` |
 | Spec directory | `specs/NNN-short-slug/` | `specs/042-user-auth/` |
 | Git branch | `NNN-short-slug` | `042-user-auth` |
-| ADR file | `docs/adr/NNN-title.md` | `docs/adr/042-jwt-vs-opaque.md` |
+| ADR file | `docs/architecture/adr-NNN-slug.md` | `docs/architecture/adr-042-jwt-vs-opaque.md` |
 
 `NNN` = the GitHub Issue number (zero-padded to 3 digits). No separate counter needed.
 

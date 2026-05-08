@@ -1,19 +1,21 @@
-# AD| **ADR Number** | 002 |
-| **Issue** | #2 — Autonomous Agent Orchestration |
-| **Status** | Superseded by ADR-004 (2026-05-08) |
-| **Date** | 2026-05-04 |
-| **Deciders** | BA/Product Agent, Architect Agent |
-| **Supersedes** | — |
-| **Superseded By** | [ADR-004](./adr-004-orchestrator-state-comment-model-v2.md) — Hybrid live-status + append-only audit comment model (Orchestrator v2) | Orchestrator State Storage Strategy
+# ADR-002: Orchestrator State Storage Strategy
 
 | Field | Value |
 |---|---|
 | **ADR Number** | 002 |
 | **Issue** | #2 — Autonomous Agent Orchestration System |
-| **Status** | Accepted |
+| **Status** | Superseded by [ADR-004](./adr-004-orchestrator-state-comment-model-v2.md) (2026-05-08) |
 | **Date** | 2026-05-04 |
 | **Deciders** | BA/Product Agent, Architect Agent |
 | **Supersedes** | — |
+| **Superseded By** | [ADR-004](./adr-004-orchestrator-state-comment-model-v2.md) — Hybrid live-status + append-only audit comment model (Orchestrator v2) |
+
+---
+
+> **Status note (2026-05-08):** This ADR is superseded by ADR-004 for Orchestrator
+> v2 (spec #44). The append-only-only model described below remains the v1
+> behaviour and is kept for historical reference and v1 backward compatibility
+> (see spec 044 US-7, FR-002, FR-015).
 
 ---
 

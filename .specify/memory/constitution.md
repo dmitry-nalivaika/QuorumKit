@@ -13,7 +13,7 @@ role definition file under `.apm/agents/` or `.apm/skills/`.
 ### II. NNN Traceability (NON-NEGOTIABLE)
 Every unit of work is anchored to a GitHub Issue number, zero-padded to 3 digits
 (`NNN`). The same NNN ties together: Issue → spec directory (`specs/NNN-slug/`) →
-git branch (`NNN-slug`) → ADR (`docs/adr/NNN-title.md`) → PR → release note. No
+git branch (`NNN-slug`) → ADR (`docs/architecture/adr-NNN-slug.md`) → PR → release note. No
 work begins without a GitHub Issue. No spec is created without an Issue number. No
 exceptions.
 
@@ -107,7 +107,7 @@ All PRs must pass the following gates before merge:
 This constitution supersedes all other practices defined in this repository.
 Amendments require:
 1. A GitHub Issue describing the proposed change and rationale
-2. An ADR at `docs/adr/NNN-title.md` if the change affects agent behaviour, file layout, or compatibility
+2. An ADR at `docs/architecture/adr-NNN-slug.md` if the change affects agent behaviour, file layout, or compatibility
 3. A PR reviewed and approved by at least one human maintainer
 4. An update to `LAST_AMENDED_DATE` and `CONSTITUTION_VERSION` in this file
 
