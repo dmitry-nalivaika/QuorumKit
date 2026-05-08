@@ -193,6 +193,11 @@ Acceptance Scenarios:
 - **FR-023**: The orchestrator MUST be covered by automated tests (no live GitHub calls required) that exercise at minimum: a pipeline with one backward edge running to budget exhaustion; a pipeline with three different runtimes across three agents; an `apm-msg` protocol violation; a duplicate event delivery; a loaded v1 pipeline executing as a degenerate v2 graph; a runtime referencing an unresolved credential.
 - **FR-024**: The Reviewer Agent MUST raise a BLOCKER on any PR that adds a label, message outcome, or transition identifier to source code or pipeline YAML without a corresponding update to the regulation document (FR-014).
 - **FR-025**: The orchestrator's behaviour MUST NOT depend on which AI runtime is selected. The same pipeline graph, message protocol, label semantics, loop budgets, and audit format MUST apply identically across every registered runtime.
+- **FR-026**: The orchestrator MUST compute the FR-016 dedup key per inbound GitHub event using the deterministic, per-trigger formulas frozen in ADR-007 §1, and MUST persist the resolved key in each `apm-pipeline-state` audit comment payload (field `dedup_key`). Manual `workflow_dispatch` invocations are exempt from deduplication (operator intent). Any new event trigger added to the orchestrator MUST extend the ADR-007 formula table in the same PR.
+- **FR-027**: The orchestrator GitHub Actions workflow MUST declare a `concurrency:` block keyed on the triggering issue/PR number (per ADR-007 §2) with `cancel-in-progress: false`, serialising runs per thread to eliminate the live-status PATCH race named in ADR-004. The `alert-to-issue.yml` workflow MUST declare an equivalent concurrency group keyed on the alert title. Application-level dedup (FR-016) MUST NOT be relied upon as the sole protection against concurrent runs.
+- **FR-028**: `loop_budget.max_wallclock_minutes` MUST be measured from the first audit comment's `created_at` to the present moment across the whole pipeline run on the issue thread, NOT from the per-job `timeout-minutes` of any single dispatched workflow (per ADR-007 §3). The validator MUST enforce `step.timeout_minutes ≤ dispatched_workflow.timeout-minutes` for every step (per ADR-007 §4); any agent workflow lacking an explicit `timeout-minutes:` MUST be treated as the GitHub default of 360 minutes for this comparison and MUST be flagged by `quality-check.sh`.
+- **FR-029**: The CI configuration MUST register the following as **required status checks** on `main` before v2 is enabled (per ADR-007 §5): `pipeline-validator` (FR-020), `verify-mirror` (ADR-006), `orchestrator-tests` (FR-023), and `regulation-lint` (FR-014). The orchestrator workflow itself MUST surface its own failures as an audit comment with `outcome: orchestrator-failure` on the triggering issue/PR (per ADR-007 §6); a silent orchestrator-workflow failure MUST be treated as a Constitution §VI violation by the Reviewer Agent.
+- **FR-030**: Each `runtimes/<kind>.js` adapter MUST export a static `requiredPermissions` map declaring the GitHub Actions token scopes it consumes; the orchestrator MUST union only the scopes of adapters used by enabled runtimes when composing dispatched workflow `permissions:` blocks (per ADR-007 §7). Transient runtime failures (HTTP 5xx, 429, network timeout) MUST be retried inside the adapter using the shared bounded-backoff helper (per ADR-007 §8) before being surfaced; retry-exhausted failures MUST surface as the declared outcome `runtime-error`, distinct from `protocol-violation`, and MUST NOT be counted as separate `loop_budget` iterations.
 
 ## Success Criteria
 
@@ -208,6 +213,10 @@ Acceptance Scenarios:
 - [ ] The regulation document at the canonical path declares every label, message outcome, and transition trigger referenced anywhere in `.apm/pipelines/` and the orchestrator source; a CI check enforces this.
 - [ ] Automated tests cover all scenarios in FR-023 and execute without a live GitHub connection.
 - [ ] The dashboard receives loop iteration counters and per-step runtime in its broadcast payload (verified by a captured payload sample in the spec's worked example).
+- [ ] Two webhook deliveries arriving within 1 second for the same issue produce exactly one orchestrator transition (validates FR-027 concurrency + FR-026 dedup together, not just FR-016 in isolation).
+- [ ] An orchestrator workflow run that throws an uncaught exception still results in an `outcome: orchestrator-failure` audit comment on the triggering issue with a link to the failed Actions run (FR-029).
+- [ ] A pipeline declares `step.timeout_minutes: 400` against an agent workflow with `timeout-minutes: 60`; the validator rejects the pipeline naming the offending step (FR-028).
+- [ ] A simulated `runtime-error` (3 consecutive 503s from a runtime adapter) surfaces as `outcome: runtime-error` and does NOT increment the QA→DEV iteration counter on the loop-budget worked example (FR-030).
 
 ## Key Entities
 
@@ -270,15 +279,20 @@ The following items were resolved by Architect ADRs during review of this spec
   for `.apm/pipelines/`, `.apm/runtimes.yml`, and `docs/AGENT_PROTOCOL.md`.
   `.apm/` is canonical; Copilot tree mirroring is generated by `init.sh` and
   verified in CI.
+- [RESOLVED — ADR-007] GitHub Actions execution-substrate contract: per-trigger
+  dedup-key formulas (FR-026), per-issue workflow concurrency (FR-027),
+  wallclock-vs-job-cap semantics and per-step timeout invariant (FR-028),
+  required CI status checks and orchestrator self-failure feedback (FR-029),
+  per-adapter least-privilege scopes and bounded retry policy (FR-030).
 
 Open items deferred to plan.md (Developer Agent input requested):
 
 - [PLAN] Concrete default values for `loop_budget` (`max_iterations_per_edge`,
   `max_total_steps`, `max_wallclock_minutes`) — Architect recommends `3`, `30`,
-  `720` respectively; final values to be confirmed with worked example.
+  `720` respectively (per ADR-007 §3, `max_wallclock_minutes` is a thread-spanning
+  measurement, not a per-job cap); final values to be confirmed with worked example.
 - [PLAN] Idempotency-cache bound (Architect recommends ring buffer of last 200
   delivery IDs OR pruning by `loop_budget.max_wallclock_minutes` window,
   whichever is reached first).
-- [PLAN] Per-step timeout vs dispatched-workflow `timeout-minutes` invariant
-  (Architect recommends validator-enforced `step.timeout_minutes ≤
-  workflow.timeout-minutes`).
+- [PLAN] ~~Per-step timeout vs dispatched-workflow `timeout-minutes` invariant~~
+  → resolved by ADR-007 §4 / FR-028.
