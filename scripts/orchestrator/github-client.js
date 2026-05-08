@@ -76,6 +76,28 @@ export function createGitHubClient(token) {
   }
 
   /**
+   * Update (PATCH) an existing comment by ID. Used by the v2 live-status
+   * channel to edit the single mutable status comment in place (ADR-004).
+   */
+  async function updateComment(owner, repo, commentId, body) {
+    const { data } = await withRetry(() =>
+      octokit.rest.issues.updateComment({ owner, repo, comment_id: commentId, body })
+    );
+    return data;
+  }
+
+  /**
+   * Add labels to an issue/PR (used by FR-005 to apply `status:needs-human`
+   * on loop-budget exhaustion).
+   */
+  async function addLabels(owner, repo, issueNumber, labels) {
+    if (!labels || labels.length === 0) return;
+    await withRetry(() =>
+      octokit.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels })
+    );
+  }
+
+  /**
    * Trigger a repository workflow_dispatch event.
    */
   async function triggerWorkflow(owner, repo, workflow, ref, inputs = {}) {
@@ -95,7 +117,7 @@ export function createGitHubClient(token) {
     return data.permission;
   }
 
-  return { listComments, createComment, triggerWorkflow, getCollaboratorPermission };
+  return { listComments, createComment, updateComment, addLabels, triggerWorkflow, getCollaboratorPermission };
 }
 
 function sleep(ms) {
