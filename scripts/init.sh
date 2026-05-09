@@ -221,10 +221,12 @@ install_copilot() {
 # PIPELINE TEMPLATES (FR-012)
 # =============================================================================
 install_pipelines() {
-  h1 "Installing Orchestrator pipeline templates (.apm/pipelines/)"
-  local pipelines_src="$APM_PACKAGE_DIR/templates/.apm/pipelines"
+  h1 "Installing Orchestrator pipelines (.apm/pipelines/)"
+  # ADR-006 §3 / FR-005: pipelines are NOT mirrored. The package's `.apm/pipelines/`
+  # is the single source of truth and is copied directly to the consumer.
+  local pipelines_src="$APM_PACKAGE_DIR/.apm/pipelines"
   if [ ! -d "$pipelines_src" ]; then
-    warn "Pipeline templates not found at $pipelines_src — skipping"
+    warn "Pipelines not found at $pipelines_src — skipping"
     return
   fi
 
