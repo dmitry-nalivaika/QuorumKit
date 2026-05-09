@@ -15,9 +15,8 @@ export function getQuorumStatus(state: QuorumState): {
 } {
   const percentage = (state.votesReceived / state.totalMembers) * 100;
 
-  // BUG: should be >= but uses > so quorum is never shown as reached
-  // when votes exactly meet the threshold (e.g. 3/5 with 60% threshold)
-  const reached = percentage > state.threshold;
+  // Fixed: now uses >= to include cases where votes exactly meet the threshold
+  const reached = percentage >= state.threshold;
 
   return {
     reached,
