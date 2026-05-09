@@ -1,0 +1,59 @@
+# Dependabot configuration.
+#
+# Required by:
+#   - specs/047-repo-topology/spec.md FR-031 (M9: SHA-pinned third-party Actions
+#     need an automated upgrade loop).
+#   - docs/architecture/adr-047-action-runtime.md §Implementation Plan, item 6
+#     (track github-actions for / and /engine/, npm for /engine/).
+#
+# When the Issue #47 topology migration lands the `engine/` and `installer/`
+# directories, add entries for those paths under the same schema (do NOT remove
+# the entries below until their corresponding source trees are removed).
+version: 2
+updates:
+  # ── GitHub Actions used by self-host workflows in .github/workflows/ ────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "tech-debt"
+      - "agent:security"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # ── npm: orchestrator engine (current path; will move to /engine/ per #47) ─
+  - package-ecosystem: "npm"
+    directory: "/scripts/orchestrator"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "tech-debt"
+      - "agent:security"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    ignore:
+      # Pin js-yaml major; FR-013 requires a safe loader and tag-aware
+      # loading is forbidden — defer majors to a manual security review.
+      - dependency-name: "js-yaml"
+        update-types: ["version-update:semver-major"]
+
+  # ── npm: dashboard ─────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/dashboard"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "type:chore"
+      - "tech-debt"
+      - "agent:security"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
