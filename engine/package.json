@@ -1,0 +1,16 @@
+{
+  "name": "apm-engine",
+  "version": "0.0.0-dev",
+  "description": "APM autonomous-agent orchestrator — distributed as a GitHub Action (Issue #47, ADR-047 amendment).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "ncc build orchestrator/index.js -o dist --minify --source-map --license licenses.txt",
+    "ncc:build": "npm run build",
+    "test": "cd orchestrator && npm test",
+    "ci:install": "npm ci --ignore-scripts && (cd orchestrator && npm ci --ignore-scripts) && (cd dashboard && npm ci --ignore-scripts)"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1"
+  }
+}

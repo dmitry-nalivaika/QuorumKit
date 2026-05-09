@@ -44,6 +44,20 @@ updates:
       - dependency-name: "js-yaml"
         update-types: ["version-update:semver-major"]
 
+  # ── npm: engine bundler (ncc) ────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/engine"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "type:chore"
+      - "tech-debt"
+      - "agent:security"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
   # ── npm: dashboard ─────────────────────────────────────────────────────
   - package-ecosystem: "npm"
     directory: "/engine/dashboard"

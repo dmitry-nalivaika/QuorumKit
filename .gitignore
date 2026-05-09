@@ -16,5 +16,6 @@ engine/dashboard/.apm-project.json
 .copilot-agent-context.md
 .apm-workspaces/
 engine/orchestrator/node_modules/
+engine/node_modules/
 
 engine/tests/.vite/
