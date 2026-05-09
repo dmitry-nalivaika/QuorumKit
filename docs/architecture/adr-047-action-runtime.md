@@ -3,14 +3,14 @@
 | Field | Value |
 |---|---|
 | **ADR Number** | 047 (amendment) |
-| **Issue** | [#47](https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/47) |
+| **Issue** | [#47](https://github.com/dmitry-nalivaika/quorumkit/issues/47) |
 | **Parent ADR** | `docs/architecture/adr-047-repo-topology-and-engine-distribution.md` |
 | **Spec** | `specs/047-repo-topology/spec.md` (FR-008, FR-014, FR-031) |
 | **Status** | Proposed |
 | **Date** | 2026-05-10 |
 | **Deciders** | Architect Agent |
 | **Resolves** | SEC-MED-005 (Security Agent review, 2026-05-09 — issue #47) |
-| **Source** | [issue #47 comment 4410703363](https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/47#issuecomment-4410703363) |
+| **Source** | [issue #47 comment 4410703363](https://github.com/dmitry-nalivaika/quorumkit/issues/47#issuecomment-4410703363) |
 
 ---
 

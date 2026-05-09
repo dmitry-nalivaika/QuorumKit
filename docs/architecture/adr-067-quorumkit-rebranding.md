@@ -16,7 +16,7 @@
 ## Context
 
 The project has been developed under the name **APM / Agentic Dev Stack** and the
-GitHub repository slug `agentic-dev-stack`. Issue #61 gates the v3 NPM release; that
+GitHub repository slug `quorumkit`. Issue #61 gates the v3 NPM release; that
 release must ship under a stable public identity from day one. Shipping `apm-engine`
 to NPM and renaming to `quorumkit-engine` in a subsequent release would require
 consumers to migrate twice and leave a stale published package on the NPM registry

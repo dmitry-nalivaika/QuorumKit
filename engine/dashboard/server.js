@@ -152,7 +152,7 @@ function autoDetectProject() {
   let localPath = process.env.QUORUMKIT_PROJECT_DIR || '';
   if (!localPath) {
     // Heuristic: if the dashboard lives under <project>/ (e.g. vendored as
-    // node_modules/agentic-dev-stack/dashboard or apm_modules/.../dashboard),
+    // node_modules/quorumkit/dashboard or vendor/.../dashboard),
     // walk up looking for a .git directory.
     let cur = path.resolve(DASHBOARD_DIR, '..');
     for (let i = 0; i < 5 && cur !== '/'; i++) {
@@ -318,18 +318,34 @@ function buildAgentCmd(agentId, cfg, agentName) {
   // SEC-HIGH-003: agentName must not contain shell-special characters.
   const safeAgentName = (agentName || agentId).replace(/[^a-zA-Z0-9 _\-]/g, '');
   const skill = idToSkill[agentId] || agentId;
-  const skillFile = path.join(DASHBOARD_DIR, '..', '.apm', 'skills', `${skill}-agent`, 'SKILL.md');
-  const agentFile = path.join(DASHBOARD_DIR, '..', '.apm', 'agents',
+  const agentFileName =
     skill === 'ba'              ? 'ba-product-agent.md'       :
     skill === 'dev'             ? 'developer-agent.md'        :
     skill === 'qa'              ? 'qa-test-agent.md'          :
     skill === 'tech-debt'       ? 'tech-debt-agent.md'        :
     skill === 'ot-integration'  ? 'ot-integration-agent.md'   :
     skill === 'digital-twin'    ? 'digital-twin-agent.md'     :
-                                  `${skill}-agent.md`
-  );
+                                  `${skill}-agent.md`;
 
   const workDir = cfg.localPath || '.';
+
+  // Prefer consumer project's installed .apm/ copies (put there by init.sh)
+  // so the dashboard works correctly when invoked against a separate project.
+  // Fall back to the package's own .apm/ so local development still works.
+  function resolveApmFile(relToWorkDir, relToPackage) {
+    const consumer = path.join(workDir, relToWorkDir);
+    if (fs.existsSync(consumer)) return consumer;
+    return path.join(DASHBOARD_DIR, '..', relToPackage);
+  }
+  const skillFile = resolveApmFile(
+    path.join('.apm', 'skills', `${skill}-agent`, 'SKILL.md'),
+    path.join('.apm', 'skills', `${skill}-agent`, 'SKILL.md')
+  );
+  const agentFile = resolveApmFile(
+    path.join('.apm', 'agents', agentFileName),
+    path.join('.apm', 'agents', agentFileName)
+  );
+
   const qWork   = workDir.replace(/"/g, '\\"');
   const qSkill  = skillFile.replace(/"/g, '\\"');
 
@@ -738,10 +754,28 @@ function ensureBridgeExtensionInstalled(codeBin, agentId) {
 async function handleCopilotInvoke(agentId, agentName, sentinel) {
   const { workDir, skillFile, agentFile } = sentinel;
 
-  // Build context content
-  const skill   = fs.existsSync(skillFile)   ? fs.readFileSync(skillFile, 'utf8')   : '';
-  const agentDef = fs.existsSync(agentFile)  ? fs.readFileSync(agentFile, 'utf8')  : '';
+  // Relative paths inside the consumer project (installed by init.sh).
+  // @workspace resolves these against the open folder, so Copilot reads the
+  // locally installed copies rather than receiving the full content inline.
+  const agentRelPath = path.join('.apm', 'agents', path.basename(agentFile));
+  const skillRelPath = path.join('.apm', 'skills', path.basename(path.dirname(skillFile)), 'SKILL.md');
+
+  // Full content kept only for the human-readable reference section below.
+  const agentDef = fs.existsSync(agentFile) ? fs.readFileSync(agentFile, 'utf8') : '';
+  const skillDef = fs.existsSync(skillFile)  ? fs.readFileSync(skillFile, 'utf8')  : '';
   const contextPath = path.join(workDir, '.copilot-agent-context.md');
+
+  // Prompt: tell the agent who it is, point it at its two role files,
+  // then explicitly ask it to greet and wait — not start autonomous work.
+  const chatPrompt = [
+    `@workspace You are acting as the **${agentName}**.`,
+    ``,
+    `Read your role definition from \`${agentRelPath}\` and your skill guide from \`${skillRelPath}\`.`,
+    ``,
+    `Say hello: introduce yourself with your name and a one-sentence description of what you do.`,
+    `Then **stop and wait for instructions**.`,
+    `Do NOT read further files, run commands, or begin any autonomous analysis until the user gives you a specific task.`,
+  ].join('\n');
 
   const contextContent = [
     `# QuorumKit Agent Context — ${agentName}`,
@@ -749,9 +783,7 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     '',
     `## Copilot Chat prompt`,
     '```',
-    `@workspace You are acting as the ${agentName}. Follow the role definition below exactly.`,
-    ``,
-    skill || agentDef || `Agent: ${agentName}`,
+    chatPrompt,
     '```',
     '',
     '---',
@@ -759,7 +791,7 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     agentDef || '_agent file not found_',
     '',
     '## Skill / Instruction',
-    skill || '_skill file not found_',
+    skillDef || '_skill file not found_',
   ].join('\n');
 
   try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }

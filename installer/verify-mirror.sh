@@ -134,7 +134,7 @@ if [ -d ".github/workflows" ] && [ -d "templates/github/workflows" ]; then
         # An explicit `# apm-allow-divergence: <reason>` marker on either copy
         # exempts a documented intentional split (e.g. the SoT orchestrator
         # workflow dogfoods via `node engine/...` while the distributed
-        # template uses `uses: dmitry-nalivaika/agentic-dev-stack/engine@<ref>` per FR-011).
+        # template uses `uses: dmitry-nalivaika/quorumkit/engine@<ref>` per FR-011).
         if grep -qE '#[[:space:]]*apm-allow-divergence:' "$wf" "$template"; then
           ok "M5: $name divergence acknowledged via 'apm-allow-divergence:' marker"
         else
@@ -193,7 +193,7 @@ for p in "${m8_paths[@]}"; do
     if echo "$line" | grep -qE '#[[:space:]]*apm-allow:'; then
       continue
     fi
-    fail "M8: $line — engine must be invoked via 'uses:' Action ref (FR-019). Remediation: replace with 'uses: dmitry-nalivaika/agentic-dev-stack/engine@<sha>'."
+    fail "M8: $line — engine must be invoked via 'uses:' Action ref (FR-019). Remediation: replace with 'uses: dmitry-nalivaika/quorumkit/engine@<sha>'."
     m8_violations=$((m8_violations + 1))
   done < <(grep -RnE --exclude-dir=node_modules "run: *node (scripts|engine)/orchestrator/" "$p" 2>/dev/null || true)
 done
