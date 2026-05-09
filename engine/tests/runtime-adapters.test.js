@@ -27,8 +27,11 @@ describe('runtimes/copilot', () => {
     });
     expect(r).toEqual({ dispatched: true, retries: 0, workflow: 'copilot-agent-qa.yml' });
     expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'copilot-agent-qa.yml', 'main', expect.objectContaining({
-      issue_number: '10', run_id: 'run-1', step: 'qa', iteration: '2', runtime: 'copilot-default',
+      issue_number: '10', run_id: 'run-1', step: 'qa', iteration: '2',
     }));
+    // `runtime` must NOT be sent: agent workflows do not declare it as an input.
+    const sentInputs = client.triggerWorkflow.mock.calls[0][4];
+    expect(sentInputs).not.toHaveProperty('runtime');
   });
 
   it('throws runtime-credential-missing when env var is absent — without leaking value', async () => {

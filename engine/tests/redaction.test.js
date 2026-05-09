@@ -97,9 +97,10 @@ describe('FR-009 — credentials never leak into any orchestrator surface', () =
 
     const blob = deepSerialise({ captured, result });
     assertNoLeak({ 'dispatch+result': blob }, 'claude.invoke');
-    // sanity: the helper actually ran and used the REF name
-    expect(blob).toContain('claude-test');
-    expect(captured.inputs.runtime).toBe('claude-test');
+    // sanity: the helper actually ran and dispatched the expected workflow
+    expect(captured.workflow).toBe('agent-dev.yml');
+    // `runtime` is intentionally NOT a workflow input (workflows don't declare it).
+    expect(captured.inputs.runtime).toBeUndefined();
   });
 
   it('runtimes/copilot.js#invoke does NOT pass the credential value into workflow inputs or retries', async () => {
@@ -126,7 +127,8 @@ describe('FR-009 — credentials never leak into any orchestrator surface', () =
 
     const blob = deepSerialise({ captured, result });
     assertNoLeak({ 'dispatch+result': blob }, 'copilot.invoke');
-    expect(blob).toContain('copilot-test');
+    expect(captured.workflow).toBe('copilot-agent-qa.yml');
+    expect(captured.inputs.runtime).toBeUndefined();
   });
 
   it('runtime-credential-missing error carries only the REF NAME, never the value', async () => {
