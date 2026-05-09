@@ -44,12 +44,14 @@ export async function invoke(context) {
   const slug = context.agent.replace(/-agent$/, '');
   const workflow = `agent-${slug}.yml`;
   const dispatchRef = context.ref ?? 'main';
+  // Note: agent workflows do not declare a `runtime` input; the runtime
+  // *kind* is implied by which workflow is dispatched (copilot-agent-* vs
+  // agent-*). Sending it would be rejected with `Unexpected inputs provided`.
   const inputs = {
     issue_number: String(context.issueNumber),
     run_id: context.runId ?? '',
     step: context.step ?? '',
     iteration: String(context.iteration ?? 1),
-    runtime: context.runtimeName ?? '',
   };
 
   const { retries } = await withRetry(
