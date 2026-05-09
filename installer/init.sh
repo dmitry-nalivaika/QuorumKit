@@ -30,6 +30,10 @@ h1()   { echo -e "\n${BOLD}$*${NC}"; }
 # ── Parse arguments ───────────────────────────────────────────────────────────
 AI_MODE="claude"  # default
 DOMAIN=""         # optional domain extension pack
+UPGRADE=0         # T-20 / FR-024: rewrite consumer workflows from
+                  # `node engine/orchestrator/...` to `uses:` engine Action
+APPLY=0           # default to dry-run when --upgrade is set (SEC-MED-002)
+ENGINE_REF="v3"   # default Action ref consumers will be pinned to
 
 for arg in "$@"; do
   case "$arg" in
@@ -40,9 +44,13 @@ for arg in "$@"; do
     --domain=*)
       warn "Unknown domain pack: $arg — only 'industrial' is currently available"
       ;;
+    --upgrade)         UPGRADE=1             ;;
+    --apply)           APPLY=1               ;;
+    --engine-ref=*)    ENGINE_REF="${arg#--engine-ref=}" ;;
     *)
       err "Unknown argument: $arg"
       echo "Usage: $0 [--ai=claude|copilot|both] [--domain=industrial]"
+      echo "       $0 --upgrade [--apply] [--engine-ref=<ref>]"
       exit 1
       ;;
   esac
@@ -327,6 +335,129 @@ install_github_templates() {
     fi
   done
 }
+
+# =============================================================================
+# UPGRADE MODE — T-20 / FR-024 / SEC-MED-002
+#
+# `--upgrade` rewrites consumer .github/workflows/*.yml files that still call
+# the engine via `node engine/orchestrator/index.js` (or the pre-#47
+# `node scripts/orchestrator/index.js`) so they instead use the published
+# Action ref `uses: dmitry-nalivaika/APM/engine@$ENGINE_REF`.
+#
+# Safety contract:
+#   • Dry-run by default. `--apply` is required to write changes.
+#   • Idempotent: a workflow already on the Action form is left untouched.
+#   • Refuses to broaden any `permissions:` block (SEC-MED-002). If the
+#     existing workflow has narrower scopes than the engine's documented
+#     minimum (engine/SECURITY.md), the script reports the gap and exits
+#     non-zero. It NEVER widens automatically.
+#   • Does not touch agent workflows (`copilot-agent-*.yml`, etc.) — only
+#     workflows that actually invoke the engine.
+# =============================================================================
+run_upgrade() {
+  h1 "APM Upgrade — rewrite engine invocations to 'uses:' Action form"
+  if [ ! -d ".github/workflows" ]; then
+    err "No .github/workflows/ directory in $(pwd) — nothing to upgrade."
+    exit 1
+  fi
+
+  local action_ref="dmitry-nalivaika/APM/engine@$ENGINE_REF"
+  local mode_label
+  if [ "$APPLY" -eq 1 ]; then
+    mode_label="APPLY (writing changes)"
+  else
+    mode_label="DRY-RUN (use --apply to write)"
+  fi
+  echo "Mode      : $mode_label"
+  echo "Engine ref: $action_ref"
+  echo ""
+
+  local touched=0 already=0 skipped=0
+  shopt -s nullglob
+  for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+    [ -f "$wf" ] || continue
+    if ! grep -qE 'node[[:space:]]+(scripts|engine)/orchestrator/index\.js' "$wf"; then
+      if grep -qE "uses:[[:space:]]*dmitry-nalivaika/APM/engine@" "$wf"; then
+        already=$((already + 1))
+        ok "$(basename "$wf") — already on Action form"
+      else
+        skipped=$((skipped + 1))
+      fi
+      continue
+    fi
+
+    # SEC-MED-002 permissions-widening guard. Find the top-level
+    # `permissions:` block (first occurrence) and refuse to proceed if any
+    # required engine scope is currently *missing* (we do not auto-add).
+    local perms
+    perms=$(awk '/^permissions:/{flag=1;next} /^[A-Za-z]/{flag=0} flag' "$wf" || true)
+    local missing=()
+    for required in "contents:[[:space:]]*read" "issues:[[:space:]]*write" "pull-requests:[[:space:]]*write"; do
+      if ! echo "$perms" | grep -qE "$required"; then
+        missing+=("$required")
+      fi
+    done
+    if [ "${#missing[@]}" -gt 0 ]; then
+      err "$(basename "$wf"): existing 'permissions:' block lacks required scopes: ${missing[*]}"
+      err "  Refusing to broaden automatically (SEC-MED-002). Add the missing scopes manually, then re-run."
+      exit 2
+    fi
+
+    # The actual rewrite: replace the orchestrator step's body. We surgically
+    # match the multi-line block "Setup Node + npm ci + run: node engine/.../index.js"
+    # with awk; if the workflow has been customised in a way we don't
+    # recognise, fall back to a warning.
+    local tmp
+    tmp=$(mktemp)
+    awk -v ref="$action_ref" '
+      BEGIN { skip=0 }
+      # Drop the explicit Setup Node + npm ci steps that the Action no longer needs.
+      /^[[:space:]]*-[[:space:]]*name:[[:space:]]*Setup Node/ { skip=1 }
+      /^[[:space:]]*-[[:space:]]*name:[[:space:]]*Install orchestrator dependencies/ { skip=1 }
+      /^[[:space:]]*-[[:space:]]*name:[[:space:]]*Check orchestrator is installed/ { skip=1 }
+      # Replace the run step with the Action ref.
+      /run:[[:space:]]*node[[:space:]]+(scripts|engine)\/orchestrator\/index\.js/ {
+        sub(/run:[[:space:]]*node[[:space:]]+(scripts|engine)\/orchestrator\/index\.js.*/, "uses: " ref)
+        skip=0
+        print; next
+      }
+      # End of a step block (next step starts) → reset skip.
+      skip && /^[[:space:]]*-[[:space:]]*name:/ { skip=0 }
+      !skip { print }
+    ' "$wf" > "$tmp"
+
+    if cmp -s "$wf" "$tmp"; then
+      rm -f "$tmp"
+      skipped=$((skipped + 1))
+      warn "$(basename "$wf"): contains a 'node …/orchestrator/index.js' line but the surrounding block did not match the upgrade pattern. Inspect manually."
+      continue
+    fi
+
+    if [ "$APPLY" -eq 1 ]; then
+      mv "$tmp" "$wf"
+      touched=$((touched + 1))
+      ok "$(basename "$wf") — rewritten to 'uses: $action_ref'"
+    else
+      touched=$((touched + 1))
+      ok "$(basename "$wf") — would be rewritten (diff below):"
+      diff -u "$wf" "$tmp" | sed 's/^/    /' | head -40 || true
+      rm -f "$tmp"
+    fi
+  done
+
+  echo ""
+  echo "Summary: rewrote=$touched  already-on-Action=$already  skipped=$skipped"
+  if [ "$APPLY" -eq 0 ] && [ "$touched" -gt 0 ]; then
+    echo ""
+    echo -e "${BOLD}Next:${NC} re-run with --apply to write the changes:"
+    echo "    bash $0 --upgrade --apply --engine-ref=$ENGINE_REF"
+  fi
+}
+
+if [ "$UPGRADE" -eq 1 ]; then
+  run_upgrade
+  exit 0
+fi
 
 # =============================================================================
 # RUN INSTALLATION
