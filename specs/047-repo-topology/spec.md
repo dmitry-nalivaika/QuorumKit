@@ -2,8 +2,8 @@
 
 **Feature Branch**: `047-repo-topology`
 **Created**: 2026-05-09
-**Status**: Draft
-**Linked ADR**: `docs/architecture/adr-047-repo-topology-and-engine-distribution.md` (to be committed by Architect Agent)
+**Status**: Draft (security blockers resolved 2026-05-09)
+**Linked ADR**: `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
 **Extends**: ADR-006 (SoT + mirroring), ADR-007 (GH Actions substrate)
 **Issue**: [#47](https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/47)
 
@@ -51,6 +51,7 @@ As a **maintainer of the APM package**, I want CI to fail fast on any unsynchron
 4. **Given** a PR that re-creates `.github/agents/` in the SoT repo, **When** CI runs, **Then** check **M6** fails.
 5. **Given** a PR that adds `.apm/agents/new-agent.md` without populating `.claude/agents/new-agent.md` and `.github/instructions/new-agent.instructions.md`, **When** CI runs, **Then** check **M7** fails (Principle IV self-host parity).
 6. **Given** a PR that introduces `run: node scripts/orchestrator/...` in any distributed workflow, **When** CI runs, **Then** check **M8** fails (engine must be invoked via `uses:` Action).
+7. **Given** a PR that adds `uses: actions/checkout@v4` (tag, not SHA) to any workflow under `engine/`, `templates/github/workflows/`, or `.github/workflows/`, **When** CI runs, **Then** check **M9** fails with the message *"third-party Actions MUST be pinned by full commit SHA (FR-031)"*.
 
 ---
 
@@ -123,11 +124,11 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 
 - **FR-008**: The orchestrator engine MUST be distributable as a reusable GitHub Action invocable via `uses:` syntax with a versioned ref (tag or SHA).
 - **FR-009**: The orchestrator engine MUST also be distributable as an npm package, so the dashboard, VS Code extension, and any future CLI can consume the same source.
-- **FR-010**: Both distribution channels MUST be released atomically from the same `engine/` source on tag push (one CI release workflow, one source of truth).
+- **FR-010**: Both distribution channels MUST be released atomically from the same `engine/` source on tag push (one CI release workflow, one source of truth). The npm publish step MUST use **OIDC trusted publishing** (`npm publish --provenance`) and MUST NOT depend on any long-lived `NPM_TOKEN` in the steady state. If a fallback token is required for disaster recovery, it MUST be a granular, per-package, publish-only token with ≤90-day expiry, stored in a `release` GitHub Environment with required reviewer, and its rotation procedure MUST be documented in `engine/RELEASING.md`. Published artefacts (Action tag + npm tarball) MUST carry SLSA provenance attestations. *(Resolves SEC-HIGH-001.)*
 - **FR-011**: Distributed workflows in `templates/github/workflows/` MUST invoke the engine via `uses:` rather than `run: node scripts/orchestrator/...` or any path that depends on engine source being copied into the consumer repo.
 - **FR-012**: The Action MUST read pipeline DSL, runtime registry, and identity registry from the consumer's local `.apm/` directory at runtime; no engine state may be embedded in the Action itself.
-- **FR-013**: The engine MUST validate the `apiVersion:` declared in any pipeline YAML and fail fast with an actionable error if the engine version is older than the declared `apiVersion`.
-- **FR-014**: The Action's required `permissions:` block MUST be documented in the template workflows and reviewed by the Security Agent before first publish.
+- **FR-013**: The engine MUST validate the `apiVersion:` declared in any pipeline YAML and fail fast with an actionable error if the engine version is older than the declared `apiVersion`. The validator MUST use a safe YAML loader (e.g. `yaml.load` with the default `js-yaml` safe schema); tag-aware loading (`!!js/function`, custom constructors) is forbidden.
+- **FR-014**: The Action's required `permissions:` block MUST be documented in `engine/SECURITY.md` as a per-scope table — one row per scope (`issues`, `pull-requests`, `actions`, `contents`, etc.) listing (a) the exact GitHub API call that requires the scope, (b) the minimal alternative considered, (c) the justification. `contents:` MUST default to `read` and MAY only be elevated to `write` if a documented call requires it (none does in the current code path). Template workflows in `templates/github/workflows/` MUST declare `permissions:` at the **job** level (never workflow level) so reusable-Action consumers retain least privilege. The Security Agent MUST review and sign off on `engine/SECURITY.md` before the first v3.0.0 publish. *(Resolves SEC-HIGH-002.)*
 
 ### CI mirror enforcement (`installer/verify-mirror.sh` extensions)
 
@@ -136,7 +137,8 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 - **FR-017 (M6)**: CI MUST fail if `.github/agents/` exists in the SoT repo.
 - **FR-018 (M7)**: CI MUST fail if any `.apm/agents/<x>.md` lacks a counterpart in `.claude/agents/` OR `.github/instructions/` (self-host Principle IV parity).
 - **FR-019 (M8)**: CI MUST fail if any file under `templates/github/workflows/` or `.github/workflows/` contains a literal `node scripts/orchestrator/` reference (engine must be invoked via `uses:`).
-- **FR-020**: Each mirror-check failure message MUST include (a) the rule ID (M1–M8), (b) the offending file path, (c) the exact remediation command or steps.
+- **FR-020**: Each mirror-check failure message MUST include (a) the rule ID (M1–M9), (b) the offending file path, (c) the exact remediation command or steps.
+- **FR-031 (M9)**: All third-party Actions referenced by `engine/action.yml`, any workflow under `engine/`, and any workflow under `templates/github/workflows/` or `.github/workflows/` MUST be pinned by full 40-character commit SHA (tag-only or `@vN` references are forbidden); a comment naming the human-readable tag MAY follow the SHA. The repository MUST contain a `.github/dependabot.yml` entry for `package-ecosystem: github-actions` covering both `/` and `/engine/` so SHA pins receive proposed upgrades. CI check **M9** in `installer/verify-mirror.sh` MUST fail if any `uses:` line in the listed paths references an Action without a 40-character SHA. *(Resolves SEC-HIGH-003.)*
 
 ### Installer behaviour
 
@@ -160,13 +162,16 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 ## Success Criteria
 
 - **SC-001**: A fresh consumer repo on v3.0.0 can run a full `feature` pipeline (triage → ba → architect → dev → qa → reviewer → release) end-to-end without any engine source files being copied into the consumer repo. Verified by automated end-to-end test.
-- **SC-002**: All eight `verify-mirror.sh` checks (M1–M8) pass on `main` after migration; introducing a deliberate violation in any of M4–M8 causes CI to fail with a message that names the rule ID and the offending file. Verified by negative-test fixtures in `installer/tests/`.
+- **SC-002**: All nine `verify-mirror.sh` checks (M1–M9) pass on `main` after migration; introducing a deliberate violation in any of M4–M9 causes CI to fail with a message that names the rule ID and the offending file. Verified by negative-test fixtures in `installer/tests/`.
 - **SC-003**: The post-migration top-level directory listing is unambiguous: 100% of top-level folders map to exactly one of the three zones, validated by a static check in `installer/verify-mirror.sh`.
 - **SC-004**: Both `.claude/agents/` and `.github/instructions/` in the SoT repo contain a counterpart for every file in `.apm/agents/` (Principle IV self-host parity).
 - **SC-005**: A v2.x → v3.0.0 upgrade via `installer/init.sh --upgrade` completes in under 30 seconds on a typical consumer repo, is idempotent on a second run, and produces workflows that execute successfully against the published Action.
 - **SC-006**: An engine bug fix released as v3.0.1 reaches a consumer pinned to `@v3` by changing zero files in their repo (Action ref auto-resolves the patch).
 - **SC-007**: A new contributor, given the post-migration root directory listing and `CONTRIBUTING.md`, correctly identifies the destination folder for an agent definition, an orchestrator bug fix, and an installer enhancement on the first try.
 - **SC-008**: The release CI workflow publishing both Action and npm package is atomic — either both succeed or the release is rolled back automatically; no state where one channel is on v3.x and the other is on v3.(x-1).
+- **SC-009**: The first v3.0.0 npm publish carries a verifiable SLSA provenance attestation (visible on the npm package page) and was produced via OIDC trusted publishing without any long-lived `NPM_TOKEN` being read in CI. Verified by inspecting the published package metadata.
+- **SC-010**: `engine/SECURITY.md` exists, contains a per-scope justification table for every entry in the Action's `permissions:` block, has been signed off by the Security Agent (PR comment + label), and the `contents:` scope is `read` (not `write`) unless an explicitly listed call requires write. Verified by Security Agent review on the v3.0.0 release PR.
+- **SC-011**: Zero `uses:` lines under `engine/`, `templates/github/workflows/`, or `.github/workflows/` reference a third-party Action by tag or `@vN`; every entry is pinned by a 40-character commit SHA, and `.github/dependabot.yml` includes a `package-ecosystem: github-actions` entry so SHA pins receive upgrade PRs. Verified by check M9 on `main`.
 
 ## Key Entities
 
@@ -191,10 +196,12 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 ## Security and Privacy Considerations
 
 - **No PII handled** — standard open-source data classification applies (per Constitution Security & Privacy section).
-- **Action permissions surface**: publishing the engine as a reusable Action exposes its `permissions:` requirements to every consumer. The Security Agent MUST review the documented `permissions:` block before the first v3.0.0 publish (FR-014). Required scopes today (`issues:write`, `pull-requests:write`, `actions:write`, `contents:write`) MUST be justified per scope and recorded in `engine/SECURITY.md`.
-- **Supply-chain integrity**: consumers MUST be able to pin the Action by SHA; documentation MUST recommend SHA-pinning over tag-pinning for security-sensitive deployments. Dependabot compatibility MUST be verified.
-- **npm package supply chain**: the npm publish step MUST use a scoped, automation-token-only publish flow; no human credentials in CI. Token MUST have publish-only scope.
-- **Secrets**: no secrets are introduced or relocated by this feature. The release workflow needs `NPM_TOKEN` (new secret); it MUST be a GitHub Actions environment-scoped secret tied to a `release` environment with required reviewer.
+- **Action permissions surface (FR-014)**: publishing the engine as a reusable Action exposes its `permissions:` requirements to every consumer. `engine/SECURITY.md` MUST contain a per-scope justification table (one row per scope: exact API call, minimal alternative considered, justification). `contents:` defaults to `read` and may only be elevated to `write` if a documented API call requires it. Template workflows MUST declare `permissions:` at the **job** level, never at workflow level. The Security Agent MUST sign off before the first v3.0.0 publish. *(Addresses SEC-HIGH-002.)*
+- **Supply-chain integrity — third-party Actions (FR-031 / M9)**: every Action referenced under `engine/`, `templates/github/workflows/`, or `.github/workflows/` MUST be pinned by 40-character commit SHA. Dependabot `package-ecosystem: github-actions` MUST be configured for both `/` and `/engine/`. CI check M9 enforces this on every PR. *(Addresses SEC-HIGH-003.)*
+- **Supply-chain integrity — consumer pinning**: consumers MUST be able to pin the APM Action by SHA; documentation MUST recommend SHA-pinning over tag-pinning for security-sensitive deployments. Dependabot compatibility MUST be verified.
+- **npm package supply chain (FR-010)**: the npm publish step MUST use OIDC trusted publishing with `npm publish --provenance`. No long-lived `NPM_TOKEN` is used in the steady state. If a fallback token is ever required, it MUST be a granular, package-scoped, publish-only token with ≤90-day expiry, stored in a `release` GitHub Environment with required reviewer; rotation is documented in `engine/RELEASING.md`. *(Addresses SEC-HIGH-001.)*
+- **Pipeline YAML loader (FR-013)**: the `apiVersion` validator MUST use a safe YAML loader; tag-aware loading is forbidden.
+- **Release environment**: the release job MUST run inside a protected `release` GitHub Environment with a required reviewer; tag-protection rules MUST forbid force-push or deletion of `v*` tags; release tags MUST be signed (`git tag -s`) with the verifying key documented in `engine/RELEASING.md`.
 - **Workflow permissions in consumer repos**: distributed workflow templates MUST declare minimum `permissions:` per job; the Security Agent will validate this before publish (Constitution Quality Gates).
 
 ## Assumptions
@@ -212,7 +219,7 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 
 *(All open questions must be resolved to zero before handoff to Developer Agent. Architect Agent decisions on each item below are required during ADR-008 finalisation.)*
 
-- *(none currently — Architect Agent has resolved all topology and distribution questions in the proposed ADR-008. Re-run `/speckit-clarify` after ADR-008 is committed to confirm zero remaining markers before Developer Agent starts.)*
+- *(none currently — Architect Agent has resolved all topology and distribution questions in ADR-047. Security Agent's three SEC-HIGH blockers from the 2026-05-09 review are resolved by FR-010 (provenance/OIDC), FR-014 (per-scope `engine/SECURITY.md`), and FR-031/M9 (third-party SHA-pinning). Re-run `/speckit-clarify` to confirm zero markers persist before Developer Agent starts step 8.)*
 
 ---
 
