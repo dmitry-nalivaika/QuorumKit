@@ -6,6 +6,19 @@ on:
       issue_number:
         description: 'Issue or PR number triggering this agent'
         required: true
+      run_id:
+        description: 'Orchestrator run ID'
+        required: false
+      step:
+        description: 'Pipeline step name'
+        required: false
+      iteration:
+        description: 'Iteration count'
+        required: false
+        default: '1'
+      runtime:
+        description: 'Runtime name from registry'
+        required: false
 
 permissions:
   contents: write
@@ -19,8 +32,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Developer Agent via GitHub Models
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ask GitHub Models for a code patch
+        id: ask_llm
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -32,11 +54,9 @@ jobs:
 
             const agentInstructions = readSafe('.github/agents/developer-agent.md') || readSafe('.apm/agents/developer-agent.md');
             const constitution      = readSafe('.specify/memory/constitution.md');
-
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');
 
-            let issueTitle = '';
-            let issueBody  = '';
+            let issueTitle = '', issueBody = '';
             try {
               const issue = await github.rest.issues.get({
                 owner: context.repo.owner,
@@ -49,16 +69,29 @@ jobs:
               core.warning(`Could not fetch issue #${issueNumber}: ${e.message}`);
             }
 
+            // Collect file contents mentioned in the issue body
+            const fileMentions = [...(issueBody.matchAll(/`([^`]+\.[a-z]{1,5})`/g))].map(m => m[1]);
+            const fileContents = fileMentions.map(f => {
+              const content = readSafe(f);
+              return content ? `### ${f}\n\`\`\`\n${content}\n\`\`\`` : '';
+            }).filter(Boolean).join('\n\n');
+
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
               agentInstructions && `## Agent Instructions\n${agentInstructions}`,
-            ].filter(Boolean).join('\n\n---\n\n')
-              || 'You are a helpful GitHub developer agent.';
+              `## IMPORTANT OUTPUT FORMAT`,
+              `You MUST respond with a JSON object (no prose, no markdown wrapper) with these exact keys:`,
+              `{ "branch": "NNN-short-slug", "files": [{ "path": "...", "content": "..." }], "pr_title": "...", "pr_body": "...", "commit_msg": "..." }`,
+              `"files" is an array of ALL files to write (full content, not diffs). Include test files.`,
+              `Branch: zero-pad issue number to 3 digits (e.g. issue 78 → "078-short-slug").`,
+            ].filter(Boolean).join('\n\n');
 
-            const userContent =
-              `You are acting as the Developer Agent for issue #${issueNumber}.\n` +
-              `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
-              `Review the spec, plan the implementation, and post a summary of the next steps as a comment.`;
+            const userContent = [
+              `Fix issue #${issueNumber}: ${issueTitle}`,
+              `\n\n${issueBody}`,
+              fileContents ? `\n\n## Relevant file contents\n${fileContents}` : '',
+              `\n\nRespond ONLY with the JSON object described in the system prompt.`,
+            ].join('');
 
             const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
               method: 'POST',
@@ -72,7 +105,8 @@ jobs:
                   { role: 'system', content: systemContent },
                   { role: 'user',   content: userContent },
                 ],
-                max_tokens: 2048,
+                max_tokens: 4096,
+                response_format: { type: 'json_object' },
               }),
             });
 
@@ -83,12 +117,116 @@ jobs:
             }
 
             const data  = await res.json();
-            const reply = data.choices?.[0]?.message?.content?.trim()
-              ?? '⚠️ Developer agent produced no output.';
+            const raw   = data.choices?.[0]?.message?.content?.trim() ?? '{}';
+            core.setOutput('patch_json', raw);
+            core.info(`LLM patch JSON: ${raw.slice(0, 300)}`);
+
+      - name: Apply patch, commit, push branch
+        id: apply_patch
+        env:
+          PATCH_JSON: ${{ steps.ask_llm.outputs.patch_json }}
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+        run: |
+          node - <<'EOF'
+          const fs   = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+
+          const exec = cmd => execSync(cmd, { encoding: 'utf8', stdio: 'inherit' });
+
+          let patch;
+          try {
+            patch = JSON.parse(process.env.PATCH_JSON || '{}');
+          } catch (e) {
+            console.error('Failed to parse patch JSON:', e.message);
+            process.exit(1);
+          }
+
+          if (!patch.branch || !Array.isArray(patch.files) || patch.files.length === 0) {
+            console.error('LLM produced no files to write. Exiting.');
+            process.exit(1);
+          }
+
+          const branch = patch.branch.replace(/[^a-zA-Z0-9/_-]/g, '-');
+          exec(`git checkout -b "${branch}"`);
+
+          for (const file of patch.files) {
+            if (!file.path || typeof file.content !== 'string') continue;
+            // Safety: block writes outside the repo
+            const resolved = path.resolve(file.path);
+            if (!resolved.startsWith(process.cwd())) {
+              console.warn(`Skipping path outside repo: ${file.path}`);
+              continue;
+            }
+            fs.mkdirSync(path.dirname(resolved), { recursive: true });
+            fs.writeFileSync(resolved, file.content, 'utf8');
+            console.log(`Written: ${file.path}`);
+          }
+
+          exec('git add -A');
+          exec(`git commit -m ${JSON.stringify(patch.commit_msg || 'fix: apply dev-agent patch')}`);
+          exec(`git push origin "${branch}" --force-with-lease`);
+
+          // Persist for next step
+          fs.writeFileSync('/tmp/branch',   branch);
+          fs.writeFileSync('/tmp/pr_title', patch.pr_title  || `fix: resolve issue #${process.env.ISSUE_NUMBER}`);
+          fs.writeFileSync('/tmp/pr_body',  patch.pr_body   || '');
+          EOF
+
+      - name: Open Pull Request
+        id: open_pr
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const branch   = fs.readFileSync('/tmp/branch',   'utf8').trim();
+            const prTitle  = fs.readFileSync('/tmp/pr_title', 'utf8').trim();
+            const prBody   = fs.readFileSync('/tmp/pr_body',  'utf8').trim();
+            const issueNumber = Number('${{ github.event.inputs.issue_number }}');
+            const runId    = '${{ github.event.inputs.run_id }}';
+            const step     = '${{ github.event.inputs.step }}' || 'dev';
+
+            const template = (() => { try { return require('fs').readFileSync('.github/pull_request_template.md', 'utf8'); } catch { return ''; } })();
+            const fullBody = [prBody, template ? `---\n${template}` : '', `\nCloses #${issueNumber}`].filter(Boolean).join('\n\n');
+
+            let prUrl = '';
+            try {
+              const pr = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                title: prTitle,
+                body:  fullBody,
+                head:  branch,
+                base:  'main',
+              });
+              prUrl = pr.data.html_url;
+              core.info(`PR opened: ${prUrl}`);
+
+              // Label for downstream agents
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: pr.data.number,
+                labels: ['agent:reviewer'],
+              });
+            } catch (e) {
+              core.warning(`Could not open PR: ${e.message}`);
+            }
+
+            // Post orchestrator-compatible outcome comment on the issue
+            const outcomeBody = [
+              `**[QuorumKit Orchestrator]** 🤖 Developer Agent (Copilot) — \`outcome: success\``,
+              '',
+              `Patch applied and PR opened: ${prUrl}`,
+              runId ? `\n<!-- apm:run_id=${runId} step=${step} outcome=success -->` : '',
+            ].join('\n').trim();
 
             await github.rest.issues.createComment({
               owner:        context.repo.owner,
               repo:         context.repo.repo,
               issue_number: issueNumber,
-              body:         reply,
+              body:         outcomeBody,
             });

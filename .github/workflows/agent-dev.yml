@@ -1,0 +1,410 @@
+name: Developer Agent (Claude)
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue or PR number triggering this agent'
+        required: true
+      run_id:
+        description: 'Orchestrator run ID (passed by orchestrator)'
+        required: false
+      step:
+        description: 'Pipeline step name'
+        required: false
+      iteration:
+        description: 'Iteration count'
+        required: false
+        default: '1'
+      runtime:
+        description: 'Runtime name from registry'
+        required: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run Developer Agent via Claude (agentic tool use)
+        id: claude_dev
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          STEP: ${{ github.event.inputs.step }}
+          ITERATION: ${{ github.event.inputs.iteration }}
+        run: |
+          node - <<'EOF'
+          const https = require('https');
+          const fs   = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+
+          // ─── helpers ──────────────────────────────────────────────────────
+          const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+          const writeSafe = (p, content) => {
+            fs.mkdirSync(path.dirname(p), { recursive: true });
+            fs.writeFileSync(p, content, 'utf8');
+          };
+          const exec = (cmd, opts = {}) => {
+            try {
+              return execSync(cmd, { encoding: 'utf8', stdio: 'pipe', ...opts }).trim();
+            } catch (e) {
+              return `ERROR: ${e.stderr || e.message}`;
+            }
+          };
+
+          // ─── fetch issue ──────────────────────────────────────────────────
+          const owner       = process.env.GITHUB_REPOSITORY.split('/')[0];
+          const repo        = process.env.GITHUB_REPOSITORY.split('/')[1];
+          const issueNumber = Number(process.env.ISSUE_NUMBER);
+
+          async function ghGet(path) {
+            return new Promise((resolve, reject) => {
+              const options = {
+                hostname: 'api.github.com',
+                path,
+                headers: {
+                  'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                  'User-Agent': 'QuorumKit-DevAgent/1.0',
+                  'Accept': 'application/vnd.github+json',
+                },
+              };
+              https.get(options, res => {
+                let body = '';
+                res.on('data', d => body += d);
+                res.on('end', () => resolve(JSON.parse(body)));
+              }).on('error', reject);
+            });
+          }
+
+          async function ghPost(path, data) {
+            return new Promise((resolve, reject) => {
+              const body = JSON.stringify(data);
+              const options = {
+                hostname: 'api.github.com',
+                path,
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                  'User-Agent': 'QuorumKit-DevAgent/1.0',
+                  'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(body),
+                },
+              };
+              const req = https.request(options, res => {
+                let b = '';
+                res.on('data', d => b += d);
+                res.on('end', () => resolve(JSON.parse(b)));
+              });
+              req.on('error', reject);
+              req.write(body);
+              req.end();
+            });
+          }
+
+          const issue = await ghGet(`/repos/${owner}/${repo}/issues/${issueNumber}`);
+          const agentInstructions = readSafe('.github/agents/developer-agent.md') || readSafe('.apm/agents/developer-agent.md');
+          const constitution      = readSafe('.specify/memory/constitution.md');
+
+          // ─── tool definitions ─────────────────────────────────────────────
+          const tools = [
+            {
+              name: 'read_file',
+              description: 'Read the contents of a file in the repository.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  path: { type: 'string', description: 'Relative file path from repo root' },
+                },
+                required: ['path'],
+              },
+            },
+            {
+              name: 'list_directory',
+              description: 'List files and directories at a given path.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  path: { type: 'string', description: 'Relative directory path from repo root' },
+                },
+                required: ['path'],
+              },
+            },
+            {
+              name: 'write_file',
+              description: 'Write or overwrite a file in the repository.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  path:    { type: 'string', description: 'Relative file path from repo root' },
+                  content: { type: 'string', description: 'Full file content to write' },
+                },
+                required: ['path', 'content'],
+              },
+            },
+            {
+              name: 'run_command',
+              description: 'Run a shell command (e.g. npm test, npm run lint). Returns stdout+stderr.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  command: { type: 'string', description: 'Shell command to execute' },
+                },
+                required: ['command'],
+              },
+            },
+            {
+              name: 'git_commit',
+              description: 'Stage all changes and create a git commit.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string', description: 'Commit message' },
+                },
+                required: ['message'],
+              },
+            },
+            {
+              name: 'open_pull_request',
+              description: 'Push the current branch and open a pull request.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  branch: { type: 'string', description: 'Branch name to push and PR from' },
+                  title:  { type: 'string', description: 'PR title' },
+                  body:   { type: 'string', description: 'PR description (markdown)' },
+                },
+                required: ['branch', 'title', 'body'],
+              },
+            },
+            {
+              name: 'post_issue_comment',
+              description: 'Post a comment on the issue.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  body: { type: 'string', description: 'Comment body (markdown)' },
+                },
+                required: ['body'],
+              },
+            },
+            {
+              name: 'signal_outcome',
+              description: 'Signal the final outcome to the orchestrator (success | fail | needs-human | blocker).',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  outcome: { type: 'string', enum: ['success', 'fail', 'needs-human', 'blocker'] },
+                  summary: { type: 'string', description: 'One-line summary of what was done' },
+                  pr_url:  { type: 'string', description: 'URL of the opened PR, if any' },
+                },
+                required: ['outcome', 'summary'],
+              },
+            },
+          ];
+
+          // ─── tool executor ────────────────────────────────────────────────
+          let prUrl = '';
+          async function executeTool(name, input) {
+            switch (name) {
+              case 'read_file': {
+                const content = readSafe(input.path);
+                return content || `(file not found: ${input.path})`;
+              }
+              case 'list_directory': {
+                return exec(`ls -la "${input.path}" 2>&1 || find "${input.path}" -maxdepth 1 2>&1`);
+              }
+              case 'write_file': {
+                writeSafe(input.path, input.content);
+                return `Written: ${input.path}`;
+              }
+              case 'run_command': {
+                // Safeguard: block destructive commands
+                const blocked = /rm\s+-rf\s+\/|drop\s+table|format\s+c:/i;
+                if (blocked.test(input.command)) return 'ERROR: Command blocked by safety guard.';
+                return exec(input.command, { timeout: 120_000 });
+              }
+              case 'git_commit': {
+                exec('git add -A');
+                return exec(`git commit -m ${JSON.stringify(input.message)} --allow-empty`);
+              }
+              case 'open_pull_request': {
+                const branch = input.branch.replace(/[^a-zA-Z0-9/_-]/g, '-');
+                exec(`git checkout -b "${branch}" 2>/dev/null || git checkout "${branch}"`);
+                exec('git add -A');
+                exec(`git commit -m "chore: apply dev-agent changes" --allow-empty`);
+                exec(`git push origin "${branch}" --force-with-lease 2>&1 || git push origin "${branch}" 2>&1`);
+                const prTemplate = readSafe('.github/pull_request_template.md');
+                const body = input.body + (prTemplate ? `\n\n---\n${prTemplate}` : '');
+                const pr = await ghPost(`/repos/${owner}/${repo}/pulls`, {
+                  title: input.title,
+                  body,
+                  head:  branch,
+                  base:  'main',
+                });
+                prUrl = pr.html_url ?? '';
+                // Link PR to issue
+                if (pr.number) {
+                  await ghPost(`/repos/${owner}/${repo}/issues/${pr.number}/labels`, { labels: ['agent:reviewer'] });
+                }
+                return `PR opened: ${prUrl} (#${pr.number})`;
+              }
+              case 'post_issue_comment': {
+                await ghPost(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, { body: input.body });
+                return 'Comment posted.';
+              }
+              case 'signal_outcome': {
+                // Post orchestrator-compatible outcome comment
+                const runId = process.env.RUN_ID || '';
+                const step  = process.env.STEP  || 'dev';
+                const outcomeBody = [
+                  `**[QuorumKit Orchestrator]** 🤖 Developer Agent (Claude) — \`outcome: ${input.outcome}\``,
+                  '',
+                  input.summary,
+                  input.pr_url ? `\nPR: ${input.pr_url}` : '',
+                  runId ? `\n<!-- apm:run_id=${runId} step=${step} outcome=${input.outcome} -->` : '',
+                ].join('\n').trim();
+                await ghPost(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, { body: outcomeBody });
+                fs.writeFileSync('/tmp/agent_outcome', input.outcome);
+                return `Outcome signalled: ${input.outcome}`;
+              }
+              default:
+                return `Unknown tool: ${name}`;
+            }
+          }
+
+          // ─── agentic loop (Claude tool use) ──────────────────────────────
+          const systemPrompt = [
+            agentInstructions && `## Developer Agent Instructions\n${agentInstructions}`,
+            constitution && `## Project Constitution\n${constitution}`,
+            `## Available Repository Context`,
+            `You have tools to read/write files, run commands, commit code, and open PRs.`,
+            `The repository is already checked out at the current working directory.`,
+            `Follow TDD: write failing tests first, then implement the fix, then verify tests pass.`,
+            `Branch naming: zero-pad the issue number to 3 digits, e.g. issue #78 → branch \`078-short-slug\`.`,
+            `MUST NOT commit to main. MUST NOT open PR while tests are failing.`,
+            `When done, call signal_outcome with outcome=success and the PR URL.`,
+            `If blocked, call signal_outcome with outcome=needs-human and explain why.`,
+          ].filter(Boolean).join('\n\n');
+
+          const initialMessage = {
+            role: 'user',
+            content: `You are the Developer Agent. Fix issue #${issueNumber}.
+
+**Title:** ${issue.title}
+
+**Body:**
+${issue.body ?? '(no body)'}
+
+Start by reading the relevant files, write tests, implement the fix, verify tests pass, then open a PR.`,
+          };
+
+          let messages = [initialMessage];
+          const MAX_ITERATIONS = 20;
+
+          function claudeRequest(msgs) {
+            return new Promise((resolve, reject) => {
+              const body = JSON.stringify({
+                model: 'claude-opus-4-5',
+                max_tokens: 4096,
+                system: systemPrompt,
+                tools,
+                messages: msgs,
+              });
+              const options = {
+                hostname: 'api.anthropic.com',
+                path: '/v1/messages',
+                method: 'POST',
+                headers: {
+                  'x-api-key': process.env.ANTHROPIC_API_KEY,
+                  'anthropic-version': '2023-06-01',
+                  'anthropic-beta': 'tools-2024-04-04',
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(body),
+                },
+              };
+              const req = https.request(options, res => {
+                let b = '';
+                res.on('data', d => b += d);
+                res.on('end', () => {
+                  try { resolve(JSON.parse(b)); } catch (e) { reject(new Error(b)); }
+                });
+              });
+              req.on('error', reject);
+              req.write(body);
+              req.end();
+            });
+          }
+
+          let finalOutcome = 'fail';
+          for (let i = 0; i < MAX_ITERATIONS; i++) {
+            console.log(`[agent-dev] iteration ${i + 1}`);
+            const response = await claudeRequest(messages);
+
+            if (response.error) {
+              console.error('[agent-dev] Claude API error:', JSON.stringify(response.error));
+              break;
+            }
+
+            // Append assistant response to message history
+            messages.push({ role: 'assistant', content: response.content });
+
+            if (response.stop_reason === 'end_turn') {
+              console.log('[agent-dev] Claude finished (end_turn)');
+              break;
+            }
+
+            if (response.stop_reason !== 'tool_use') break;
+
+            // Execute all tool calls
+            const toolResults = [];
+            for (const block of response.content) {
+              if (block.type !== 'tool_use') continue;
+              console.log(`[agent-dev] tool: ${block.name}`, JSON.stringify(block.input).slice(0, 120));
+              const result = await executeTool(block.name, block.input);
+              console.log(`[agent-dev] result:`, String(result).slice(0, 200));
+
+              if (block.name === 'signal_outcome') {
+                finalOutcome = block.input.outcome;
+              }
+
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: String(result),
+              });
+            }
+
+            messages.push({ role: 'user', content: toolResults });
+          }
+
+          const outcome = fs.existsSync('/tmp/agent_outcome')
+            ? fs.readFileSync('/tmp/agent_outcome', 'utf8').trim()
+            : finalOutcome;
+
+          console.log(`[agent-dev] final outcome: ${outcome}`);
+          process.exitCode = outcome === 'success' ? 0 : 1;
+          EOF
