@@ -1,0 +1,99 @@
+# filepath: /Users/Dmitry_Nalivaika/Documents/Projects/APM/.github/workflows/engine-release.yml
+# =============================================================================
+# Engine Release — both distribution channels (T-12, FR-010, SC-009, SEC-HIGH-001)
+#
+# Trigger: push of a signed v* tag (e.g. v3.0.0).
+# Channels released atomically from the same engine/ source:
+#   1. GitHub Action ref — the tag itself (consumers use `uses: dmitry-nalivaika/APM/engine@v3.0.0`).
+#   2. npm package — published with --provenance via OIDC trusted publishing.
+#
+# Hardening:
+#   • Tag MUST be signed and verified before publish (`git verify-tag`).
+#   • permissions: contents:write (release notes) + id-token:write (OIDC) only.
+#   • Environment `release` is required; protection rule mandates a maintainer
+#     reviewer (configured in repo Settings → Environments → release).
+#   • No NPM_TOKEN is read. Trusted publishing is enabled at npm registry side
+#     (npmjs.com → package settings → trusted publisher → this workflow).
+#   • SLSA build provenance is attached automatically by `npm publish --provenance`.
+#
+# Disaster-recovery fallback: see engine/RELEASING.md (T-23).
+# =============================================================================
+name: engine-release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    name: verify tag, build, and publish to npm
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://www.npmjs.com/package/apm-engine
+    permissions:
+      contents: write       # create the GitHub Release
+      id-token: write       # OIDC token for npm trusted publishing
+    steps:
+      - name: Checkout (full history for tag verification)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify the pushed tag is signed
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Verifying signature on $TAG"
+          # `git verify-tag` exits non-zero if the tag is unsigned or the
+          # signing key is not in the local keyring imported below.
+          git verify-tag "$TAG"
+
+      - name: Setup Node 20 with npm registry
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install engine devDeps + orchestrator runtime deps
+        run: |
+          cd engine && npm ci --ignore-scripts --no-audit --no-fund
+          cd orchestrator && npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Rebuild dist/ bundle and verify it matches the tagged commit
+        run: |
+          cd engine
+          npm run build
+          if ! git diff --quiet -- dist/; then
+            echo "::error::Tagged commit's engine/dist/ does not match a clean rebuild."
+            git --no-pager diff --stat -- dist/
+            exit 1
+          fi
+
+      - name: Publish to npm with OIDC provenance
+        # FR-010 / SEC-HIGH-001: no NPM_TOKEN; npm CLI obtains an OIDC token
+        # from GITHUB_TOKEN-bound id-token endpoint and authenticates the
+        # registry's trusted-publisher policy.
+        working-directory: engine
+        run: npm publish --provenance --access public
+
+      - name: Create the GitHub Release
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              generate_release_notes: true,
+              draft: false,
+              prerelease: tag.includes('-'),
+            });

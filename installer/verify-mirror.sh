@@ -131,8 +131,16 @@ if [ -d ".github/workflows" ] && [ -d "templates/github/workflows" ]; then
       if cmp -s "$wf" "$template"; then
         ok "M5: $name byte-identical"
       else
-        fail "M5: '$wf' diverges from '$template' (FR-016). Remediation: make the two files byte-identical, or remove one tree's copy if divergence is intentional. Diff:"
-        diff -u "$template" "$wf" | sed 's/^/    /' | head -40 || true
+        # An explicit `# apm-allow-divergence: <reason>` marker on either copy
+        # exempts a documented intentional split (e.g. the SoT orchestrator
+        # workflow dogfoods via `node engine/...` while the distributed
+        # template uses `uses: dmitry-nalivaika/APM/engine@<ref>` per FR-011).
+        if grep -qE '#[[:space:]]*apm-allow-divergence:' "$wf" "$template"; then
+          ok "M5: $name divergence acknowledged via 'apm-allow-divergence:' marker"
+        else
+          fail "M5: '$wf' diverges from '$template' (FR-016). Remediation: make the two files byte-identical, OR add '# apm-allow-divergence: <reason>' to one copy if the split is intentional (e.g. FR-011 self-host vs distributed). Diff:"
+          diff -u "$template" "$wf" | sed 's/^/    /' | head -40 || true
+        fi
       fi
     fi
   done
