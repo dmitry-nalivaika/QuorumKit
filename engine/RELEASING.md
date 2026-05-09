@@ -1,4 +1,4 @@
-# APM Engine — Release Procedure
+# QuorumKit Engine — Release Procedure
 
 > **Audience:** maintainers cutting a release of `engine/`. Contributors should not need to read this.
 
@@ -44,7 +44,7 @@ git status                                            # MUST be clean (dist/ in 
 #    + Security Agent sign-off. Merge.
 
 # 3. Cut a SIGNED tag at the merge commit on main.
-git tag -s v3.0.0 -m "APM v3.0.0 — three-zone topology + engine distribution"
+git tag -s v3.0.0 -m "QuorumKit v3.0.0 — three-zone topology + engine distribution"
 git push origin v3.0.0
 
 # 4. The engine-release.yml workflow auto-runs:
@@ -100,7 +100,7 @@ git tag -fs v3 -m "Track v3.0.1"   # signed, force-update
 git push --force origin v3
 ```
 
-Floating tags are **only** acceptable for first-party APM Actions inside
+Floating tags are **only** acceptable for first-party QuorumKit Actions inside
 `templates/github/workflows/`. Third-party Actions remain SHA-pinned per
 FR-031 / mirror gate M9 — Dependabot rotates them.
 

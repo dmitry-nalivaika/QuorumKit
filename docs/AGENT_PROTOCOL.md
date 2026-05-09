@@ -1,4 +1,4 @@
-# APM Agent Protocol — Canonical Regulation Document
+# QuorumKit Agent Protocol — Canonical Regulation Document
 
 > **Source of truth.** This document is the **single canonical declaration** of
 > every label, `apm-msg` outcome, and transition trigger meaningful to the

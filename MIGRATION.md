@@ -132,6 +132,26 @@ bash /path/to/quorumkit/installer/init.sh --upgrade --apply --engine-ref=v3
 
 ---
 
+## Dashboard Webhook Secrets and Headers (v2 → v3)
+
+The dashboard webhook authentication identifiers have been renamed:
+
+| v2 (old)                  | v3 (new)                          |
+|---------------------------|-----------------------------------|
+| `APM_WEBHOOK_SECRET`      | `QUORUMKIT_WEBHOOK_SECRET`        |
+| `X-APM-Webhook-Secret`    | `X-QuorumKit-Webhook-Secret`      |
+| `APM_PORT`                | `QUORUMKIT_PORT`                  |
+| `APM_PROJECT_DIR`         | `QUORUMKIT_PROJECT_DIR`           |
+| `APM_PACKAGE_DIR`         | `QUORUMKIT_PACKAGE_DIR`           |
+
+**Action required:**
+
+1. Rename the GitHub Actions secret in your repo from `APM_WEBHOOK_SECRET` to `QUORUMKIT_WEBHOOK_SECRET`.
+2. If you have the `uses: ./.github/workflows/orchestrator.yml` template installed, re-run `init.sh` (or manually edit the workflow) to use `QUORUMKIT_WEBHOOK_SECRET` and `X-QuorumKit-Webhook-Secret`.
+3. Update any scripts or reverse-proxies that send `X-APM-Webhook-Secret` to send `X-QuorumKit-Webhook-Secret` instead.
+
+---
+
 ## Further help
 
 - Open an Issue at `github.com/dmitry-nalivaika/quorumkit/issues`

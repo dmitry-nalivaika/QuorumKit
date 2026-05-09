@@ -24,7 +24,7 @@ Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 | [`PIPELINES.md`](PIPELINES.md) | v2 orchestrator: pipeline YAML, runtime registry, two-channel state, apm-msg protocol |
 | [`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md) | Agent contract: outcomes, apm-msg framing, `<!-- apm-state -->` |
 | [`DASHBOARD.md`](DASHBOARD.md) | Local browser dashboard for live agent invocation |
-| [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) | Adopting APM in an existing repo (conflict detection, gradual rollout) |
+| [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) | Adopting QuorumKit in an existing repo (conflict detection, gradual rollout) |
 | [`DARK_FACTORY_GUIDE.md`](DARK_FACTORY_GUIDE.md) | Greenfield industrial / lights-out manufacturing guide |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributing to this library (NNN convention, quality gates) |
 | [`ENHANCEMENTS.md`](ENHANCEMENTS.md) | Gap analysis & roadmap |

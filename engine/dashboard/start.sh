@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# APM Dark Factory — one-command launcher
+# QuorumKit Dark Factory — one-command launcher
 set -e
 
 # Capture the directory the user invoked this script FROM, before we cd away.
@@ -12,7 +12,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
 echo ""
-echo "  APM Dark Factory — Orchestrator"
+echo "  QuorumKit Dark Factory — Orchestrator"
 echo "  Project: $APM_PROJECT_DIR"
 echo ""
 

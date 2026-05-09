@@ -64,7 +64,7 @@ export async function saveState(client, owner, repo, issueNumber, state, auditMe
   const stateTag = `${STATE_TAG}${JSON.stringify(state)}${STATE_CLOSE}`;
   const now = new Date().toISOString();
   const humanLine = auditMessage
-    ? `**[APM Orchestrator]** ${auditMessage}\n\n_${now}_\n\n`
+    ? `**[QuorumKit Orchestrator]** ${auditMessage}\n\n_${now}_\n\n`
     : '';
   const body = `${humanLine}${stateTag}`;
   return client.createComment(owner, repo, issueNumber, body);
@@ -76,7 +76,7 @@ export async function saveState(client, owner, repo, issueNumber, state, auditMe
  */
 export async function postAuditEntry(client, owner, repo, issueNumber, message) {
   const now = new Date().toISOString();
-  const body = `**[APM Orchestrator]** ${message}\n\n_${now}_`;
+  const body = `**[QuorumKit Orchestrator]** ${message}\n\n_${now}_`;
   return client.createComment(owner, repo, issueNumber, body);
 }
 

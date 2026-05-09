@@ -1,4 +1,4 @@
-# APM Pipelines (v2)
+# QuorumKit Pipelines (v2)
 
 > **TL;DR** — Drop a YAML file in `.apm/pipelines/`, label a GitHub issue, and the
 > Orchestrator drives the right AI agents through your SDLC loop — including

@@ -158,11 +158,11 @@ async function submitPrompt(prompt) {
   try {
     await vscode.env.clipboard.writeText(prompt);
     vscode.window.showInformationMessage(
-      'APM: prompt copied to clipboard — paste into Copilot Chat (⌘V, Enter).'
+      'QuorumKit: prompt copied to clipboard — paste into Copilot Chat (⌘V, Enter).'
     );
     return true;
   } catch (e) {
-    vscode.window.showErrorMessage(`APM Copilot Bridge: ${e.message || e}`);
+    vscode.window.showErrorMessage(`QuorumKit Copilot Bridge: ${e.message || e}`);
     return false;
   }
 }

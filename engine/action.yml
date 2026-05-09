@@ -1,5 +1,5 @@
 # =============================================================================
-# APM Engine — Composite GitHub Action (Issue #47, ADR-047 amendment §1)
+# QuorumKit Engine — Composite GitHub Action (Issue #47, ADR-047 amendment §1)
 #
 # Runtime: Node 20 (FR-008, AR-D §6).
 # Bundle:  dist/index.js — produced by `npm run build` (ncc) and committed
@@ -12,9 +12,9 @@
 #              NOT request any. The minimum-viable scope is `contents: read`
 #              + `issues: write` + `pull-requests: write` (engine/SECURITY.md).
 # =============================================================================
-name: 'APM Engine'
-description: 'Run the APM autonomous-agent orchestrator on a GitHub event payload.'
-author: 'APM contributors'
+name: 'QuorumKit Engine'
+description: 'Run the QuorumKit autonomous-agent orchestrator on a GitHub event payload.'
+author: 'QuorumKit contributors'
 
 branding:
   icon: 'cpu'

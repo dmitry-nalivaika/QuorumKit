@@ -78,7 +78,7 @@ echo "=== Community files ==="
 After running `init.sh`, compare manually:
 
 ```zsh
-APM=/path/to/quorumkit
+QUORUMKIT=/path/to/quorumkit
 
 # Show diff between your current agent and the new version
 for agent in ba-product-agent developer-agent qa-test-agent reviewer-agent \
@@ -138,7 +138,7 @@ diff .github/copilot-instructions.md \
      /path/to/quorumkit/templates/seed/copilot-instructions.md
 ```
 
-The APM template `copilot-instructions.md` adds:
+The QuorumKit template `copilot-instructions.md` adds:
 - A pointer to the agent definitions in `.github/agents/`
 - Standard activation phrases for each agent role
 
@@ -152,9 +152,9 @@ to the top of your existing file, then keep all your existing project context be
 `init.sh` skips any workflow file that already exists.
 
 Scenarios:
-1. **You have `agent-*.yml` from a previous version of APM** — compare and update
+1. **You have `agent-*.yml` from a previous version of QuorumKit** — compare and update
    manually; the new versions are delegation-only (simpler).
-2. **You have a non-APM workflow with the same name** — rename yours first, then run
+2. **You have a non-QuorumKit workflow with the same name** — rename yours first, then run
    `init.sh`, then reconcile.
 3. **You have a `ci.yml` or `test.yml`** — no conflict; agent workflows are
    independently triggered by PR comments.
@@ -173,7 +173,7 @@ done
 
 ### Conflict: Existing CLAUDE.md {#conflict-existing-claudemd}
 
-`init.sh` skips `CLAUDE.md` if it exists. The APM template CLAUDE.md is minimal —
+`init.sh` skips `CLAUDE.md` if it exists. The QuorumKit template CLAUDE.md is minimal —
 it only adds `<!-- SPECKIT START/END -->` tags for constitution injection.
 
 Check whether your existing CLAUDE.md has the speckit tags:

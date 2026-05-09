@@ -2,7 +2,7 @@
 
 > **Audience:** consumer-repo maintainers wiring `uses: dmitry-nalivaika/quorumkit/engine@<sha>` into a workflow, and QuorumKit contributors changing engine behaviour.
 
-This document is the security contract of the APM engine Action. It is
+This document is the security contract of the QuorumKit engine Action. It is
 authoritative for FR-014, ADR-047 amendment §4, and SEC-MED-001. Every
 permission the engine consumes MUST appear in the table below with a
 written justification; reviewers reject changes that broaden the table
@@ -36,7 +36,7 @@ existing `permissions:` block.
 | ---------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `contents: read`       | required       | `actions/checkout` reads the consumer repo to load `.apm/pipelines/`, `.apm/agents/`, and other SoT files.                              | never — without this the engine cannot start.                 |
 | `contents: write`      | **off**        | Only enable for consumer pipelines that include a step writing files via the orchestrator (e.g. dashboard regen). Most pipelines don't. | default — keep `contents: read`.                              |
-| `issues: write`        | required       | Post audit comments (FR-026, ADR-002), `<APM-LIVE-STATUS>` updates, and label changes that drive the state machine.                     | only if the consumer does not use issue-driven pipelines.     |
+| `issues: write`        | required       | Post audit comments (FR-026, ADR-002), `<QUORUMKIT-LIVE-STATUS>` updates, and label changes that drive the state machine.                     | only if the consumer does not use issue-driven pipelines.     |
 | `pull-requests: write` | required       | Comment on PR threads, update review labels, and post timeline reconstructions.                                                          | only if the consumer disables PR-triggered pipelines.         |
 | `actions: read`        | required       | Read `workflow_run` payloads to recover issue context (ADR-007 §6) and to re-correlate audit comments after agent failures.             | only if the pipeline never depends on `workflow_run` events.  |
 | `actions: write`       | **off**        | Never required by the engine itself. Forbid in consumer workflows unless a custom step explicitly needs `gh workflow run` capability.    | always — no engine code path requests it.                     |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# quality-check.sh — APM Library Quality Gates
+# quality-check.sh — QuorumKit Library Quality Gates
 # Run before every PR to this repository.
 # Usage: bash installer/quality-check.sh [--fix]
 # =============================================================================

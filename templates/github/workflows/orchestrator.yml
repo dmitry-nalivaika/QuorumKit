@@ -59,7 +59,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Run APM Orchestrator
+      - name: Run QuorumKit Orchestrator
         id: run_orchestrator
         # Engine is distributed as a GitHub Action (Issue #47, ADR-047 §1).
         # Pin to a major-version tag for automatic patch + minor updates;
@@ -88,7 +88,7 @@ jobs:
             exit 0
           fi
           BODY=$(cat <<EOF
-          **[APM Orchestrator]** ❌ Orchestrator crashed handling event \`${GITHUB_EVENT_NAME}\` — outcome \`orchestrator-failure\`. See [run logs]($RUN_URL).
+          **[QuorumKit Orchestrator]** ❌ Orchestrator crashed handling event \`${GITHUB_EVENT_NAME}\` — outcome \`orchestrator-failure\`. See [run logs]($RUN_URL).
 
           <!-- apm-pipeline-state: {"status":"failed","outcome":"orchestrator-failure","runUrl":"$RUN_URL"} -->
           EOF
@@ -104,13 +104,13 @@ jobs:
         if: vars.DASHBOARD_WEBHOOK_URL != ''
         env:
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
-          APM_WEBHOOK_SECRET: ${{ secrets.APM_WEBHOOK_SECRET }}
+          QUORUMKIT_WEBHOOK_SECRET: ${{ secrets.QUORUMKIT_WEBHOOK_SECRET }}
         run: |
           # Payload is written to /tmp/apm-pipeline-event.json by index.js when a state transition occurs
-          # SEC-HIGH-001: X-APM-Webhook-Secret header authenticates the request to the dashboard server
+          # SEC-HIGH-001: X-QuorumKit-Webhook-Secret header authenticates the request to the dashboard server
           if [ -f /tmp/apm-pipeline-event.json ]; then
             curl -s -X POST "$DASHBOARD_WEBHOOK_URL/webhook/pipeline-event" \
               -H "Content-Type: application/json" \
-              -H "X-APM-Webhook-Secret: ${APM_WEBHOOK_SECRET}" \
+              -H "X-QuorumKit-Webhook-Secret: ${QUORUMKIT_WEBHOOK_SECRET}" \
               -d @/tmp/apm-pipeline-event.json || echo "Dashboard broadcast failed (non-fatal)"
           fi

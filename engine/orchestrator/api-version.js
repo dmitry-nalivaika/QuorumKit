@@ -63,7 +63,7 @@ export function assertApiVersionSupported(parsed, engineVersion = ENGINE_API_VER
   if (!isApiVersionSupported(declared, engineVersion)) {
     throw new Error(
       `Pipeline declares apiVersion '${declared}', but this engine only supports up to '${engineVersion}'. ` +
-      `Remediation: bump the APM engine Action ref (uses: dmitry-nalivaika/APM/engine@<newer-sha>) ` +
+      `Remediation: bump the QuorumKit engine Action ref (uses: dmitry-nalivaika/quorumkit/engine@<newer-sha>) ` +
       `or lower the pipeline's apiVersion.`
     );
   }

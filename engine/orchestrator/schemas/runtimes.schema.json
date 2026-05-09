@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://apm.dev/schemas/runtimes.schema.json",
-  "title": "APM Runtime Registry",
+  "title": "QuorumKit Runtime Registry",
   "description": "Declares named runtimes available to v2 pipelines (FR-007, ADR-005).",
   "type": "object",
   "additionalProperties": false,

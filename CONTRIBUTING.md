@@ -1,10 +1,10 @@
-# Contributing to QuorumKit (APM)
+# Contributing to QuorumKit
 
 This guide is for contributors who want to **enhance the QuorumKit library itself** —
 adding new agents, improving existing ones, updating workflows, or extending the
 framework for new domains (e.g. dark factory, fintech, healthcare).
 
-> **Using APM in your own project?** See `templates/seed/CONTRIBUTING.md` — that file
+> **Using QuorumKit in your own project?** See `templates/seed/CONTRIBUTING.md` — that file
 > is for contributors to projects that _use_ this library, not for this library itself.
 
 ---
@@ -272,7 +272,7 @@ guidance without polluting the universal agent definitions.
 ```zsh
 # Create a new domain guide
 touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
-# Then: /ba-agent Write a domain guide for fintech projects using this APM stack
+# Then: /ba-agent Write a domain guide for fintech projects using this QuorumKit stack
 ```
 
 ---

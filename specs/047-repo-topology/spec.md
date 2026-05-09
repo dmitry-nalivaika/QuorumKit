@@ -9,7 +9,7 @@
 
 ## Overview
 
-The APM repo currently serves three roles (distributable package, engine, and self-hosted consumer) without clear separation, causing two defects:
+The QuorumKit repo currently serves three roles (distributable package, engine, and self-hosted consumer) without clear separation, causing two defects:
 
 1. **Mirror drift across uncovered surfaces** — `templates/.apm/pipelines/`, `.github/agents/`, and 14 overlapping workflows have no parity gate; one surface has already drifted.
 2. **Engine is not distributed** — `init.sh` copies pipeline DSL files but not the orchestrator that executes them, so consumer projects receive an inert harness that cannot run pipelines.
@@ -20,7 +20,7 @@ This feature reorganises the repo into three explicit zones (Package / Engine / 
 
 ### US-1: Consumer gets a working agentic environment from one install (Priority: P1)
 
-As a **developer adopting APM in a new project**, I want `init.sh` to produce a repo where pipelines actually execute and agents actually route, so that I get the full agentic environment advertised by Constitution Principle V — not just inert prompts.
+As a **developer adopting QuorumKit in a new project**, I want `init.sh` to produce a repo where pipelines actually execute and agents actually route, so that I get the full agentic environment advertised by Constitution Principle V — not just inert prompts.
 
 **Why this priority**: This is the headline value of v3.0.0 and the primary motivation for the issue. Without it, every consumer project today is silently broken.
 
@@ -28,8 +28,8 @@ As a **developer adopting APM in a new project**, I want `init.sh` to produce a 
 
 **Acceptance Scenarios**:
 
-1. **Given** a fresh consumer repo and APM v3.0.0 installed, **When** a maintainer opens an Issue with `type:feature`, **Then** the orchestrator workflow runs to completion using the published Action and posts pipeline state comments on the Issue.
-2. **Given** a consumer repo on v3.0.0, **When** APM publishes v3.1.0 with an engine bug fix, **Then** the consumer receives the fix by bumping the Action ref tag (no re-running of `init.sh`, no copied files to update).
+1. **Given** a fresh consumer repo and QuorumKit v3.0.0 installed, **When** a maintainer opens an Issue with `type:feature`, **Then** the orchestrator workflow runs to completion using the published Action and posts pipeline state comments on the Issue.
+2. **Given** a consumer repo on v3.0.0, **When** QuorumKit publishes v3.1.0 with an engine bug fix, **Then** the consumer receives the fix by bumping the Action ref tag (no re-running of `init.sh`, no copied files to update).
 3. **Given** a consumer running `installer/init.sh --ai=both`, **When** the install finishes, **Then** zero engine source files (`engine/orchestrator/**`, `engine/dashboard/**`) exist in the consumer repo, but `.apm/`, `.claude/`, `.github/`, and seed docs are present.
 4. **Given** a consumer behind a strict supply-chain policy, **When** they pin the Action by SHA, **Then** Dependabot recognises it and proposes upgrades.
 
@@ -37,7 +37,7 @@ As a **developer adopting APM in a new project**, I want `init.sh` to produce a 
 
 ### US-2: Maintainer cannot accidentally let mirror trees drift (Priority: P1)
 
-As a **maintainer of the APM package**, I want CI to fail fast on any unsynchronised mirror surface, so that consumers never inherit stale pipelines, agents, or workflows.
+As a **maintainer of the QuorumKit package**, I want CI to fail fast on any unsynchronised mirror surface, so that consumers never inherit stale pipelines, agents, or workflows.
 
 **Why this priority**: Drift is the root cause that ADR-006 set out to eliminate; this completes the job for the three remaining surfaces and is required for the topology change to be safe long-term.
 
@@ -72,7 +72,7 @@ As a **first-time contributor**, I want the top-level folder names to immediatel
 
 ### US-4: Self-hosted dogfooding works for both AI runtimes (Priority: P2)
 
-As a **maintainer using either Claude Code or Copilot to develop APM itself**, I want both `.claude/agents/` and `.github/instructions/` to be populated in the SoT repo, so that Constitution Principle IV is upheld where it matters most — in the project that defines the principle.
+As a **maintainer using either Claude Code or Copilot to develop QuorumKit itself**, I want both `.claude/agents/` and `.github/instructions/` to be populated in the SoT repo, so that Constitution Principle IV is upheld where it matters most — in the project that defines the principle.
 
 **Why this priority**: Required by Principle IV but not user-visible for consumers; medium priority because today's de-facto Copilot-only dogfooding still works.
 
@@ -86,7 +86,7 @@ As a **maintainer using either Claude Code or Copilot to develop APM itself**, I
 
 ### US-5: Existing v2.x consumers can upgrade without manual rewrites (Priority: P2)
 
-As a **maintainer of a project already on APM v2.x**, I want a single `installer/init.sh --upgrade` command to migrate my installed workflows from `node scripts/orchestrator/...` references to the v3 Action-based form, so that the breaking change is operationally absorbable.
+As a **maintainer of a project already on QuorumKit v2.x**, I want a single `installer/init.sh --upgrade` command to migrate my installed workflows from `node scripts/orchestrator/...` references to the v3 Action-based form, so that the breaking change is operationally absorbable.
 
 **Why this priority**: Required because v3.0.0 is a breaking change for installed workflows. Medium because affected user count today is small, but operational pain is high if absent.
 
@@ -198,7 +198,7 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 - **No PII handled** — standard open-source data classification applies (per Constitution Security & Privacy section).
 - **Action permissions surface (FR-014)**: publishing the engine as a reusable Action exposes its `permissions:` requirements to every consumer. `engine/SECURITY.md` MUST contain a per-scope justification table (one row per scope: exact API call, minimal alternative considered, justification). `contents:` defaults to `read` and may only be elevated to `write` if a documented API call requires it. Template workflows MUST declare `permissions:` at the **job** level, never at workflow level. The Security Agent MUST sign off before the first v3.0.0 publish. *(Addresses SEC-HIGH-002.)*
 - **Supply-chain integrity — third-party Actions (FR-031 / M9)**: every Action referenced under `engine/`, `templates/github/workflows/`, or `.github/workflows/` MUST be pinned by 40-character commit SHA. Dependabot `package-ecosystem: github-actions` MUST be configured for both `/` and `/engine/`. CI check M9 enforces this on every PR. *(Addresses SEC-HIGH-003.)*
-- **Supply-chain integrity — consumer pinning**: consumers MUST be able to pin the APM Action by SHA; documentation MUST recommend SHA-pinning over tag-pinning for security-sensitive deployments. Dependabot compatibility MUST be verified.
+- **Supply-chain integrity — consumer pinning**: consumers MUST be able to pin the QuorumKit Action by SHA; documentation MUST recommend SHA-pinning over tag-pinning for security-sensitive deployments. Dependabot compatibility MUST be verified.
 - **npm package supply chain (FR-010)**: the npm publish step MUST use OIDC trusted publishing with `npm publish --provenance`. No long-lived `NPM_TOKEN` is used in the steady state. If a fallback token is ever required, it MUST be a granular, package-scoped, publish-only token with ≤90-day expiry, stored in a `release` GitHub Environment with required reviewer; rotation is documented in `engine/RELEASING.md`. *(Addresses SEC-HIGH-001.)*
 - **Pipeline YAML loader (FR-013)**: the `apiVersion` validator MUST use a safe YAML loader; tag-aware loading is forbidden.
 - **Release environment**: the release job MUST run inside a protected `release` GitHub Environment with a required reviewer; tag-protection rules MUST forbid force-push or deletion of `v*` tags; release tags MUST be signed (`git tag -s`) with the verifying key documented in `engine/RELEASING.md`.
@@ -208,7 +208,7 @@ As a **maintainer of a project already on APM v2.x**, I want a single `installer
 
 - The current GitHub Actions substrate (ADR-007) remains the only orchestrator runtime target. No multi-cloud or self-hosted runner support is added here.
 - The npm package will be published under a scope owned by the project maintainer (`@dmitry-nalivaika/apm-orchestrator` is the working name; final scope confirmed at release time).
-- The Action will be published either as a sub-action of this repo (`Dmitry-Nalivaika/APM/engine@v3`) or as a sibling repo. The choice is a release-time detail; the spec is satisfied by either.
+- The Action will be published either as a sub-action of this repo (`dmitry-nalivaika/quorumkit/engine@v3`) or as a sibling repo. The choice is a release-time detail; the spec is satisfied by either.
 - Consumers have Node.js available in their CI (already required by current installed workflows).
 - The 14 currently-overlapping workflows in `.github/workflows/` and `templates/github/workflows/` are intended to be identical; any divergence today is unintentional drift, not deliberate self-host customisation.
 - `quality.yml` and `update-dashboard.yml` in `.github/workflows/` are self-host-only and have no template counterpart by design.

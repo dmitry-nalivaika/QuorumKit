@@ -1,6 +1,6 @@
-# APM Dashboard — Complete Guide
+# QuorumKit Dashboard — Complete Guide
 
-> **The APM Dashboard** is the local browser control centre for the APM
+> **The QuorumKit Dashboard** is the local browser control centre for QuorumKit
 > Dark Factory. It turns the 15 AI agents from a set of Markdown definitions
 > into a live, interactive system you can watch, steer, and control — all
 > from one browser tab.
@@ -212,19 +212,19 @@ cd ~/work/legacy-billing-service
 bash ~/.quorumkit/engine/dashboard/start.sh
 ```
 
-`start.sh` captures `$PWD` into `APM_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses it as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to fill in the **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
+`start.sh` captures `$PWD` into `QUORUMKIT_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses it as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to fill in the **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
 
 You'll see the project context echoed before the server starts:
 
 ```
-  APM Dark Factory — Orchestrator
+  QuorumKit Dark Factory — Orchestrator
   Project: /Users/alice/work/legacy-billing-service
 ```
 
 When the dashboard opens at `http://localhost:3131` the topbar shows:
 
 ```
-🏭 APM Dark Factory   📁 legacy-billing-service   ● 0 active   15 agents   …   ⚙
+🏭 QuorumKit Dark Factory   📁 legacy-billing-service   ● 0 active   15 agents   …   ⚙
 ```
 
 — and you can invoke any agent without ever opening Settings.
@@ -243,17 +243,17 @@ Then from any project: `cd ~/work/foo && apm`.
 ### 5.3 — Custom port
 
 ```zsh
-APM_PORT=4000 apm
+QUORUMKIT_PORT=4000 apm
 # or
 bash ~/.quorumkit/engine/dashboard/start.sh --port 4000
 ```
 
 ### 5.4 — Override the auto-detected project
 
-The detected values can always be edited from **⚙ Settings** in the UI, or by setting `APM_PROJECT_DIR` explicitly:
+The detected values can always be edited from **⚙ Settings** in the UI, or by setting `QUORUMKIT_PROJECT_DIR` explicitly:
 
 ```zsh
-APM_PROJECT_DIR=~/work/some-other-repo apm
+QUORUMKIT_PROJECT_DIR=~/work/some-other-repo apm
 ```
 
 ### 5.5 — Verifying the server is up
@@ -330,7 +330,7 @@ folder and broadcasts the config to all connected browser tabs.
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│ 🏭 APM Dark Factory          ● 0 active  15 agents  ...  ⚙  💻`  │  ← topbar
+│ 🏭 QuorumKit Dark Factory          ● 0 active  15 agents  ...  ⚙  💻`  │  ← topbar
 ├────────────────────────────────────────────────────────────────────┤
 │ 🔍 Search…   All agents  🌐 Universal  🏭 Industrial        15 ag │  ← toolbar
 ├─────────────────── agent grid (scrollable) ────────────────────────┤
@@ -354,7 +354,7 @@ folder and broadcasts the config to all connected browser tabs.
 | **● live** (green) | WebSocket connected to server — real invocations available |
 | **● offline** (amber) | Server not running — simulation mode only |
 | **0 active** | Number of agents currently running |
-| **v2.0.0** | APM stack version |
+| **v2.0.0** | QuorumKit version |
 | **⚙** | Opens Settings modal |
 | **💻 Console `** | Toggles the bottom drawer (also: press backtick `` ` ``) |
 
@@ -554,10 +554,10 @@ cd ~/projects/todo-api && apm
 The topbar now shows the project pill automatically:
 
 ```
-🏭 APM Dark Factory   📁 todo-api   ● 0 active   15 agents   …   ⚙
+🏭 QuorumKit Dark Factory   📁 todo-api   ● 0 active   15 agents   …   ⚙
 ```
 
-The browser tab title also reads `todo-api — APM Dark Factory`. Open **⚙ Settings**
+The browser tab title also reads `todo-api — QuorumKit Dark Factory`. Open **⚙ Settings**
 only if you want to flip the **AI Tool** to something other than the default, or
 override the auto-detected path/repo/branch.
 
@@ -740,14 +740,14 @@ changelog, release — was handled by agents.
 
 This file lives in `engine/dashboard/.apm-project.json` (inside the quorumkit repo, not your project).
 It is git-ignored so your paths stay local. The server re-derives `projectName` and any
-missing fields on every launch from `APM_PROJECT_DIR` + `git`, so older saved configs upgrade automatically.
+missing fields on every launch from `QUORUMKIT_PROJECT_DIR` + `git`, so older saved configs upgrade automatically.
 
 ### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `APM_PORT` | `3131` | HTTP + WebSocket port |
-| `APM_PROJECT_DIR` | `$PWD` at launch | Project root used for auto-detection. `start.sh` captures it before `cd`-ing into the dashboard folder. |
+| `QUORUMKIT_PORT` | `3131` | HTTP + WebSocket port |
+| `QUORUMKIT_PROJECT_DIR` | `$PWD` at launch | Project root used for auto-detection. `start.sh` captures it before `cd`-ing into the dashboard folder. |
 
 ### Agent-to-skill mapping
 
@@ -918,7 +918,7 @@ If you see it:
    ```zsh
    cd ~/projects/todo-api && bash ~/.quorumkit/engine/dashboard/start.sh
    ```
-2. Or set `APM_PROJECT_DIR` explicitly: `APM_PROJECT_DIR=~/projects/todo-api apm`
+2. Or set `QUORUMKIT_PROJECT_DIR` explicitly: `QUORUMKIT_PROJECT_DIR=~/projects/todo-api apm`
 3. Or open **⚙ Settings** and fill in **Local Project Path**. The path must exist on disk.
 
 ```zsh
@@ -992,7 +992,7 @@ The server logs the exit code and the stderr output to the console. Common cause
 
 - [`README.md`](README.md) — Stack overview, agent table, NNN convention
 - [`DARK_FACTORY_GUIDE.md`](DARK_FACTORY_GUIDE.md) — Architectural philosophy and agent design
-- [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) — Adopting APM in an existing project
+- [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) — Adopting QuorumKit in an existing project
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — How to extend the stack
 - [`engine/dashboard/server.js`](engine/dashboard/server.js) — Orchestrator backend source
 - [`engine/dashboard/index.html`](engine/dashboard/index.html) — Dashboard UI source

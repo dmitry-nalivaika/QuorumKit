@@ -1,6 +1,6 @@
 # Contributing Guide
 
-This project uses the **Agentic Dev Stack** — eight specialised AI agents drive
+This project uses the **QuorumKit** — eight specialised AI agents drive
 the development workflow. This guide explains how human contributors work alongside
 the agents.
 

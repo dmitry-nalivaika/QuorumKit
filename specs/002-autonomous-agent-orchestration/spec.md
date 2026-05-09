@@ -2,7 +2,7 @@
 
 ## Overview
 
-The APM stack currently provides 15 AI agents invocable only via manual slash-commands
+The QuorumKit stack currently provides 15 AI agents invocable only via manual slash-commands
 or individually-triggered GitHub Actions workflows. This feature introduces an
 **Orchestrator** that automatically sequences and coordinates those agents in response
 to repository events — without human intervention for routine work — while preserving

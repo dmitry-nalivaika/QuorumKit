@@ -15,7 +15,7 @@
 | Tests before implementation | Every task in `tasks.md` ships its test first (red), then implementation (green), then refactor. Vitest suite `tests/orchestrator/**` is the gate. |
 | No hardcoded secrets | Runtime registry stores `credential_ref` *names* only; resolution is via `process.env` / `${{ secrets.* }}` at invocation time (FR-009). The orchestrator MUST NEVER write a secret value to a comment, log, or audit entry — enforced by a redaction unit test in `tests/orchestrator/redaction.test.js`. |
 | Input validation at boundaries | Boundaries: (1) pipeline YAML loader (Ajv against v2 JSON schema + semantic validator for unreachable steps, undeclared identifiers, missing loop budgets); (2) runtime registry loader (Ajv + kind-allowlist check); (3) agent comment ingest (`apm-msg` parser validates author identity, exactly-one fenced block, schema, expected agent for current step); (4) `/approve` comment handler (permission level checked via GitHub API). |
-| Data access scoping | N/A — APM handles no PII; no per-user authorisation surface. Orchestrator runs under `GITHUB_TOKEN` with least-privilege scopes per ADR-007 §7 (per-adapter `requiredPermissions` union). |
+| Data access scoping | N/A — QuorumKit handles no PII; no per-user authorisation surface. Orchestrator runs under `GITHUB_TOKEN` with least-privilege scopes per ADR-007 §7 (per-adapter `requiredPermissions` union). |
 | Coverage threshold | Constitution does not pin a numeric threshold. This plan targets **≥ 90 % statements / ≥ 85 % branches** on `scripts/orchestrator/**` (pure logic, no live GitHub). FR-023 enumerates the mandatory scenarios; each maps 1:1 to a test file listed in `tasks.md`. |
 
 No spec-vs-constitution conflicts. Open `[PLAN]` items from the spec are
