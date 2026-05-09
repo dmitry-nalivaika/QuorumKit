@@ -13,47 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.0.0-rebranding] — 2026-05-09 (Issue #67)
+## [3.0.0] — 2026-05-09 (Issues #47, #61, #67)
 
-> **Breaking change.** Full rebranding from APM / Agentic Dev Stack to **QuorumKit**.
+> **Breaking change.** Full rebranding to **QuorumKit** (Issue #67), repository topology
+> rewritten into three zones (Package payload / Engine / Self-host), and the orchestrator
+> engine is now distributed as a versioned GitHub Action + npm package (`quorumkit-engine`)
+> (Issue #47). v3 NPM release (Issue #61).
 > See `MIGRATION.md` for the complete before/after reference table.
+> See `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
+> and `specs/047-repo-topology/spec.md` for the full topology rationale.
 
 ### ⚠️ Breaking changes
 
-- **`apm.yml` renamed to `quorumkit.yml`** — v3 does not accept the old filename.
-  `installer/init.sh` exits non-zero with a migration notice if `apm.yml` is detected.
-- **NPM package renamed**: `apm-engine` → `quorumkit-engine`, `apm-orchestrator` → `quorumkit-orchestrator`.
-  No backward-compatible alias is published.
-- **GitHub repository renamed**: `agentic-dev-stack` → `quorumkit`.
-  Consumer `uses:` paths must be updated to `uses: dmitry-nalivaika/quorumkit/engine@v3`.
-- **VS Code extension renamed**: `apm-copilot-bridge` → `quorumkit-copilot-bridge`;
-  command prefix changed from `apm.` to `quorumkit.`.
-
-### Changed
-
-- `engine/package.json` `name`: `apm-engine` → `quorumkit-engine`; `"private": true` removed.
-- `engine/orchestrator/package.json` `name`: `apm-orchestrator` → `quorumkit-orchestrator`.
-- `quorumkit.yml` replaces `apm.yml` (hard break — FR-004, ADR-067).
-- All root-level documentation updated to reflect QuorumKit brand (FR-006).
-- `.specify/memory/constitution.md` header updated to QuorumKit (FR-007, separate PR).
-
-### Internal (frozen, not renamed — FR-013, FR-014)
-
-- Wire-format tokens (`apm-msg`, `apm-state`, `apm-pipeline-state`) unchanged.
-- `.apm/` configuration directory unchanged.
-
----
-
-## [3.0.0] — 2026-05-09
-
-> **Breaking change.** Repository topology rewritten into three zones
-> (Package payload / Engine / Self-host) and the orchestrator engine is
-> now distributed as a versioned GitHub Action + npm package
-> (`apm-engine`). See `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
-> and `specs/047-repo-topology/spec.md` for the full rationale.
-
-### ⚠️ Breaking changes
-
+- **Project renamed to QuorumKit.** `apm-engine` → `quorumkit-engine`, `apm-orchestrator` → `quorumkit-orchestrator`. No backward-compatible alias published (Issue #67, FR-002/FR-003).
+- **`apm.yml` renamed to `quorumkit.yml`** — v3 does not accept the old filename. `installer/init.sh` exits non-zero with a migration notice if `apm.yml` is detected (FR-004/FR-005, ADR-067).
+- **GitHub repository renamed**: `agentic-dev-stack` → `quorumkit`. Consumer `uses:` paths must be updated to `uses: dmitry-nalivaika/quorumkit/engine@v3`.
+- **VS Code extension renamed**: `apm-copilot-bridge` → `quorumkit-copilot-bridge`; command prefix changed from `apm.` to `quorumkit.`.
+- **Wire-format tokens unchanged** — `apm-msg`, `apm-state`, `apm-pipeline-state` are intentionally NOT renamed (FR-013, FR-014).
+- **`.apm/` directory unchanged** — renaming deferred to a future major with full migration strategy.
 - **Engine moved.** `scripts/orchestrator/` → `engine/orchestrator/`,
   `tests/orchestrator/` → `engine/tests/`, `dashboard/` → `engine/dashboard/`.
   Consumer workflows that ran `node scripts/orchestrator/index.js` MUST
@@ -89,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OIDC-trusted npm publishing.** `.github/workflows/engine-release.yml`
   triggers on signed `v*` tags, runs in a protected `release` Environment,
   verifies the tag signature, rebuilds `dist/`, and publishes
-  `apm-engine` with `--provenance` — no `NPM_TOKEN` ever read
+  `quorumkit-engine` with `--provenance` — no `NPM_TOKEN` ever read
   (T-12, FR-010, SC-009, SEC-HIGH-001).
 - **Per-scope `engine/SECURITY.md`** with permission justification table,
   threat-model snapshot, and change-control rules. Default consumer-side
@@ -132,17 +109,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🧪 Migration cheatsheet for consumer repos
 
 ```bash
-# 1. Pull the new APM package.
-cd /path/to/apm-clone && git pull --ff-only
+# 1. Pull the QuorumKit package.
+cd /path/to/quorumkit-clone && git pull --ff-only
 
 # 2. From the consumer repo, dry-run the upgrade.
 cd /path/to/your-project
-bash /path/to/apm-clone/installer/init.sh --upgrade --engine-ref=v3
+bash /path/to/quorumkit-clone/installer/init.sh --upgrade --engine-ref=v3
 # Review the diff. The script refuses if existing 'permissions:' blocks
 # lack required engine scopes — fix those by hand and re-run.
 
 # 3. Apply.
-bash /path/to/apm-clone/installer/init.sh --upgrade --apply --engine-ref=v3
+bash /path/to/quorumkit-clone/installer/init.sh --upgrade --apply --engine-ref=v3
 
 # 4. Commit + open a PR. Branch protection runs verify-mirror; the PR
 #    must be green before merge.
