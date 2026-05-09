@@ -1,4 +1,5 @@
 name: Developer Agent (Copilot)
+# apm-allow-divergence: self-host uses shared .cjs agentic runner (issue #101); templates/ retains the v1 inline GitHub Models script until the runner is packaged for downstream distribution.
 
 on:
   workflow_dispatch:
