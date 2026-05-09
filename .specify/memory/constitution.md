@@ -1,4 +1,4 @@
-# APM (Agentic Dev Stack) Constitution
+# QuorumKit Constitution
 
 ## Core Principles
 
@@ -69,7 +69,7 @@ surface real-time and historical agent activity, pipeline status, and health
 metrics derived from GitHub Events and workflow run data. Dashboard features that
 require write access to any system are out of scope and prohibited without an ADR.
 The dashboard must remain functional as a standalone static app (no mandatory
-backend) and as a VS Code extension (`dashboard/extensions/apm-copilot-bridge/`).
+backend) and as a VS Code extension (`dashboard/extensions/quorumkit-copilot-bridge/`).
 
 ## Quality Gates
 
