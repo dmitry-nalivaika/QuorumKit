@@ -100,7 +100,7 @@ export async function loadRuntimeRegistry(rootDir = process.cwd()) {
     return { found: false, runtimes: {}, errors: [] };
   }
   const raw = await readFile(fullPath, 'utf8');
-  const parsed = yaml.load(raw) ?? {};
+  const parsed = yaml.load(raw, { schema: yaml.CORE_SCHEMA }) ?? {};
   const errors = validateRegistry(parsed);
   return {
     found: true,

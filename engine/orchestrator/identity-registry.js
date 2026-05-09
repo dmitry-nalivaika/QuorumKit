@@ -67,7 +67,7 @@ export async function loadIdentities(rootDir = process.cwd()) {
   if (!existsSync(fullPath)) {
     return { found: false, byLogin: new Map(), errors: [] };
   }
-  const parsed = yaml.load(await readFile(fullPath, 'utf8')) ?? {};
+  const parsed = yaml.load(await readFile(fullPath, 'utf8'), { schema: yaml.CORE_SCHEMA }) ?? {};
   const lookup = buildLookup(parsed);
   if (!lookup.ok) return { found: true, byLogin: new Map(), errors: lookup.errors };
   return { found: true, byLogin: lookup.byLogin, errors: [] };

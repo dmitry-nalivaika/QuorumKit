@@ -30,8 +30,13 @@ import path from 'path';
 import { existsSync } from 'fs';
 import yaml from 'js-yaml';
 import { validatePipeline } from './pipeline-validator.js';
+import { assertApiVersionSupported } from './api-version.js';
 
-const parseYaml = yaml.load;
+// FR-013: tag-aware loading is forbidden. js-yaml v4's default schema is
+// already safe (no !!js/function), but we pin CORE_SCHEMA explicitly so any
+// future default-schema change cannot silently weaken our guarantee.
+const SAFE_LOAD_OPTS = { schema: yaml.CORE_SCHEMA };
+const parseYaml = (raw) => yaml.load(raw, SAFE_LOAD_OPTS);
 
 /**
  * Load all pipeline YAML files from `dir`, normalise into the internal form,
@@ -62,6 +67,9 @@ export async function loadPipelines(dir, context = {}) {
     try {
       const raw = await fs.readFile(fullPath, 'utf8');
       const parsed = parseYaml(raw);
+
+      // FR-013: apiVersion compatibility gate (engine refuses too-new pipelines).
+      assertApiVersionSupported(parsed);
 
       const semanticErrors = validatePipeline(parsed, context);
       if (semanticErrors.length > 0) {

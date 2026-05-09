@@ -16,6 +16,7 @@
         "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "version": { "type": "string", "enum": ["1"] },
         "schema_version": { "type": "string", "enum": ["1"] },
+        "apiVersion": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
         "trigger": { "$ref": "#/definitions/trigger" },
         "steps": {
           "type": "array",
@@ -31,6 +32,7 @@
       "properties": {
         "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "schema_version": { "type": "string", "enum": ["2"] },
+        "apiVersion": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
         "trigger": { "$ref": "#/definitions/trigger" },
         "entry": { "type": "string", "minLength": 1 },
         "steps": {
