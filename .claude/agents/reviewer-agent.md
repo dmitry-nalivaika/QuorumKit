@@ -105,6 +105,16 @@ SUGGESTION: [improvement idea] — [why it would help] — [not required for mer
 - MUST NOT approve a PR where data access isolation is violated (if constitution requires auth)
 - MUST read the full spec before reviewing — partial reviews are not valid
 - MUST post BLOCKER comments on the PR so they can be picked up and fixed (even on AI-agent-authored PRs)
+- MUST raise a **BLOCKER** when a PR adds a new label, outcome, or transition trigger
+  to any pipeline file under `.apm/pipelines/` without first declaring the identifier
+  in `docs/AGENT_PROTOCOL.md` (FR-024). The orchestrator's `regulation-lint` CI job
+  enforces this mechanically; bypass attempts (e.g. `--no-verify`, deleting the gate)
+  MUST be flagged as a Constitution §VI violation.
+- MUST raise a **BLOCKER** when an agent-dispatching workflow under `.github/workflows/`
+  is added or modified without a `timeout-minutes:` declaration (FR-028, ADR-007 §4).
+- MUST raise a **BLOCKER** when a runtime entry is added to `.apm/runtimes.yml` whose
+  `kind` is outside the ADR-005 allowlist without a per-kind ADR landing in the same
+  PR (FR-007).
 
 ## Context Files to Read at Session Start
 

@@ -39,6 +39,57 @@ framework for new domains (e.g. dark factory, fintech, healthcare).
 
 ---
 
+## Repo Topology
+
+This repository plays **three** roles. Every top-level folder belongs to
+exactly one zone (ADR-047, FR-001).
+
+| Zone | Top-level folders | Purpose |
+|---|---|---|
+| **1. Package payload** | `.apm/`, `templates/`, `scripts/` (→ `installer/` per FR-003) | Files that `init.sh` copies into a consumer repo. SoT for agents, skills, pipelines, runtime registry, identity registry, seed docs, template workflows. |
+| **2. Engine** | `scripts/orchestrator/` (→ `engine/orchestrator/`), `dashboard/` (→ `engine/dashboard/`), `tests/orchestrator/` (→ `engine/tests/`) | Orchestrator runtime + dashboard + their tests. Distributed as (a) a reusable GitHub Action and (b) an npm package. **Never copied** into a consumer repo. |
+| **3. Self-host** | `.github/`, `.claude/`, `.specify/`, `specs/`, `docs/` | Files that exist solely so this repo can dogfood itself. **Not distributed.** |
+
+Where to put what:
+
+- **A new agent definition** → `.apm/agents/<slug>-agent.md`. Re-run
+  `scripts/init.sh` to regenerate the `templates/github/instructions/` mirror.
+  `verify-mirror.sh` (M1 + M7) enforces parity to `.claude/agents/` and
+  `.github/instructions/`.
+- **An orchestrator bug fix** → `scripts/orchestrator/` (will move to
+  `engine/orchestrator/` per ADR-047). Tests under `tests/orchestrator/` (will
+  move to `engine/tests/`).
+- **An installer enhancement** → `scripts/init.sh` (will move to
+  `installer/init.sh` per FR-003; a backward-compatible symlink will be
+  retained for one minor version).
+- **A first-time-init seed file** (`CLAUDE.md`, `CONTRIBUTING.md`,
+  `SECURITY.md`, `copilot-instructions.md`) → `templates/` (FR-004).
+
+What **MUST NOT** exist in this repo (enforced by `scripts/verify-mirror.sh`):
+
+- `templates/.apm/pipelines/` — pipelines are read directly from
+  `.apm/pipelines/` per ADR-006 §3 (M4).
+- `.github/agents/` — that directory is generated in *consumer* repos by
+  `init.sh`; in this SoT repo, agent definitions live only at `.apm/agents/`
+  (M6).
+
+Mirror surfaces:
+
+| ID | SoT | Mirror / invariant |
+|---|---|---|
+| M1 | `.apm/agents/<x>.md` | `templates/github/instructions/<short>.instructions.md` parity |
+| M5 | `templates/github/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` byte-identity (if both exist) |
+| M7 | `.apm/agents/<x>.md` | `.claude/agents/<x>.md` AND `.github/instructions/<short>.instructions.md` |
+| M8 | — | no `node scripts/orchestrator/` in distributed workflows (engine via `uses:` only) |
+| M9 | — | every third-party `uses:` SHA-pinned (40 hex) |
+
+The marker `# apm-allow: <reason>` on a `uses:` or `run:` line documents a
+deliberate, time-boxed exemption (e.g. an Action whose stable release has not
+yet shipped). Use sparingly and remove the line as soon as the underlying
+condition resolves.
+
+---
+
 ## Prerequisites
 
 ```zsh

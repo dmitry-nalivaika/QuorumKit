@@ -13,7 +13,7 @@ on:
     # Only watch agent workflows completing — not the orchestrator itself
     workflows:
       - "Triage Agent (Copilot)"
-      - "BA/Product Agent (Copilot)"
+      - "BA / Product Agent (Copilot)"
       - "Architect Agent (Copilot)"
       - "Developer Agent (Copilot)"
       - "QA/Test Agent (Copilot)"
@@ -38,14 +38,26 @@ permissions:
   # Note: GET /repos/{owner}/{repo}/collaborators/{username}/permission (FR-010) is
   # covered by the GITHUB_TOKEN's default repository read access (contents: read above).
 
+# FR-027, ADR-007 §2: serialise orchestrator runs per issue/PR. Without this,
+# parallel deliveries (e.g. label spam) race on the audit channel and can
+# produce two state comments for the same transition.
+concurrency:
+  group: apm-orchestrator-${{ github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.id || 'global' }}
+  cancel-in-progress: false
+
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # ADR-007 §6 / FR-029: never let a routing failure swallow the run silently.
+    # The final step posts an `outcome: orchestrator-failure` audit comment
+    # if any earlier step failed.
+    continue-on-error: false
     # Don't run when triggered by a bot (prevents cascades from automated commits)
     if: ${{ github.event.sender.type != 'Bot' || github.event_name == 'workflow_run' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Check orchestrator is installed
         id: check
@@ -59,7 +71,7 @@ jobs:
 
       - name: Setup Node
         if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
@@ -69,14 +81,45 @@ jobs:
         working-directory: scripts/orchestrator
 
       - name: Run Orchestrator
+        id: run_orchestrator
         if: steps.check.outputs.skip != 'true'
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
-        run: node scripts/orchestrator/index.js
+        run: node scripts/orchestrator/index.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
+
+      # FR-029, ADR-007 §6: if the orchestrator itself crashed, post a
+      # canonical orchestrator-failure audit comment so the run is observable
+      # instead of silently dropped. The fallback uses gh CLI because the
+      # orchestrator process is the failed party.
+      - name: Post orchestrator-failure audit comment
+        if: steps.check.outputs.skip != 'true' && steps.run_orchestrator.outcome == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "::warning::No issue/PR number on this event — cannot post orchestrator-failure"
+            exit 0
+          fi
+          BODY=$(cat <<EOF
+          **[APM Orchestrator]** ❌ Orchestrator crashed handling event \`${GITHUB_EVENT_NAME}\` — outcome \`orchestrator-failure\`. See [run logs]($RUN_URL).
+
+          <!-- apm-pipeline-state: {"status":"failed","outcome":"orchestrator-failure","runUrl":"$RUN_URL"} -->
+          EOF
+          )
+          gh api -X POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$REPO/issues/$ISSUE_NUMBER/comments" \
+            -f body="$BODY" || true
+          # Re-fail the job so the orchestrator-failure is visible in the run badge.
+          exit 1
 
       - name: Broadcast to dashboard
         if: steps.check.outputs.skip != 'true' && vars.DASHBOARD_WEBHOOK_URL != ''

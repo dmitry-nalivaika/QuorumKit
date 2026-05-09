@@ -76,6 +76,19 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 - Parameterised queries only — no dynamic query string concatenation
 - Validate all user input at system boundaries (API, CLI, form fields, message queues)
 - No hardcoded secrets — use environment variables or a secret manager
+- **Markdown hygiene**: every `.md` file you author or edit MUST pass
+  `markdown-link-check --config .markdown-link-check.json <file>` locally
+  *before* you commit it. The PR `Markdown Link Validator` job is the most
+  common red CI surface and is almost always preventable. Specifically:
+  - Use **relative** paths for in-repo links (`./docs/foo.md`, never the
+    full `https://github.com/<owner>/<repo>/blob/...` form).
+  - GitHub Issue / PR / Discussion / commit URLs are exempt by config (they
+    rate-limit unauthenticated requests in CI), but you should still verify
+    they resolve in a browser.
+  - Headings linked via `#anchor` must match the slugified heading text;
+    re-run the validator after any heading rename.
+  - Code-fence languages must be valid (`bash`, `yaml`, `json`, `markdown`,
+    `text`) — `markdownlint` flags unknown values.
 
 ## Handoff Checklist (before opening PR)
 
@@ -83,6 +96,8 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 - [ ] All tests pass locally
 - [ ] Coverage meets the threshold defined in the constitution
 - [ ] Linting and formatting checks pass
+- [ ] **Markdown link check passes locally** on every `.md` file in the diff:
+      `git diff --name-only --diff-filter=AM origin/main...HEAD -- '*.md' | xargs -r -I{} markdown-link-check --quiet --config .markdown-link-check.json {}`
 - [ ] No hardcoded credentials in any file
 - [ ] PR description uses `.github/pull_request_template.md`
 - [ ] Branch name matches spec directory name (`NNN-short-slug`)

@@ -98,6 +98,10 @@ agent or team member. You keep the issue tracker organized and actionable.
 - MUST NOT make code changes
 - MUST triage new issues within 1 business day; `priority:critical` issues within 2 hours
   (or within the SLA defined in the constitution if specified)
+- MUST only apply labels that are declared in `docs/AGENT_PROTOCOL.md` (FR-014, FR-024).
+  When a new label is genuinely needed, file a separate PR adding it to the regulation
+  document FIRST; the orchestrator's `regulation-lint` job will reject any pipeline
+  trigger that references an undeclared label.
 
 ## Context Files to Read at Session Start
 
