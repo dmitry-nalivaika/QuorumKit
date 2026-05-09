@@ -738,10 +738,28 @@ function ensureBridgeExtensionInstalled(codeBin, agentId) {
 async function handleCopilotInvoke(agentId, agentName, sentinel) {
   const { workDir, skillFile, agentFile } = sentinel;
 
-  // Build context content
-  const skill   = fs.existsSync(skillFile)   ? fs.readFileSync(skillFile, 'utf8')   : '';
-  const agentDef = fs.existsSync(agentFile)  ? fs.readFileSync(agentFile, 'utf8')  : '';
+  // Relative paths inside the consumer project (installed by init.sh).
+  // @workspace resolves these against the open folder, so Copilot reads the
+  // locally installed copies rather than receiving the full content inline.
+  const agentRelPath = path.join('.apm', 'agents', path.basename(agentFile));
+  const skillRelPath = path.join('.apm', 'skills', path.basename(path.dirname(skillFile)), 'SKILL.md');
+
+  // Full content kept only for the human-readable reference section below.
+  const agentDef = fs.existsSync(agentFile) ? fs.readFileSync(agentFile, 'utf8') : '';
+  const skillDef = fs.existsSync(skillFile)  ? fs.readFileSync(skillFile, 'utf8')  : '';
   const contextPath = path.join(workDir, '.copilot-agent-context.md');
+
+  // Prompt: tell the agent who it is, point it at its two role files,
+  // then explicitly ask it to greet and wait — not start autonomous work.
+  const chatPrompt = [
+    `@workspace You are acting as the **${agentName}**.`,
+    ``,
+    `Read your role definition from \`${agentRelPath}\` and your skill guide from \`${skillRelPath}\`.`,
+    ``,
+    `Say hello: introduce yourself with your name and a one-sentence description of what you do.`,
+    `Then **stop and wait for instructions**.`,
+    `Do NOT read further files, run commands, or begin any autonomous analysis until the user gives you a specific task.`,
+  ].join('\n');
 
   const contextContent = [
     `# QuorumKit Agent Context — ${agentName}`,
@@ -749,9 +767,7 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     '',
     `## Copilot Chat prompt`,
     '```',
-    `@workspace You are acting as the ${agentName}. Follow the role definition below exactly.`,
-    ``,
-    skill || agentDef || `Agent: ${agentName}`,
+    chatPrompt,
     '```',
     '',
     '---',
@@ -759,7 +775,7 @@ async function handleCopilotInvoke(agentId, agentName, sentinel) {
     agentDef || '_agent file not found_',
     '',
     '## Skill / Instruction',
-    skill || '_skill file not found_',
+    skillDef || '_skill file not found_',
   ].join('\n');
 
   try { fs.writeFileSync(contextPath, contextContent, 'utf8'); } catch { /* non-fatal */ }
