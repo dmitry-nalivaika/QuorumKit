@@ -45,10 +45,10 @@ async function submitPrompt(prompt) {
   async function tryCmd(id, ...args) {
     try {
       await vscode.commands.executeCommand(id, ...args);
-      console.log(`[APM] cmd ok: ${id}`);
+      console.log(`[QuorumKit] cmd ok: ${id}`);
       return true;
     } catch (e) {
-      console.log(`[APM] cmd fail: ${id} → ${e && e.message}`);
+      console.log(`[QuorumKit] cmd fail: ${id} → ${e && e.message}`);
       return false;
     }
   }
@@ -72,14 +72,14 @@ async function submitPrompt(prompt) {
   }
 
   const ready = await waitForChatReady();
-  console.log(`[APM] chat ready: ${ready}`);
+  console.log(`[QuorumKit] chat ready: ${ready}`);
 
   // Diagnostic: dump all chat / copilot commands so we can see what's there.
   const all = await vscode.commands.getCommands(true);
   const interesting = all.filter(c =>
     /chat|copilot|agent/i.test(c) && !c.startsWith('_')
   ).sort();
-  console.log(`[APM] chat-related commands (${interesting.length}):`);
+  console.log(`[QuorumKit] chat-related commands (${interesting.length}):`);
   for (const c of interesting) console.log(`  ${c}`);
 
   // Step 1 — Open the chat panel directly in Agent mode.
@@ -101,7 +101,7 @@ async function submitPrompt(prompt) {
       if (modeSwitched) break;
     }
   }
-  console.log(`[APM] agent mode switched: ${modeSwitched}`);
+  console.log(`[QuorumKit] agent mode switched: ${modeSwitched}`);
 
   // If no Agent mode command exists at all, fall back to chat.open with mode.
   if (!modeSwitched) {
@@ -195,10 +195,10 @@ async function tryInjectOnce() {
 
 function activate(context) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('apm.submitAgentPrompt', () => tryInjectOnce())
+    vscode.commands.registerCommand('quorumkit.submitAgentPrompt', () => tryInjectOnce())
   );
   // Fire and forget on startup
-  tryInjectOnce().catch(err => console.error('[APM] inject failed:', err));
+  tryInjectOnce().catch(err => console.error('[QuorumKit] inject failed:', err));
 }
 
 function deactivate() {}

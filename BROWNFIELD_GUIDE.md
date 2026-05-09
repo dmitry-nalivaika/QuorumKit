@@ -1,6 +1,6 @@
 # Brownfield Adoption Guide
 
-How to introduce the Agentic Dev Stack into a **project that already exists** —
+How to introduce the QuorumKit into a **project that already exists** —
 with existing code, existing issues, possibly an existing CI pipeline, and a team
 that has not used AI agents before.
 
@@ -78,7 +78,7 @@ echo "=== Community files ==="
 After running `init.sh`, compare manually:
 
 ```zsh
-APM=/path/to/agentic-dev-stack
+APM=/path/to/quorumkit
 
 # Show diff between your current agent and the new version
 for agent in ba-product-agent developer-agent qa-test-agent reviewer-agent \
@@ -135,7 +135,7 @@ Code (or describe it to Copilot) to update it section by section.
 
 ```zsh
 diff .github/copilot-instructions.md \
-     /path/to/agentic-dev-stack/templates/seed/copilot-instructions.md
+     /path/to/quorumkit/templates/seed/copilot-instructions.md
 ```
 
 The APM template `copilot-instructions.md` adds:
@@ -161,7 +161,7 @@ Scenarios:
 
 ```zsh
 # See which workflows would be skipped
-for wf in /path/to/agentic-dev-stack/templates/github/workflows/*.yml; do
+for wf in /path/to/quorumkit/templates/github/workflows/*.yml; do
   wf_name="$(basename "$wf")"
   [ -f ".github/workflows/$wf_name" ] \
     && echo "SKIP (exists): $wf_name" \
@@ -200,9 +200,9 @@ If tags are missing, add them anywhere in your CLAUDE.md:
 cd /path/to/your-existing-project
 
 # Choose the mode that matches your team
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=both     # Claude + Copilot
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=claude   # Claude Code only
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=copilot  # GitHub Copilot only
+bash /path/to/quorumkit/installer/init.sh --ai=both     # Claude + Copilot
+bash /path/to/quorumkit/installer/init.sh --ai=claude   # Claude Code only
+bash /path/to/quorumkit/installer/init.sh --ai=copilot  # GitHub Copilot only
 ```
 
 The script is safe to run on existing projects — it **skips any file that already

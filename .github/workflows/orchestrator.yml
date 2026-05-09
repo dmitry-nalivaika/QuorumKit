@@ -1,7 +1,7 @@
-name: APM Orchestrator
+name: QuorumKit Orchestrator
 # apm-allow-divergence: SoT dogfoods the engine via `node engine/orchestrator/index.js` so
 # changes to engine/ are exercised in this repo on every PR. The distributed template
-# (templates/github/workflows/orchestrator.yml) uses `uses: dmitry-nalivaika/agentic-dev-stack/engine@<ref>`
+# (templates/github/workflows/orchestrator.yml) uses `uses: dmitry-nalivaika/quorumkit/engine@<ref>`
 # per FR-011 — that is the consumer-facing form. Both files MUST stay in functional sync.
 
 on:
@@ -113,7 +113,7 @@ jobs:
             exit 0
           fi
           BODY=$(cat <<EOF
-          **[APM Orchestrator]** ❌ Orchestrator crashed handling event \`${GITHUB_EVENT_NAME}\` — outcome \`orchestrator-failure\`. See [run logs]($RUN_URL).
+          **[QuorumKit Orchestrator]** ❌ Orchestrator crashed handling event \`${GITHUB_EVENT_NAME}\` — outcome \`orchestrator-failure\`. See [run logs]($RUN_URL).
 
           <!-- apm-pipeline-state: {"status":"failed","outcome":"orchestrator-failure","runUrl":"$RUN_URL"} -->
           EOF

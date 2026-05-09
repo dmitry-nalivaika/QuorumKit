@@ -62,12 +62,27 @@ APM_PACKAGE_DIR="${APM_PACKAGE_DIR:-$(dirname "$SCRIPT_DIR")}"
 PROJECT_DIR="${PWD}"
 
 echo ""
-echo -e "${BOLD}Agentic Dev Stack — Initializing${NC}"
-echo "APM package : $APM_PACKAGE_DIR"
+echo -e "${BOLD}QuorumKit — Initializing${NC}"
+echo "Package dir : $APM_PACKAGE_DIR"
 echo "Project     : $PROJECT_DIR"
 echo "AI mode     : $AI_MODE"
 echo "Domain pack : ${DOMAIN:-none (universal core only)}"
 echo ""
+
+# ── FR-005: Detect legacy apm.yml (v3 hard break) ────────────────────────────
+if [ -f "$PROJECT_DIR/apm.yml" ] && [ ! -f "$PROJECT_DIR/quorumkit.yml" ]; then
+  err "Legacy configuration file detected: apm.yml"
+  echo "" >&2
+  echo -e "  ${BOLD}QuorumKit v3 requires quorumkit.yml — apm.yml is no longer recognised.${NC}" >&2
+  echo "" >&2
+  echo "  Migration steps:" >&2
+  echo "    1. Rename your configuration file:  mv apm.yml quorumkit.yml" >&2
+  echo "    2. Update the 'name' field in quorumkit.yml if it still reads 'agentic-dev-stack'" >&2
+  echo "    3. Re-run this installer." >&2
+  echo "" >&2
+  echo "  See MIGRATION.md for the full before/after reference table." >&2
+  exit 1
+fi
 
 GITHUB_TMPL="$APM_PACKAGE_DIR/templates/github"
 

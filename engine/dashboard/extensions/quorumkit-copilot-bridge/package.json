@@ -1,0 +1,19 @@
+{
+  "name": "quorumkit-copilot-bridge",
+  "displayName": "QuorumKit Copilot Bridge",
+  "description": "Auto-submits QuorumKit agent prompts to Copilot Chat on workspace open.",
+  "version": "0.1.5",
+  "publisher": "quorumkit",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "quorumkit.submitAgentPrompt",
+        "title": "QuorumKit: Submit Current Agent Prompt to Copilot Chat"
+      }
+    ]
+  }
+}

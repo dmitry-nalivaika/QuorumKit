@@ -1,6 +1,6 @@
-# APM Engine — Security & Permissions
+# QuorumKit Engine — Security & Permissions
 
-> **Audience:** consumer-repo maintainers wiring `uses: dmitry-nalivaika/agentic-dev-stack/engine@<sha>` into a workflow, and APM contributors changing engine behaviour.
+> **Audience:** consumer-repo maintainers wiring `uses: dmitry-nalivaika/quorumkit/engine@<sha>` into a workflow, and QuorumKit contributors changing engine behaviour.
 
 This document is the security contract of the APM engine Action. It is
 authoritative for FR-014, ADR-047 amendment §4, and SEC-MED-001. Every
@@ -64,7 +64,7 @@ existing `permissions:` block.
 ## 4. Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting on this repository
-(<https://github.com/dmitry-nalivaika/agentic-dev-stack/security>) — do **not** open a
+(<https://github.com/dmitry-nalivaika/quorumkit/security>) — do **not** open a
 public issue. The Security Agent owns triage SLA and CVE assignment per
 `SECURITY.md` at the repo root.
 

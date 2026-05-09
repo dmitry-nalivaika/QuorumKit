@@ -1,4 +1,4 @@
-name: APM Orchestrator
+name: QuorumKit Orchestrator
 
 on:
   issues:
@@ -65,7 +65,7 @@ jobs:
         # Pin to a major-version tag for automatic patch + minor updates;
         # rotate to a SHA pin if your org's policy requires it (Dependabot
         # `github-actions` ecosystem opens the rotation PRs).
-        uses: dmitry-nalivaika/agentic-dev-stack/engine@v3 # apm-allow: third-party — first-party APM engine
+        uses: dmitry-nalivaika/quorumkit/engine@v3 # apm-allow: third-party — first-party QuorumKit engine
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

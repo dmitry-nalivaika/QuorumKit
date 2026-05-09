@@ -1,6 +1,6 @@
-# Agentic Dev Stack
+# QuorumKit
 
-A reusable **APM (Agent Package Manager)** package that initialises a
+A reusable **QuorumKit** package that initialises a
 **fully autonomous, lights-out software development cycle** in any project.
 One command sets up 15 specialised AI agents, 26 GitHub Actions workflows
 (including a v2 declarative orchestrator), Spec Kit integration, and
@@ -67,7 +67,7 @@ Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 
 ### Autonomous orchestration (v2)
 
-The **APM Orchestrator** is a single GitHub Actions workflow that drives
+The **QuorumKit Orchestrator** is a single GitHub Actions workflow that drives
 agent chains from declarative pipeline YAML — no slash commands needed for
 routine SDLC work.
 
@@ -121,22 +121,22 @@ A single number ties everything together:
 
 ```bash
 # 1. Clone this repo
-git clone <this-repo-url> ~/agentic-dev-stack
+git clone <this-repo-url> ~/quorumkit
 
 # 2. Navigate to your new project
 cd /path/to/my-new-project
 
 # 3a. Claude Code only (default)
-bash ~/agentic-dev-stack/scripts/init.sh
+bash ~/quorumkit/scripts/init.sh
 
 # 3b. GitHub Copilot only
-bash ~/agentic-dev-stack/scripts/init.sh --ai=copilot
+bash ~/quorumkit/scripts/init.sh --ai=copilot
 
 # 3c. Both
-bash ~/agentic-dev-stack/scripts/init.sh --ai=both
+bash ~/quorumkit/scripts/init.sh --ai=both
 
 # 3d. With industrial domain pack
-bash ~/agentic-dev-stack/scripts/init.sh --ai=both --domain=industrial
+bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
 ```
 
 Detailed flags: [`INIT.md`](INIT.md). Adding to an existing repo:
@@ -149,7 +149,7 @@ Detailed flags: [`INIT.md`](INIT.md). Adding to an existing repo:
 
 ```
 .
-├── apm.yml                         # APM package manifest
+├── quorumkit.yml                         # QuorumKit package manifest
 ├── README.md / INIT.md / PIPELINES.md / DASHBOARD.md / …
 │
 ├── .apm/                           # APM package content (platform-agnostic)
@@ -235,12 +235,12 @@ If you have [APM](https://github.com/microsoft/apm) installed, declare it as
 a dependency:
 
 ```yaml
-# apm.yml in your project
+# quorumkit.yml in your project
 name: my-project
 version: 1.0.0
 dependencies:
   apm:
-    - source: github:<your-username>/agentic-dev-stack
+    - source: github:<your-username>/quorumkit
       version: main
 ```
 

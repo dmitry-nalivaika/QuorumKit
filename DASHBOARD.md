@@ -15,7 +15,7 @@
 1. [What the Orchestrator Is](#1-what-the-orchestrator-is)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Prerequisites](#3-prerequisites)
-4. [Installing agentic-dev-stack into your project](#4-installing-agentic-dev-stack-into-your-project)
+4. [Installing quorumkit into your project](#4-installing-quorumkit-into-your-project)
 5. [Launching the dashboard from your project directory](#5-launching-the-dashboard-from-your-project-directory)
 6. [Connecting a project (manual override)](#6-connecting-a-project-manual-override)
 7. [The Dashboard UI](#7-the-dashboard-ui)
@@ -130,24 +130,24 @@ The orchestrator works equally well on:
 - 🌱 **Greenfield** projects — a fresh `mkdir` you just `git init`ed.
 - 🏭 **Brownfield** projects — an existing repo with code, history, CI, and conventions you want to keep.
 
-You install the agentic-dev-stack **into your project**, then launch the dashboard **from your project directory**. The dashboard auto-detects the project name, the git remote, and the current branch — no manual settings needed for the common case.
+You install the quorumkit **into your project**, then launch the dashboard **from your project directory**. The dashboard auto-detects the project name, the git remote, and the current branch — no manual settings needed for the common case.
 
 ---
 
-## 4. Installing agentic-dev-stack into your project
+## 4. Installing quorumkit into your project
 
 You only need to do this once per project.
 
-### 4.1 — Get the agentic-dev-stack package
+### 4.1 — Get the quorumkit package
 
 Clone the package somewhere on your machine. It does **not** need to live inside your project.
 
 ```zsh
 # A reasonable home for the package itself:
-git clone https://github.com/dmitry-nalivaika/agentic-dev-stack.git ~/.agentic-dev-stack
+git clone https://github.com/dmitry-nalivaika/quorumkit.git ~/.quorumkit
 ```
 
-> Anywhere works — `~/Documents/Projects/agentic-dev-stack`, `~/code/agentic-dev-stack`, etc. Just remember the path; the install script lives at `<that-path>/scripts/init.sh`.
+> Anywhere works — `~/Documents/Projects/quorumkit`, `~/code/quorumkit`, etc. Just remember the path; the install script lives at `<that-path>/scripts/init.sh`.
 
 ### 4.2 — Run `init.sh` from inside your project
 
@@ -163,10 +163,10 @@ cd ~/work/legacy-billing-service
 Then, **from your project root**, run the installer once:
 
 ```zsh
-bash ~/.agentic-dev-stack/scripts/init.sh                                # Claude Code (default)
-bash ~/.agentic-dev-stack/scripts/init.sh --ai=copilot                   # GitHub Copilot
-bash ~/.agentic-dev-stack/scripts/init.sh --ai=both                      # Both
-bash ~/.agentic-dev-stack/scripts/init.sh --ai=both --domain=industrial  # Both + industrial agents
+bash ~/.quorumkit/scripts/init.sh                                # Claude Code (default)
+bash ~/.quorumkit/scripts/init.sh --ai=copilot                   # GitHub Copilot
+bash ~/.quorumkit/scripts/init.sh --ai=both                      # Both
+bash ~/.quorumkit/scripts/init.sh --ai=both --domain=industrial  # Both + industrial agents
 ```
 
 What the script writes into your project (idempotent — re-running is safe and never overwrites your files):
@@ -209,7 +209,7 @@ From **your project directory**:
 
 ```zsh
 cd ~/work/legacy-billing-service
-bash ~/.agentic-dev-stack/engine/dashboard/start.sh
+bash ~/.quorumkit/engine/dashboard/start.sh
 ```
 
 `start.sh` captures `$PWD` into `APM_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses it as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to fill in the **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
@@ -235,7 +235,7 @@ If you orchestrate several projects, a one-liner saves typing:
 
 ```zsh
 # In ~/.zshrc
-alias apm='bash ~/.agentic-dev-stack/engine/dashboard/start.sh'
+alias apm='bash ~/.quorumkit/engine/dashboard/start.sh'
 ```
 
 Then from any project: `cd ~/work/foo && apm`.
@@ -245,7 +245,7 @@ Then from any project: `cd ~/work/foo && apm`.
 ```zsh
 APM_PORT=4000 apm
 # or
-bash ~/.agentic-dev-stack/engine/dashboard/start.sh --port 4000
+bash ~/.quorumkit/engine/dashboard/start.sh --port 4000
 ```
 
 ### 5.4 — Override the auto-detected project
@@ -509,7 +509,7 @@ without a live project.
 ## 12. Worked Example — "Todo App" from Zero to Deployed
 
 This walkthrough shows how to use the Orchestrator on a real project. We will
-build a simple Node.js REST API for a todo app, guided entirely by APM agents.
+build a simple Node.js REST API for a todo app, guided entirely by QuorumKit agents.
 
 ### 12.1 — Project setup
 
@@ -524,15 +524,15 @@ git add . && git commit -m "chore: initial project skeleton"
 gh repo create todo-api --public --source=. --push
 ```
 
-### 12.2 — Install agentic-dev-stack into the project
+### 12.2 — Install quorumkit into the project
 
 From the project root (one-time, idempotent — see §4 for details):
 
 ```zsh
 cd ~/projects/todo-api
-bash ~/.agentic-dev-stack/scripts/init.sh --ai=copilot
+bash ~/.quorumkit/scripts/init.sh --ai=copilot
 # → writes .github/agents/, .github/instructions/, .github/workflows/, etc.
-git add . && git commit -m "chore: install agentic-dev-stack"
+git add . && git commit -m "chore: install quorumkit"
 ```
 
 Use `--ai=claude` if you prefer Claude Code, or `--ai=both` for both.
@@ -541,7 +541,7 @@ Use `--ai=claude` if you prefer Claude Code, or `--ai=both` for both.
 
 ```zsh
 cd ~/projects/todo-api
-bash ~/.agentic-dev-stack/engine/dashboard/start.sh
+bash ~/.quorumkit/engine/dashboard/start.sh
 # → browser opens http://localhost:3131
 ```
 
@@ -738,7 +738,7 @@ changelog, release — was handled by agents.
 }
 ```
 
-This file lives in `engine/dashboard/.apm-project.json` (inside the agentic-dev-stack repo, not your project).
+This file lives in `engine/dashboard/.apm-project.json` (inside the quorumkit repo, not your project).
 It is git-ignored so your paths stay local. The server re-derives `projectName` and any
 missing fields on every launch from `APM_PROJECT_DIR` + `git`, so older saved configs upgrade automatically.
 
@@ -916,7 +916,7 @@ If you see it:
 
 1. Confirm you launched `start.sh` from inside the project (not from `~/`):
    ```zsh
-   cd ~/projects/todo-api && bash ~/.agentic-dev-stack/engine/dashboard/start.sh
+   cd ~/projects/todo-api && bash ~/.quorumkit/engine/dashboard/start.sh
    ```
 2. Or set `APM_PROJECT_DIR` explicitly: `APM_PROJECT_DIR=~/projects/todo-api apm`
 3. Or open **⚙ Settings** and fill in **Local Project Path**. The path must exist on disk.
@@ -983,7 +983,7 @@ The server logs the exit code and the stderr output to the console. Common cause
 |-------|-----|
 | `claude: command not found` | Install Claude Code, add to PATH |
 | Permission denied on project path | `chmod -R u+rw <localPath>` |
-| Skill file not found | Run `bash ~/.agentic-dev-stack/scripts/init.sh` from your project root to install agents |
+| Skill file not found | Run `bash ~/.quorumkit/scripts/init.sh` from your project root to install agents |
 | Python/Node not found in PATH | Start server from a terminal with the full environment |
 
 ---

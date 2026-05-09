@@ -10,8 +10,8 @@ The engine ships through **two channels**, both released atomically from
 the same `engine/` source on every signed `v*` tag:
 
 1. **GitHub Action ref** — consumers pin via
-   `uses: dmitry-nalivaika/agentic-dev-stack/engine@vX.Y.Z` (or `@vX` for floating major).
-2. **npm package `apm-engine`** — published with `--provenance` via
+   `uses: dmitry-nalivaika/quorumkit/engine@vX.Y.Z` (or `@vX` for floating major).
+2. **npm package `quorumkit-engine`** — published with `--provenance` via
    OIDC trusted publishing (no `NPM_TOKEN`).
 
 ---
@@ -22,7 +22,7 @@ the same `engine/` source on every signed `v*` tag:
 |---|---|---|
 | Maintainer GPG key registered with GitHub & in the local keyring | `gpg --import` + `git config user.signingkey <FPR>` + `gpg --export <FPR>` uploaded to GitHub | Maintainer |
 | `release` GitHub Environment with required-reviewer protection rule | Repo Settings → Environments → `release` | Maintainer (admin) |
-| npm "Trusted Publisher" mapping for `apm-engine` | <https://www.npmjs.com/package/apm-engine/access> → Trusted Publishers → add this repo + workflow `engine-release.yml` | Maintainer + npm package owner |
+| npm "Trusted Publisher" mapping for `quorumkit-engine` | <https://www.npmjs.com/package/quorumkit-engine/access> → Trusted Publishers → add this repo + workflow `engine-release.yml` | Maintainer + npm package owner |
 | Branch-protection on `main` requires PR + verify-mirror green | Repo Settings → Branches → `main` | Maintainer (admin) |
 
 If any of these are missing, the release workflow fails fast — you never
@@ -40,7 +40,7 @@ bash installer/verify-mirror.sh                       # M1–M9 must be green
 (cd engine && npm ci --ignore-scripts && npm run build)
 git status                                            # MUST be clean (dist/ in sync)
 
-# 2. Bump apm.yml (T-25) and CHANGELOG.md (T-24) in a release PR. Get review
+# 2. Bump quorumkit.yml (T-25) and CHANGELOG.md (T-24) in a release PR. Get review
 #    + Security Agent sign-off. Merge.
 
 # 3. Cut a SIGNED tag at the merge commit on main.
@@ -58,8 +58,8 @@ git push origin v3.0.0
 
 A successful run produces:
 
-- A GitHub Release at <https://github.com/dmitry-nalivaika/agentic-dev-stack/releases/tag/vX.Y.Z>.
-- An npm package at <https://www.npmjs.com/package/apm-engine/v/X.Y.Z>
+- A GitHub Release at <https://github.com/dmitry-nalivaika/quorumkit/releases/tag/vX.Y.Z>.
+- An npm package at <https://www.npmjs.com/package/quorumkit-engine/v/X.Y.Z>
   whose page shows the **"Built and signed on GitHub Actions"** provenance
   badge with a link to the workflow run that produced it.
 - A signed git tag verifiable with `git verify-tag vX.Y.Z`.
@@ -70,14 +70,14 @@ A successful run produces:
 
 ```bash
 # Action ref (what consumer workflows pin):
-gh api repos/dmitry-nalivaika/agentic-dev-stack/git/refs/tags/vX.Y.Z
+gh api repos/dmitry-nalivaika/quorumkit/git/refs/tags/vX.Y.Z
 
 # Tag signature:
 git fetch --tags
 git verify-tag vX.Y.Z
 
 # npm provenance:
-npm view apm-engine@X.Y.Z --json | jq '.dist'
+npm view quorumkit-engine@X.Y.Z --json | jq '.dist'
 # Expect: dist.attestations.provenance is present and signed by the
 #         GitHub Actions OIDC issuer for this repository.
 ```
@@ -112,11 +112,11 @@ If a release ships a regression:
 
 1. **Yank the npm version** (does not delete; warns installers):
    ```bash
-   npm deprecate apm-engine@X.Y.Z "Yanked — see #<issue>; upgrade to X.Y.Z+1"
+   npm deprecate quorumkit-engine@X.Y.Z "Yanked — see #<issue>; upgrade to X.Y.Z+1"
    ```
 2. **Re-publish the prior known-good** as the latest dist-tag:
    ```bash
-   npm dist-tag add apm-engine@X.Y.(Z-1) latest
+   npm dist-tag add quorumkit-engine@X.Y.(Z-1) latest
    ```
 3. **Move the floating major tag back** so consumers pinned to `@v3`
    pick up the rollback on their next workflow run:
@@ -139,11 +139,11 @@ If npm trusted publishing is unavailable (e.g. a registry-side outage or
 the maintainer needs to publish from an air-gapped host), and only then,
 a fallback token MAY be used under the following constraints:
 
-- **Granular**, package-scoped (`apm-engine` only), publish-only.
+- **Granular**, package-scoped (`quorumkit-engine` only), publish-only.
 - **≤90-day expiry** — never rotated to a longer lifetime.
 - Stored in the `release` GitHub Environment **only**; never in repo
   secrets, never in `.env`, never in a maintainer's shell history.
-- Rotation owner: the maintainer named in `apm.yml` `owner.npm`.
+- Rotation owner: the maintainer named in `quorumkit.yml` `owner.npm`.
 - Each use of the fallback MUST be paired with a public Security Agent
   comment on the corresponding incident issue.
 
