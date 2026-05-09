@@ -25,8 +25,8 @@ describe('runtimes/copilot', () => {
       runtime: COPILOT_RT, runtimeName: 'copilot-default',
       env: { GITHUB_TOKEN: 'redacted' }, clock: fastClock,
     });
-    expect(r).toEqual({ dispatched: true, retries: 0, workflow: 'copilot-agent-qa-agent.yml' });
-    expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'copilot-agent-qa-agent.yml', 'main', expect.objectContaining({
+    expect(r).toEqual({ dispatched: true, retries: 0, workflow: 'copilot-agent-qa.yml' });
+    expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'copilot-agent-qa.yml', 'main', expect.objectContaining({
       issue_number: '10', run_id: 'run-1', step: 'qa', iteration: '2', runtime: 'copilot-default',
     }));
   });
@@ -86,7 +86,7 @@ describe('runtimes/claude', () => {
       runtime: CLAUDE_RT, runtimeName: 'claude-default',
       env: { ANTHROPIC_API_KEY: 'redacted' }, clock: fastClock,
     });
-    expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'agent-dev-agent.yml', 'main', expect.any(Object));
+    expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'agent-dev.yml', 'main', expect.any(Object));
   });
 
   it('flags missing ANTHROPIC_API_KEY as runtime-credential-missing', async () => {

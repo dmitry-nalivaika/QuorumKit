@@ -146,7 +146,10 @@ async function invoke(context) {
   const env = context.env ?? process.env;
   resolveCredential(context.runtime, env);
 
-  const workflow = `agent-${context.agent}.yml`;
+  // Workflow filename uses the bare agent slug (no `-agent` suffix):
+  //   pipeline `agent: dev-agent` → `agent-dev.yml`
+  const slug = context.agent.replace(/-agent$/, '');
+  const workflow = `agent-${slug}.yml`;
   const dispatchRef = context.ref ?? 'main';
   const inputs = {
     issue_number: String(context.issueNumber),

@@ -186,7 +186,10 @@ async function invoke(context) {
   // Trigger credential check (throws on absence) but never expose value:
   resolveCredential(context.runtime, env);
 
-  const workflow = `copilot-agent-${context.agent}.yml`;
+  // Workflow filename uses the bare agent slug (no `-agent` suffix):
+  //   pipeline `agent: dev-agent` → `copilot-agent-dev.yml`
+  const slug = context.agent.replace(/-agent$/, '');
+  const workflow = `copilot-agent-${slug}.yml`;
   const dispatchRef = context.ref ?? 'main';
   const inputs = {
     issue_number: String(context.issueNumber),
