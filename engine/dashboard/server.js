@@ -318,18 +318,34 @@ function buildAgentCmd(agentId, cfg, agentName) {
   // SEC-HIGH-003: agentName must not contain shell-special characters.
   const safeAgentName = (agentName || agentId).replace(/[^a-zA-Z0-9 _\-]/g, '');
   const skill = idToSkill[agentId] || agentId;
-  const skillFile = path.join(DASHBOARD_DIR, '..', '.apm', 'skills', `${skill}-agent`, 'SKILL.md');
-  const agentFile = path.join(DASHBOARD_DIR, '..', '.apm', 'agents',
+  const agentFileName =
     skill === 'ba'              ? 'ba-product-agent.md'       :
     skill === 'dev'             ? 'developer-agent.md'        :
     skill === 'qa'              ? 'qa-test-agent.md'          :
     skill === 'tech-debt'       ? 'tech-debt-agent.md'        :
     skill === 'ot-integration'  ? 'ot-integration-agent.md'   :
     skill === 'digital-twin'    ? 'digital-twin-agent.md'     :
-                                  `${skill}-agent.md`
-  );
+                                  `${skill}-agent.md`;
 
   const workDir = cfg.localPath || '.';
+
+  // Prefer consumer project's installed .apm/ copies (put there by init.sh)
+  // so the dashboard works correctly when invoked against a separate project.
+  // Fall back to the package's own .apm/ so local development still works.
+  function resolveApmFile(relToWorkDir, relToPackage) {
+    const consumer = path.join(workDir, relToWorkDir);
+    if (fs.existsSync(consumer)) return consumer;
+    return path.join(DASHBOARD_DIR, '..', relToPackage);
+  }
+  const skillFile = resolveApmFile(
+    path.join('.apm', 'skills', `${skill}-agent`, 'SKILL.md'),
+    path.join('.apm', 'skills', `${skill}-agent`, 'SKILL.md')
+  );
+  const agentFile = resolveApmFile(
+    path.join('.apm', 'agents', agentFileName),
+    path.join('.apm', 'agents', agentFileName)
+  );
+
   const qWork   = workDir.replace(/"/g, '\\"');
   const qSkill  = skillFile.replace(/"/g, '\\"');
 
