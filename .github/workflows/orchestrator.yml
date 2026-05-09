@@ -1,4 +1,8 @@
 name: APM Orchestrator
+# apm-allow-divergence: SoT dogfoods the engine via `node engine/orchestrator/index.js` so
+# changes to engine/ are exercised in this repo on every PR. The distributed template
+# (templates/github/workflows/orchestrator.yml) uses `uses: dmitry-nalivaika/agentic-dev-stack/engine@<ref>`
+# per FR-011 — that is the consumer-facing form. Both files MUST stay in functional sync.
 
 on:
   issues:
@@ -62,9 +66,9 @@ jobs:
       - name: Check orchestrator is installed
         id: check
         run: |
-          if [ ! -f scripts/orchestrator/index.js ]; then
+          if [ ! -f engine/orchestrator/index.js ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Orchestrator not installed in this repo — skipping. Run scripts/init.sh to install."
+            echo "::notice::Orchestrator not installed in this repo — skipping. Run installer/init.sh to install."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -78,7 +82,7 @@ jobs:
       - name: Install orchestrator dependencies
         if: steps.check.outputs.skip != 'true'
         run: npm ci
-        working-directory: scripts/orchestrator
+        working-directory: engine/orchestrator
 
       - name: Run Orchestrator
         id: run_orchestrator
@@ -90,7 +94,7 @@ jobs:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
-        run: node scripts/orchestrator/index.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
+        run: node engine/orchestrator/index.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
       # FR-029, ADR-007 §6: if the orchestrator itself crashed, post a
       # canonical orchestrator-failure audit comment so the run is observable

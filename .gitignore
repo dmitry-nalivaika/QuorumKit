@@ -11,10 +11,11 @@ Thumbs.db
 
 # APM installed modules (like node_modules)
 apm_modules/
-dashboard/node_modules/
-dashboard/.apm-project.json
+engine/dashboard/node_modules/
+engine/dashboard/.apm-project.json
 .copilot-agent-context.md
 .apm-workspaces/
-scripts/orchestrator/node_modules/
+engine/orchestrator/node_modules/
+engine/node_modules/
 
-tests/orchestrator/.vite/
+engine/tests/.vite/

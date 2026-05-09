@@ -1,0 +1,57 @@
+# filepath: /Users/Dmitry_Nalivaika/Documents/Projects/APM/.github/workflows/engine-build-gate.yml
+# =============================================================================
+# Engine Build Gate (T-09, FR-009, ADR-047 amendment §3)
+#
+# The committed `engine/dist/` bundle is what consumer repos execute when they
+# pin `uses: dmitry-nalivaika/agentic-dev-stack/engine@<sha>`. This workflow rebuilds the
+# bundle from `engine/orchestrator/**` and fails the PR if the result differs
+# from what is committed. Reviewers MUST regenerate via `npm run build` in
+# `engine/` and commit the diff — never edit `dist/` by hand.
+# =============================================================================
+name: engine-build-gate
+
+on:
+  pull_request:
+    paths:
+      - 'engine/**'
+      - '.github/workflows/engine-build-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'engine/**'
+      - '.github/workflows/engine-build-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-and-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      - name: Install engine devDeps (ncc)
+        working-directory: engine
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install orchestrator runtime deps
+        working-directory: engine/orchestrator
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Rebuild dist/ bundle
+        working-directory: engine
+        run: npm run build
+
+      - name: Verify committed dist/ matches rebuild
+        run: |
+          if ! git diff --quiet -- engine/dist/; then
+            echo "::error::engine/dist/ is out of sync with engine/orchestrator/ source."
+            echo "::error::Remediation: cd engine && npm ci --ignore-scripts && npm run build && git add engine/dist && commit."
+            git --no-pager diff --stat -- engine/dist/
+            exit 1
+          fi
+          echo "✓ engine/dist/ is in sync"

@@ -25,9 +25,9 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # ── npm: orchestrator engine (current path; will move to /engine/ per #47) ─
+  # ── npm: orchestrator engine ─────────────────────────────────────────────
   - package-ecosystem: "npm"
-    directory: "/scripts/orchestrator"
+    directory: "/engine/orchestrator"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -44,9 +44,23 @@ updates:
       - dependency-name: "js-yaml"
         update-types: ["version-update:semver-major"]
 
+  # ── npm: engine bundler (ncc) ────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/engine"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "type:chore"
+      - "tech-debt"
+      - "agent:security"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
   # ── npm: dashboard ─────────────────────────────────────────────────────
   - package-ecosystem: "npm"
-    directory: "/dashboard"
+    directory: "/engine/dashboard"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

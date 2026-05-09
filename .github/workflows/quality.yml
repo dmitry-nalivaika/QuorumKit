@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run quality gates
-        run: bash scripts/quality-check.sh
+        run: bash installer/quality-check.sh
 
   pipeline-validator:
     name: Pipeline Validator (FR-020)
@@ -26,9 +26,9 @@ jobs:
           node-version: '20'
       - name: Install orchestrator deps
         run: npm ci
-        working-directory: scripts/orchestrator
+        working-directory: engine/orchestrator
       - name: Validate every pipeline file under .apm/pipelines/
-        run: node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
+        run: node engine/orchestrator/pipeline-validator-cli.js .apm/pipelines # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
   verify-mirror:
     name: Verify Mirror (ADR-006)
@@ -40,9 +40,9 @@ jobs:
           node-version: '20'
       - name: Install orchestrator deps (for js-yaml in verify-mirror.sh)
         run: npm ci
-        working-directory: scripts/orchestrator
+        working-directory: engine/orchestrator
       - name: Run verify-mirror.sh
-        run: bash scripts/verify-mirror.sh
+        run: bash installer/verify-mirror.sh
 
   orchestrator-tests:
     name: Orchestrator Tests (FR-023)
@@ -54,10 +54,10 @@ jobs:
           node-version: '20'
       - name: Install orchestrator deps
         run: npm ci
-        working-directory: scripts/orchestrator
+        working-directory: engine/orchestrator
       - name: Run vitest suite
         run: npm test
-        working-directory: scripts/orchestrator
+        working-directory: engine/orchestrator
 
   regulation-lint:
     name: Regulation Lint (FR-014)
@@ -69,9 +69,9 @@ jobs:
           node-version: '20'
       - name: Install orchestrator deps
         run: npm ci
-        working-directory: scripts/orchestrator
+        working-directory: engine/orchestrator
       - name: Lint pipelines against regulation document
-        run: node scripts/orchestrator/regulation-lint.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
+        run: node engine/orchestrator/regulation-lint.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
   markdown-links:
     name: Markdown Link Validator
@@ -84,6 +84,12 @@ jobs:
 
       - name: Check markdown links
         run: |
+          # Skip:
+          #   • node_modules — third-party docs.
+          #   • templates/seed/ — consumer-repo seed files; relative links
+          #     resolve against the *consumer's* root post-install, not against
+          #     the SoT path. Validating them here yields false negatives.
           find . -name "*.md" \
             -not -path "*/node_modules/*" \
+            -not -path "./templates/seed/*" \
             | xargs markdown-link-check --config .markdown-link-check.json

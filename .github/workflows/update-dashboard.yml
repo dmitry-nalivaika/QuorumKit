@@ -6,7 +6,7 @@ on:
     paths:
       - '.apm/agents/**'
       - 'apm.yml'
-      - 'dashboard/generate-dashboard.js'
+      - 'engine/dashboard/generate-dashboard.js'
   workflow_dispatch:
 
 permissions:
@@ -28,19 +28,19 @@ jobs:
           node-version: '20'
 
       - name: Generate dashboard
-        run: node dashboard/generate-dashboard.js
+        run: node engine/dashboard/generate-dashboard.js
 
       - name: Check for changes
         id: diff
         run: |
-          git diff --quiet dashboard/index.html && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+          git diff --quiet engine/dashboard/index.html && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
 
       - name: Commit updated dashboard
         if: steps.diff.outputs.changed == 'true'
         run: |
           git config user.name  "docs-agent[bot]"
           git config user.email "docs-agent@users.noreply.github.com"
-          git add dashboard/index.html
+          git add engine/dashboard/index.html
           git commit -m "chore(dashboard): auto-sync agent data from .apm/agents [skip ci]"
           git push
 

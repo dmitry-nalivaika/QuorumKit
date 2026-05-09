@@ -1,0 +1,25 @@
+# =============================================================================
+# APM Engine — Composite GitHub Action (Issue #47, ADR-047 amendment §1)
+#
+# Runtime: Node 20 (FR-008, AR-D §6).
+# Bundle:  dist/index.js — produced by `npm run build` (ncc) and committed
+#          (FR-009). CI re-runs the build and fails if `git diff --quiet
+#          dist/` is non-empty (engine-build-gate workflow).
+#
+# Inputs: none — the engine reads everything from the GitHub event payload
+#         and the consumer-side `.apm/` SoT directory (ADR-006 §3).
+# Permissions: declared per-call by the consumer workflow; this Action does
+#              NOT request any. The minimum-viable scope is `contents: read`
+#              + `issues: write` + `pull-requests: write` (engine/SECURITY.md).
+# =============================================================================
+name: 'APM Engine'
+description: 'Run the APM autonomous-agent orchestrator on a GitHub event payload.'
+author: 'APM contributors'
+
+branding:
+  icon: 'cpu'
+  color: 'purple'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

@@ -20,32 +20,32 @@ remaining items required for v3.0.0.
 - ✅ **T-03** Populate `.claude/agents/` with the full agent set + complete
   `.github/instructions/` for self-host Principle IV parity (FR-018, US-4).
   Commit `c7f00c1`.
-- ⬜ **T-04** Move `scripts/orchestrator/` → `engine/orchestrator/`,
+- ✅ **T-04** Move `scripts/orchestrator/` → `engine/orchestrator/`,
   `dashboard/` → `engine/dashboard/`, `tests/orchestrator/` → `engine/tests/`
   (FR-002). Update all imports + workflow paths.
-- ⬜ **T-05** Move `scripts/init.sh`, `scripts/verify-mirror.sh`,
+- ✅ **T-05** Move `scripts/init.sh`, `scripts/verify-mirror.sh`,
   `scripts/quality-check.sh` → `installer/`. Add backward-compat symlink at
   `scripts/init.sh` (FR-003).
-- ⬜ **T-06** Reorganise root-level seed files into `templates/seed/` (FR-004).
+- ✅ **T-06** Reorganise root-level seed files into `templates/seed/` (FR-004).
 
 ### Engine distribution (FR-008..FR-014)
 
-- ⬜ **T-07** Create `engine/action.yml` declaring `runs.using: 'node20'` and
+- ✅ **T-07** Create `engine/action.yml` declaring `runs.using: 'node20'` and
   `runs.main: 'dist/index.js'` (FR-008, ADR-047 amendment).
-- ⬜ **T-08** Add `engine/package.json` with `ncc:build` script using
+- ✅ **T-08** Add `engine/package.json` with `ncc:build` script using
   `@vercel/ncc` and `npm ci --ignore-scripts` policy (ADR-047 amendment).
-- ⬜ **T-09** Commit `engine/dist/` bundle. Add CI gate that rebuilds and
+- ✅ **T-09** Commit `engine/dist/` bundle. Add CI gate that rebuilds and
   fails on diff.
-- ⬜ **T-10** Implement `apiVersion` validator in pipeline-loader using
+- ✅ **T-10** Implement `apiVersion` validator in pipeline-loader using
   `yaml.load` safe schema (FR-013).
-- ⬜ **T-11** Author `engine/SECURITY.md` with per-scope `permissions:`
+- ✅ **T-11** Author `engine/SECURITY.md` with per-scope `permissions:`
   justification table; default `contents: read`. Security Agent sign-off
   required (FR-014).
-- ⬜ **T-12** Release workflow: OIDC trusted publishing + `npm publish
+- ✅ **T-12** Release workflow: OIDC trusted publishing + `npm publish
   --provenance`; protected `release` GitHub Environment; signed v* tags
   (FR-010, SC-009).
-- ⬜ **T-13** Rewrite distributed workflows in `templates/github/workflows/`
-  to use `uses: dmitry-nalivaika/APM/engine@<sha>` (FR-011). Remove the
+- ✅ **T-13** Rewrite distributed workflows in `templates/github/workflows/`
+  to use `uses: dmitry-nalivaika/agentic-dev-stack/engine@<sha>` (FR-011). Remove the
   `# apm-allow: M8` markers from `orchestrator.yml` once landed.
 
 ### CI mirror enforcement (FR-015..FR-020, FR-031)
@@ -66,7 +66,7 @@ remaining items required for v3.0.0.
   package (FR-022). Done as part of T-01 (commit `45a9a97`).
 - 🟡 **T-19** `init.sh` still creates `.github/agents/` in consumer repos
   (FR-023). Existing logic in `scripts/init.sh` preserved.
-- ⬜ **T-20** Implement `init.sh --upgrade` that rewrites consumer workflows
+- ✅ **T-20** Implement `init.sh --upgrade` that rewrites consumer workflows
   from `node scripts/orchestrator/...` to `uses: <action>` form. MUST be
   idempotent + dry-run by default + must fail if the rewrite would broaden
   any `permissions:` block (FR-024, SEC-MED-002).
@@ -75,16 +75,16 @@ remaining items required for v3.0.0.
 
 - ✅ **T-21** Add "Repo topology" section to `CONTRIBUTING.md` mapping every
   top-level folder to one of the three zones (FR-026).
-- ⬜ **T-22** Update `BROWNFIELD_GUIDE.md` and `INIT.md` for new paths
+- ✅ **T-22** Update `BROWNFIELD_GUIDE.md` and `INIT.md` for new paths
   (`installer/init.sh`, `engine/`, no `templates/.apm/pipelines/`) (FR-027).
-- ⬜ **T-23** Author `engine/RELEASING.md` documenting both release channels,
+- ✅ **T-23** Author `engine/RELEASING.md` documenting both release channels,
   rollback procedure, signed tag verifying key (FR-028, SEC-MED-004).
-- ⬜ **T-24** `CHANGELOG.md` v3.0.0 entry covering every breaking change and
+- ✅ **T-24** `CHANGELOG.md` v3.0.0 entry covering every breaking change and
   migration command (FR-029).
 
 ### Versioning (FR-030)
 
-- ⬜ **T-25** Bump `apm.yml` `version: 2.1.0` → `3.0.0` at release-PR time.
+- ✅ **T-25** Bump `apm.yml` `version: 2.1.0` → `3.0.0` at release-PR time.
 
 ## Acceptance gates
 
