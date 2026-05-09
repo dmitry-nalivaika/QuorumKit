@@ -23,9 +23,9 @@ import { createGitHubClient } from './github-client.js';
 import { computeDedupKey } from './dedup-key.js';
 import { resolveTransition } from './router-v2.js';
 import { evaluate as evaluateLoopBudget, mergeBudget } from './loop-budget.js';
-import { resolveRuntime } from './runtime-registry.js';
+import { resolveRuntime, loadRuntimeRegistry } from './runtime-registry.js';
 import { parseApmMsg, validateContext as validateMsgContext } from './apm-msg-parser.js';
-import { resolveLogin } from './identity-registry.js';
+import { resolveLogin, loadIdentities } from './identity-registry.js';
 
 const APPROVAL_TIMEOUT_DEFAULT_HOURS = 72;
 const STEP_TIMEOUT_DEFAULT_MINUTES = 60;     // FR-019, ADR-007 §4
@@ -755,8 +755,33 @@ async function main() {
     console.error(`[orchestrator] Pipeline validation error: ${err.file} — ${err.message}`);
   }
 
+  // ── Load v2 registries (FR-007, FR-008, FR-013) ──────────────────────
+  // Required so that v2 pipelines can resolve `step.runtime` and apm-msg
+  // identity validation can run. Missing files are tolerated (v1-only repo).
+  const runtimeReg = await loadRuntimeRegistry(process.cwd());
+  for (const err of runtimeReg.errors) {
+    console.error(`[orchestrator] Runtime registry error: ${err.code} — ${err.message}`);
+  }
+  const runtimeRegistry = runtimeReg.found
+    ? {
+        runtimes: runtimeReg.runtimes,
+        default_runtime: runtimeReg.default_runtime,
+        agent_defaults: runtimeReg.agent_defaults,
+      }
+    : null;
+
+  const identityReg = await loadIdentities(process.cwd());
+  for (const err of identityReg.errors) {
+    console.error(`[orchestrator] Identity registry error: ${err.code ?? 'INVALID'} — ${err.message}`);
+  }
+  const identities = identityReg.found ? identityReg.byLogin : null;
+
   const client = createGitHubClient(token);
-  await runOrchestrator({ client, event, pipelines, owner, repo, aiTool });
+  await runOrchestrator({
+    client, event, pipelines, owner, repo, aiTool,
+    runtimeRegistry, identities,
+    env: process.env,
+  });
   await broadcastToDashboard(event.issueNumber, owner, repo, client);
 }
 
