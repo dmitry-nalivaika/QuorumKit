@@ -1,10 +1,10 @@
-# filepath: /Users/Dmitry_Nalivaika/Documents/Projects/APM/.github/workflows/engine-release.yml
+# filepath: /Users/Dmitry_Nalivaika/Documents/Projects/QuorumKit/.github/workflows/engine-release.yml
 # =============================================================================
 # Engine Release — both distribution channels (T-12, FR-010, SC-009, SEC-HIGH-001)
 #
 # Trigger: push of a signed v* tag (e.g. v3.0.0).
 # Channels released atomically from the same engine/ source:
-#   1. GitHub Action ref — the tag itself (consumers use `uses: dmitry-nalivaika/agentic-dev-stack/engine@v3.0.0`).
+#   1. GitHub Action ref — the tag itself (consumers use `uses: dmitry-nalivaika/quorumkit/engine@v3.0.0`).
 #   2. npm package — published with --provenance via OIDC trusted publishing.
 #
 # Hardening:
@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://www.npmjs.com/package/apm-engine
+      url: https://www.npmjs.com/package/quorumkit-engine
     permissions:
       contents: write       # create the GitHub Release
       id-token: write       # OIDC token for npm trusted publishing

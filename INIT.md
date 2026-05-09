@@ -30,10 +30,10 @@ Install only the tools for the mode(s) you are using.
 mkdir -p /path/to/my-project && cd /path/to/my-project
 
 # 2. Run init — choose your AI mode
-bash ~/path/to/agentic-dev-stack/installer/init.sh                                # Claude only (default)
-bash ~/path/to/agentic-dev-stack/installer/init.sh --ai=copilot                   # Copilot only
-bash ~/path/to/agentic-dev-stack/installer/init.sh --ai=both                      # Both (universal)
-bash ~/path/to/agentic-dev-stack/installer/init.sh --ai=both --domain=industrial  # Both + industrial pack
+bash ~/path/to/quorumkit/installer/init.sh                                # Claude only (default)
+bash ~/path/to/quorumkit/installer/init.sh --ai=copilot                   # Copilot only
+bash ~/path/to/quorumkit/installer/init.sh --ai=both                      # Both (universal)
+bash ~/path/to/quorumkit/installer/init.sh --ai=both --domain=industrial  # Both + industrial pack
 ```
 
 The script is **idempotent** — it skips any file that already exists, making it
@@ -146,23 +146,23 @@ NNN = Issue number, **zero-padded to 3 digits**.
 ```zsh
 # Step 1: Agents and skills
 mkdir -p .claude/agents .claude/skills
-cp -r /path/to/agentic-dev-stack/.apm/agents/* .claude/agents/
-for skill in /path/to/agentic-dev-stack/.apm/skills/*/; do
+cp -r /path/to/quorumkit/.apm/agents/* .claude/agents/
+for skill in /path/to/quorumkit/.apm/skills/*/; do
   skill_name="$(basename "$skill")"
   mkdir -p ".claude/skills/$skill_name"
   cp "$skill/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
 done
 
 # Step 2: CLAUDE.md
-cp /path/to/agentic-dev-stack/templates/seed/CLAUDE.md CLAUDE.md
+cp /path/to/quorumkit/templates/seed/CLAUDE.md CLAUDE.md
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
-cp /path/to/agentic-dev-stack/templates/github/workflows/agent-*.yml .github/workflows/
-cp /path/to/agentic-dev-stack/templates/github/pull_request_template.md .github/
-cp /path/to/agentic-dev-stack/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/agentic-dev-stack/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/agentic-dev-stack/templates/seed/SECURITY.md SECURITY.md
+cp /path/to/quorumkit/templates/github/workflows/agent-*.yml .github/workflows/
+cp /path/to/quorumkit/templates/github/pull_request_template.md .github/
+cp /path/to/quorumkit/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
+cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
 
 # Step 4: github-speckit
 npx github-speckit@latest
@@ -177,20 +177,20 @@ git init && git add . && git commit -m "chore: initialize agentic dev stack"
 ```zsh
 # Step 1: Agent definitions
 mkdir -p .github/agents
-cp -r /path/to/agentic-dev-stack/.apm/agents/* .github/agents/
+cp -r /path/to/quorumkit/.apm/agents/* .github/agents/
 
 # Step 2: Copilot context and instructions
 mkdir -p .github/instructions
-cp /path/to/agentic-dev-stack/templates/seed/copilot-instructions.md .github/copilot-instructions.md
-cp /path/to/agentic-dev-stack/templates/github/instructions/*.instructions.md .github/instructions/
+cp /path/to/quorumkit/templates/seed/copilot-instructions.md .github/copilot-instructions.md
+cp /path/to/quorumkit/templates/github/instructions/*.instructions.md .github/instructions/
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
-cp /path/to/agentic-dev-stack/templates/github/workflows/copilot-agent-*.yml .github/workflows/
-cp /path/to/agentic-dev-stack/templates/github/pull_request_template.md .github/
-cp /path/to/agentic-dev-stack/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/agentic-dev-stack/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/agentic-dev-stack/templates/seed/SECURITY.md SECURITY.md
+cp /path/to/quorumkit/templates/github/workflows/copilot-agent-*.yml .github/workflows/
+cp /path/to/quorumkit/templates/github/pull_request_template.md .github/
+cp /path/to/quorumkit/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
+cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
 
 # Step 4: Git
 git init && git add . && git commit -m "chore: initialize agentic dev stack"
@@ -235,8 +235,8 @@ it at every session start and treat it as non-negotiable.
 ### 3. Copy additional templates to your project root
 
 ```zsh
-cp /path/to/agentic-dev-stack/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/agentic-dev-stack/templates/seed/SECURITY.md SECURITY.md
+cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
 ```
 
 Edit `SECURITY.md` to replace `[security@your-domain.com]` with your actual contact.
@@ -373,11 +373,11 @@ Common customisations:
 
 ```zsh
 # Re-run init (skips existing files)
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=both
+bash /path/to/quorumkit/installer/init.sh --ai=both
 
 # Or update a single agent
-cp /path/to/agentic-dev-stack/.apm/agents/security-agent.md .claude/agents/
-cp /path/to/agentic-dev-stack/.apm/agents/security-agent.md .github/agents/
+cp /path/to/quorumkit/.apm/agents/security-agent.md .claude/agents/
+cp /path/to/quorumkit/.apm/agents/security-agent.md .github/agents/
 ```
 
 ---
@@ -451,12 +451,12 @@ See **[BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md)** for:
 ## Using with APM CLI (microsoft/apm)
 
 ```yaml
-# apm.yml in your project
+# quorumkit.yml in your project
 name: my-project
 version: 1.0.0
 dependencies:
   apm:
-    - source: github:<your-username>/agentic-dev-stack
+    - source: github:<your-username>/quorumkit
       version: main
 ```
 

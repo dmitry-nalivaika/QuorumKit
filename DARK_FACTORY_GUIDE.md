@@ -1,7 +1,7 @@
 # Dark Factory Project Guide
 
 How to start a **dark factory** (lights-out / fully automated manufacturing)
-project from zero using the Agentic Dev Stack.
+project from zero using the QuorumKit.
 
 > **Dark factory** = a manufacturing facility that operates autonomously with
 > minimal or no human presence on the floor — controlled by software, robotics,
@@ -37,8 +37,8 @@ mkdir -p ~/projects/dark-factory && cd ~/projects/dark-factory
 # 2. Initialize git
 git init && git remote add origin <your-github-repo-url>
 
-# 3. Initialize the Agentic Dev Stack
-bash /path/to/agentic-dev-stack/scripts/init.sh --ai=both   # recommended
+# 3. Initialize the QuorumKit
+bash /path/to/quorumkit/scripts/init.sh --ai=both   # recommended
 # or --ai=claude / --ai=copilot for single-mode
 
 # 4. Initialize github-speckit

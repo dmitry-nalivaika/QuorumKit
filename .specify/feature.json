@@ -1,13 +1,15 @@
 {
-  "activeSpec": "specs/047-repo-topology",
-  "issue": 47,
-  "slug": "047-repo-topology",
-  "specFile": "specs/047-repo-topology/spec.md",
-  "adr": "docs/architecture/adr-047-repo-topology-and-engine-distribution.md",
-  "status": "in-progress",
+  "activeSpec": "specs/067-quorumkit-rebranding",
+  "issue": 67,
+  "slug": "067-quorumkit-rebranding",
+  "specFile": "specs/067-quorumkit-rebranding/spec.md",
+  "adr": null,
+  "status": "ready-for-dev",
   "openQuestions": 0,
   "updatedAt": "2026-05-09",
-  "architectReviewResolved": true,
+  "architectReviewResolved": false,
   "archBlockers": [],
-  "archConcerns": []
+  "archConcerns": [],
+  "precedesIssue": 61,
+  "note": "Full rebranding APM \u2192 QuorumKit. Gates v3 NPM release (Issue #61). Branch: 067-quorumkit-rebranding."
 }

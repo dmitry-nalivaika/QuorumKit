@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # =============================================================================
-# init.sh — Initialize the Agentic Dev Stack in a new project
+# init.sh — Initialize QuorumKit in a new project
 # =============================================================================
 # Usage (from any project directory):
-#   bash /path/to/APM/installer/init.sh [--ai=claude|copilot|both]
+#   bash /path/to/quorumkit/installer/init.sh [--ai=claude|copilot|both]
 #
 # Options:
 #   --ai=claude   Install for Claude Code only (default)
 #   --ai=copilot  Install for GitHub Copilot only
 #   --ai=both     Install for both Claude Code and GitHub Copilot
 #
-# Or with APM_PACKAGE_DIR set:
-#   APM_PACKAGE_DIR=/path/to/APM bash /path/to/APM/installer/init.sh --ai=both
+# Or with QUORUMKIT_PACKAGE_DIR set:
+#   QUORUMKIT_PACKAGE_DIR=/path/to/quorumkit bash /path/to/quorumkit/installer/init.sh --ai=both
 # =============================================================================
 set -euo pipefail
 
@@ -58,18 +58,33 @@ done
 
 # ── Resolve paths ─────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APM_PACKAGE_DIR="${APM_PACKAGE_DIR:-$(dirname "$SCRIPT_DIR")}"
+QUORUMKIT_PACKAGE_DIR="${QUORUMKIT_PACKAGE_DIR:-$(dirname "$SCRIPT_DIR")}"
 PROJECT_DIR="${PWD}"
 
 echo ""
-echo -e "${BOLD}Agentic Dev Stack — Initializing${NC}"
-echo "APM package : $APM_PACKAGE_DIR"
+echo -e "${BOLD}QuorumKit — Initializing${NC}"
+echo "Package dir : $QUORUMKIT_PACKAGE_DIR"
 echo "Project     : $PROJECT_DIR"
 echo "AI mode     : $AI_MODE"
 echo "Domain pack : ${DOMAIN:-none (universal core only)}"
 echo ""
 
-GITHUB_TMPL="$APM_PACKAGE_DIR/templates/github"
+# ── FR-005: Detect legacy apm.yml (v3 hard break) ────────────────────────────
+if [ -f "$PROJECT_DIR/apm.yml" ] && [ ! -f "$PROJECT_DIR/quorumkit.yml" ]; then
+  err "Legacy configuration file detected: apm.yml"
+  echo "" >&2
+  echo -e "  ${BOLD}QuorumKit v3 requires quorumkit.yml — apm.yml is no longer recognised.${NC}" >&2
+  echo "" >&2
+  echo "  Migration steps:" >&2
+  echo "    1. Rename your configuration file:  mv apm.yml quorumkit.yml" >&2
+  echo "    2. Update the 'name' field in quorumkit.yml if it still reads 'agentic-dev-stack'" >&2
+  echo "    3. Re-run this installer." >&2
+  echo "" >&2
+  echo "  See MIGRATION.md for the full before/after reference table." >&2
+  exit 1
+fi
+
+GITHUB_TMPL="$QUORUMKIT_PACKAGE_DIR/templates/github"
 
 # =============================================================================
 # CLAUDE CODE SETUP
@@ -87,14 +102,14 @@ install_claude() {
     "release-agent.md"    "docs-agent.md"       "tech-debt-agent.md"
   )
   for agent in "${UNIVERSAL_AGENTS[@]}"; do
-    cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".claude/agents/$agent"
+    cp "$QUORUMKIT_PACKAGE_DIR/.apm/agents/$agent" ".claude/agents/$agent"
   done
 
   # Domain extension pack — industrial
   if [ "$DOMAIN" = "industrial" ]; then
     DOMAIN_AGENTS=("ot-integration-agent.md" "digital-twin-agent.md" "compliance-agent.md" "incident-agent.md")
     for agent in "${DOMAIN_AGENTS[@]}"; do
-      cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".claude/agents/$agent"
+      cp "$QUORUMKIT_PACKAGE_DIR/.apm/agents/$agent" ".claude/agents/$agent"
     done
     ok "Industrial domain agents installed"
   fi
@@ -114,7 +129,7 @@ install_claude() {
   fi
 
   for skill_name in "${skills_to_install[@]}"; do
-    skill_dir="$APM_PACKAGE_DIR/.apm/skills/$skill_name"
+    skill_dir="$QUORUMKIT_PACKAGE_DIR/.apm/skills/$skill_name"
     if [ -d "$skill_dir" ]; then
       mkdir -p ".claude/skills/$skill_name"
       cp "$skill_dir/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
@@ -125,7 +140,7 @@ install_claude() {
   # CLAUDE.md
   h1 "2. CLAUDE.md"
   if [ ! -f CLAUDE.md ]; then
-    cp "$APM_PACKAGE_DIR/templates/seed/CLAUDE.md" CLAUDE.md
+    cp "$QUORUMKIT_PACKAGE_DIR/templates/seed/CLAUDE.md" CLAUDE.md
     ok "CLAUDE.md created"
   else
     warn "CLAUDE.md already exists — skipping (update manually if needed)"
@@ -167,20 +182,20 @@ install_copilot() {
     "release-agent.md"    "docs-agent.md"       "tech-debt-agent.md"
   )
   for agent in "${UNIVERSAL_AGENTS[@]}"; do
-    cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".github/agents/$agent"
+    cp "$QUORUMKIT_PACKAGE_DIR/.apm/agents/$agent" ".github/agents/$agent"
   done
 
   if [ "$DOMAIN" = "industrial" ]; then
     DOMAIN_AGENTS=("ot-integration-agent.md" "digital-twin-agent.md" "compliance-agent.md" "incident-agent.md")
     for agent in "${DOMAIN_AGENTS[@]}"; do
-      cp "$APM_PACKAGE_DIR/.apm/agents/$agent" ".github/agents/$agent"
+      cp "$QUORUMKIT_PACKAGE_DIR/.apm/agents/$agent" ".github/agents/$agent"
     done
     ok "Industrial domain agents installed (.github/agents/)"
   fi
   ok "Agent definitions installed (.github/agents/)"
 
   # Copilot custom instructions — universal set
-  INSTR_SRC="$APM_PACKAGE_DIR/templates/github/instructions"
+  INSTR_SRC="$QUORUMKIT_PACKAGE_DIR/templates/github/instructions"
   UNIVERSAL_INSTRUCTIONS=(
     "ba-agent" "dev-agent" "qa-agent" "reviewer-agent" "architect-agent"   # kept consistent
     "devops-agent" "security-agent" "triage-agent"
@@ -214,7 +229,7 @@ install_copilot() {
   h1 "2. .github/copilot-instructions.md"
   if [ ! -f .github/copilot-instructions.md ]; then
     mkdir -p .github
-    cp "$APM_PACKAGE_DIR/templates/seed/copilot-instructions.md" .github/copilot-instructions.md
+    cp "$QUORUMKIT_PACKAGE_DIR/templates/seed/copilot-instructions.md" .github/copilot-instructions.md
     ok ".github/copilot-instructions.md created"
   else
     warn ".github/copilot-instructions.md already exists — skipping"
@@ -232,7 +247,7 @@ install_pipelines() {
   h1 "Installing Orchestrator pipelines (.apm/pipelines/)"
   # ADR-006 §3 / FR-005: pipelines are NOT mirrored. The package's `.apm/pipelines/`
   # is the single source of truth and is copied directly to the consumer.
-  local pipelines_src="$APM_PACKAGE_DIR/.apm/pipelines"
+  local pipelines_src="$QUORUMKIT_PACKAGE_DIR/.apm/pipelines"
   if [ ! -d "$pipelines_src" ]; then
     warn "Pipelines not found at $pipelines_src — skipping"
     return
@@ -328,7 +343,7 @@ install_github_templates() {
   # ── Root-level community files ─────────────────────────────────────────────
   for doc in CONTRIBUTING.md SECURITY.md; do
     if [ ! -f "$doc" ]; then
-      cp "$APM_PACKAGE_DIR/templates/seed/$doc" "$doc"
+      cp "$QUORUMKIT_PACKAGE_DIR/templates/seed/$doc" "$doc"
       ok "$doc created (review and customise before committing)"
     else
       warn "$doc already exists — skipping"
@@ -355,7 +370,7 @@ install_github_templates() {
 #     workflows that actually invoke the engine.
 # =============================================================================
 run_upgrade() {
-  h1 "APM Upgrade — rewrite engine invocations to 'uses:' Action form"
+  h1 "QuorumKit Upgrade — rewrite engine invocations to 'uses:' Action form"
   if [ ! -d ".github/workflows" ]; then
     err "No .github/workflows/ directory in $(pwd) — nothing to upgrade."
     exit 1
@@ -495,14 +510,14 @@ fi
 # ── Copy guides ──────────────────────────────────────────────────────────────
 for guide in BROWNFIELD_GUIDE.md DARK_FACTORY_GUIDE.md ENHANCEMENTS.md; do
   if [ ! -f "$guide" ]; then
-    cp "$APM_PACKAGE_DIR/$guide" "$guide"
+    cp "$QUORUMKIT_PACKAGE_DIR/$guide" "$guide"
     ok "$guide copied"
   fi
 done
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}${BOLD}✓ Agentic Dev Stack ready! (mode: $AI_MODE${DOMAIN:+ / domain: $DOMAIN})${NC}"
+echo -e "${GREEN}${BOLD}✓ QuorumKit ready! (mode: $AI_MODE${DOMAIN:+ / domain: $DOMAIN})${NC}"
 echo ""
 echo "Next steps:"
 echo ""
@@ -556,7 +571,7 @@ fi
 echo "  ── Orchestrator dashboard (optional) ────────────────────────────────"
 echo "  Run from THIS project directory ($PROJECT_DIR) to auto-fill the"
 echo "  project path, git remote, and current branch in the dashboard:"
-echo "    bash $APM_PACKAGE_DIR/engine/dashboard/start.sh"
+echo "    bash $QUORUMKIT_PACKAGE_DIR/engine/dashboard/start.sh"
 echo "  Then open http://localhost:3131 — agents are launchable from the UI."
 echo ""
 echo "  Comment on a PR or issue to trigger agents:"

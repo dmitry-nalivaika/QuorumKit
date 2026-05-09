@@ -1,10 +1,10 @@
-# Contributing to Agentic Dev Stack (APM)
+# Contributing to QuorumKit
 
-This guide is for contributors who want to **enhance the APM library itself** —
+This guide is for contributors who want to **enhance the QuorumKit library itself** —
 adding new agents, improving existing ones, updating workflows, or extending the
 framework for new domains (e.g. dark factory, fintech, healthcare).
 
-> **Using APM in your own project?** See `templates/seed/CONTRIBUTING.md` — that file
+> **Using QuorumKit in your own project?** See `templates/seed/CONTRIBUTING.md` — that file
 > is for contributors to projects that _use_ this library, not for this library itself.
 
 ---
@@ -47,7 +47,7 @@ exactly one zone (ADR-047, FR-001).
 | Zone | Top-level folders | Purpose |
 |---|---|---|
 | **1. Package payload** | `.apm/`, `templates/`, `installer/` | Files that `installer/init.sh` copies into a consumer repo. SoT for agents, skills, pipelines, runtime registry, identity registry, seed docs, template workflows. |
-| **2. Engine** | `engine/orchestrator/`, `engine/dashboard/`, `engine/tests/`, `engine/dist/` | Orchestrator runtime + dashboard + their tests + the committed ncc bundle. Distributed as (a) a reusable GitHub Action (`uses: dmitry-nalivaika/agentic-dev-stack/engine@<ref>`) and (b) an npm package. **Never copied** into a consumer repo. |
+| **2. Engine** | `engine/orchestrator/`, `engine/dashboard/`, `engine/tests/`, `engine/dist/` | Orchestrator runtime + dashboard + their tests + the committed ncc bundle. Distributed as (a) a reusable GitHub Action (`uses: dmitry-nalivaika/quorumkit/engine@<ref>`) and (b) an npm package. **Never copied** into a consumer repo. |
 | **3. Self-host** | `.github/`, `.claude/`, `.specify/`, `specs/`, `docs/`, `scripts/` (BC shims) | Files that exist solely so this repo can dogfood itself. **Not distributed.** `scripts/*.sh` are thin wrappers around `installer/*.sh` for one major version of backward compatibility. |
 
 Where to put what:
@@ -229,7 +229,7 @@ the new agent is **universal** (applies to all software projects) or **domain-sp
 - [ ] Add agent to `required_agents` array in `scripts/quality-check.sh`
 - [ ] Add skill to `UNIVERSAL_SKILLS` / `required_skills` arrays in both scripts
 - [ ] Add workflows to `required_workflows` in `scripts/quality-check.sh`
-- [ ] Add agent to `agents.universal` list in `apm.yml`
+- [ ] Add agent to `agents.universal` list in `quorumkit.yml`
 - [ ] Add agent to `README.md` universal agent table
 - [ ] Add slash command to `INIT.md` quick reference
 - [ ] `@architect-agent` review required — structural change to the framework
@@ -246,7 +246,7 @@ Domain extension packs add opt-in agents for a specific industry vertical.
 - [ ] Create all agent/skill/workflow files following the new-agent checklist above
 - [ ] Add a `--domain=<pack>` case to the argument parser in `scripts/init.sh`
 - [ ] Add domain agent arrays (`DOMAIN_AGENTS`, `DOMAIN_SKILLS`, `DOMAIN_WF_PATTERNS`) to both install functions
-- [ ] Add domain entry to `agents.domain/<pack>` in `apm.yml`
+- [ ] Add domain entry to `agents.domain/<pack>` in `quorumkit.yml`
 - [ ] Create or update `<DOMAIN>_GUIDE.md` at repo root
 - [ ] Add domain pack to `README.md` domain table and Quick Start examples
 - [ ] Add domain pack to `ENHANCEMENTS.md` Phase 5/6 table
@@ -272,7 +272,7 @@ guidance without polluting the universal agent definitions.
 ```zsh
 # Create a new domain guide
 touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
-# Then: /ba-agent Write a domain guide for fintech projects using this APM stack
+# Then: /ba-agent Write a domain guide for fintech projects using this QuorumKit stack
 ```
 
 ---
@@ -291,7 +291,7 @@ touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
 | Add a new issue template | `templates/github/ISSUE_TEMPLATE/<name>.md` + update `config.yml` |
 | Update init.sh | `scripts/init.sh` → always run `bash -n scripts/init.sh` after |
 | Add a domain guide | New `<DOMAIN>_GUIDE.md` at root + entry in `README.md` |
-| Update agent/skill/workflow counts | `scripts/quality-check.sh` arrays + `apm.yml` + `README.md` + `CONTRIBUTING.md` |
+| Update agent/skill/workflow counts | `scripts/quality-check.sh` arrays + `quorumkit.yml` + `README.md` + `CONTRIBUTING.md` |
 
 ---
 

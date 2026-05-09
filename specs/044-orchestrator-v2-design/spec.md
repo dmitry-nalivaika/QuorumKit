@@ -253,7 +253,7 @@ Acceptance Scenarios:
 - **Approval gate authorisation** preserves the v1 rule: `/approve` is honoured only from users with `write`, `maintain`, or `admin` permission, verified against the GitHub permissions API at the moment of approval.
 - **Least-privilege workflow tokens.** Orchestrator GitHub Actions workflows must request only the scopes required (issues:write, actions:write, contents:read; plus the additional read scope needed to verify approver permissions).
 - **Custom-runtime traffic.** When a user-registered runtime calls a third-party endpoint (Azure OpenAI, Bedrock, etc.), the issue body and any agent-shared context may be transmitted to that endpoint. The regulation document MUST warn users to ensure their chosen runtime's data handling matches their compliance posture; the orchestrator does not make this decision for them.
-- **No PII handled by APM itself.** Standard open-source data classification applies (constitution Security and Privacy Constraints). Custom-runtime usage may introduce PII concerns out of APM's control; this is the user's responsibility and is called out in the regulation document.
+- **No PII handled by QuorumKit itself.** Standard open-source data classification applies (constitution Security and Privacy Constraints). Custom-runtime usage may introduce PII concerns out of QuorumKit's control; this is the user's responsibility and is called out in the regulation document.
 - **Regulation linting** (FR-024) prevents undocumented labels or message types from silently expanding the orchestrator's attack surface.
 
 ## Assumptions
@@ -261,7 +261,7 @@ Acceptance Scenarios:
 - The constitution's existing rules (§II NNN traceability, §IV dual-AI compatibility generalised here to N-runtime, §VI auditable automation, §VIII orchestrator-as-control-plane, §IX dashboard read-only) apply unchanged.
 - GitHub Actions remains the agent execution substrate; v2 changes *how* workflows are selected and parameterised, not the substrate itself.
 - GitHub's webhook delivery model (delivery ID, at-least-once, occasional retry) holds; the deduplication design depends on the delivery ID being available in the workflow context.
-- The host secret store (GitHub Actions secrets / repository variables / OIDC-federated cloud credentials) is the trust root for runtime credentials; APM does not introduce its own secret store.
+- The host secret store (GitHub Actions secrets / repository variables / OIDC-federated cloud credentials) is the trust root for runtime credentials; QuorumKit does not introduce its own secret store.
 - The dashboard remains optional; absence of the webhook URL silently disables broadcast (constitution §IX read-only stance preserved).
 - Existing v1 pipelines (`feature-pipeline.yml`, `bug-fix-pipeline.yml`, `release-pipeline.yml`) and their consumers continue to function unchanged via the v1 backward-compatibility adapter (US-7).
 

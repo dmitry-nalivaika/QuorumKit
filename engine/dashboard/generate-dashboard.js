@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * APM Dashboard Generator
+ * QuorumKit Dashboard Generator
  * ─────────────────────────────────────────────────────────────────────────────
- * Reads .apm/agents/*.md and apm.yml, then patches dashboard/index.html with
+ * Reads .apm/agents/*.md and quorumkit.yml, then patches dashboard/index.html with
  * up-to-date agent data.
  *
  * Run:  node dashboard/generate-dashboard.js
@@ -17,7 +17,7 @@ const path = require('path');
 
 const ROOT        = path.resolve(__dirname, '..');
 const AGENTS_DIR  = path.join(ROOT, '.apm', 'agents');
-const APM_YML     = path.join(ROOT, 'apm.yml');
+const APM_YML     = path.join(ROOT, 'quorumkit.yml');
 const DASHBOARD   = path.join(__dirname, 'index.html');
 
 // ─── Canonical short IDs (used as desk/DOM element IDs and bootQuips keys) ──
@@ -227,11 +227,11 @@ function parseAgent(filename, agentId, domainName) {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 function main() {
-  console.log('📊 APM Dashboard Generator');
+  console.log('📊 QuorumKit Dashboard Generator');
   console.log(`   Scanning ${AGENTS_DIR}`);
 
   const { version, workflowCount, universal, domain } = parseApmYml();
-  console.log(`   APM version: ${version} | workflows: ${workflowCount}`);
+  console.log(`   QuorumKit version: ${version} | workflows: ${workflowCount}`);
 
   const agents = [];
 
@@ -266,10 +266,10 @@ function main() {
   // Read dashboard HTML
   let html = fs.readFileSync(DASHBOARD, 'utf8');
 
-  // Replace APM_VERSION
+  // Replace QUORUMKIT_VERSION
   html = html.replace(
-    /const APM_VERSION = "[^"]+";/,
-    `const APM_VERSION = "${version}";`
+    /const QUORUMKIT_VERSION = "[^"]+";/,
+    `const QUORUMKIT_VERSION = "${version}";`
   );
 
   // Replace AGENTS array (between the sentinel comments)
@@ -288,13 +288,13 @@ function main() {
     process.exit(1);
   }
 
-  const newBlock = `${SENTINEL_START}\nconst APM_VERSION = "${version}";\n\nconst AGENTS = ${agentsJson};\n\n`;
+  const newBlock = `${SENTINEL_START}\nconst QUORUMKIT_VERSION = "${version}";\n\nconst AGENTS = ${agentsJson};\n\n`;
   html = html.slice(0, startIdx) + newBlock + html.slice(endIdx);
 
   // Write back
   fs.writeFileSync(DASHBOARD, html, 'utf8');
   console.log(`\n   ✅ dashboard/index.html updated`);
-  console.log(`   APM_VERSION = ${version}`);
+  console.log(`   QUORUMKIT_VERSION = ${version}`);
   console.log(`   AGENTS count = ${agents.length}`);
 }
 

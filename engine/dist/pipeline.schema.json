@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://apm.dev/schemas/pipeline.schema.json",
-  "title": "APM Pipeline",
-  "description": "Declarative pipeline definition for APM Orchestrator (v1 + v2)",
+  "title": "QuorumKit Pipeline",
+  "description": "Declarative pipeline definition for QuorumKit Orchestrator (v1 + v2)",
   "oneOf": [
     { "$ref": "#/definitions/v1" },
     { "$ref": "#/definitions/v2" }

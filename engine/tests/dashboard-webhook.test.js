@@ -5,8 +5,8 @@
  * and asserts correct HTTP responses. WebSocket broadcast is verified by
  * connecting a WS client before posting.
  *
- * SEC-HIGH-001: APM_WEBHOOK_SECRET is set in the server env; tests verify that
- * requests without / with a wrong X-APM-Webhook-Secret header are rejected 403.
+ * SEC-HIGH-001: QUORUMKIT_WEBHOOK_SECRET is set in the server env; tests verify that
+ * requests without / with a wrong X-QuorumKit-Webhook-Secret header are rejected 403.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer } from 'node:http';
@@ -67,7 +67,7 @@ async function post(port, path, body, extraHeaders = {}) {
 
 /** Convenience: post with the correct secret header */
 function postAuth(port, path, body) {
-  return post(port, path, body, { 'X-APM-Webhook-Secret': TEST_WEBHOOK_SECRET });
+  return post(port, path, body, { 'X-QuorumKit-Webhook-Secret': TEST_WEBHOOK_SECRET });
 }
 
 // ─── Server lifecycle ────────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ beforeAll(async () => {
     ['server.js', '--port', String(port)],
     {
       cwd: DASHBOARD_DIR,
-      env: { ...process.env, APM_PORT: String(port), APM_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET },
+      env: { ...process.env, QUORUMKIT_PORT: String(port), QUORUMKIT_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   );
@@ -123,7 +123,7 @@ describe('POST /webhook/pipeline-event', () => {
     expect(status).toBe(204);
   });
 
-  it('returns 403 when X-APM-Webhook-Secret header is missing', async () => {
+  it('returns 403 when X-QuorumKit-Webhook-Secret header is missing', async () => {
     const { status, body } = await post(port, '/webhook/pipeline-event', {
       runId: 'run-001',
       status: 'running',
@@ -132,10 +132,10 @@ describe('POST /webhook/pipeline-event', () => {
     expect(JSON.parse(body)).toMatchObject({ error: expect.stringContaining('Forbidden') });
   });
 
-  it('returns 403 when X-APM-Webhook-Secret header is wrong', async () => {
+  it('returns 403 when X-QuorumKit-Webhook-Secret header is wrong', async () => {
     const { status, body } = await post(port, '/webhook/pipeline-event',
       { runId: 'run-001', status: 'running' },
-      { 'X-APM-Webhook-Secret': 'wrong-secret' }
+      { 'X-QuorumKit-Webhook-Secret': 'wrong-secret' }
     );
     expect(status).toBe(403);
     expect(JSON.parse(body)).toMatchObject({ error: expect.stringContaining('Forbidden') });

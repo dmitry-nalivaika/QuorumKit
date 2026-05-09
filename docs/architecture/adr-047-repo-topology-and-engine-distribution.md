@@ -115,13 +115,13 @@ single transactional CI release workflow:
 
 #### Channel A — Reusable GitHub Action (primary)
 
-Published as `dmitry-nalivaika/agentic-dev-stack/engine@v3` (sub-action of this repo) or
+Published as `dmitry-nalivaika/quorumkit/engine@v3` (sub-action of this repo) or
 sibling repo. All distributed workflows call it instead of
 `node scripts/orchestrator/...`:
 
 ```yaml
 # templates/github/workflows/orchestrator.yml (NEW form)
-- uses: dmitry-nalivaika/agentic-dev-stack/engine@v3   # consumers may SHA-pin
+- uses: dmitry-nalivaika/quorumkit/engine@v3   # consumers may SHA-pin
   with:
     pipeline: feature
     issue: ${{ github.event.issue.number }}
@@ -270,7 +270,7 @@ Ordered to keep `main` green at every step:
 8. Add release workflow that publishes Action tag + npm package on `v*` tags
    (transactional). Security Agent reviews `permissions:` block first.
 9. Rewrite distributed workflows in `templates/github/workflows/` to use
-   `uses: dmitry-nalivaika/agentic-dev-stack/engine@v3`.
+   `uses: dmitry-nalivaika/quorumkit/engine@v3`.
 10. Sync `.github/workflows/` byte-identically to `templates/github/workflows/`
     (the overlapping subset).
 11. Delete `templates/.apm/pipelines/`. Update `init.sh` to copy from
@@ -288,7 +288,7 @@ Ordered to keep `main` green at every step:
 
 ## Open questions for downstream agents
 
-- **Action ref form**: sub-action of this repo (`dmitry-nalivaika/agentic-dev-stack/engine@v3`)
+- **Action ref form**: sub-action of this repo (`dmitry-nalivaika/quorumkit/engine@v3`)
   vs sibling repo (`dmitry-nalivaika/apm-orchestrator@v3`). Either satisfies
   this ADR. Decision deferred to release time; recommend sub-action for
   simpler initial release.

@@ -1,7 +1,7 @@
 {
-  "name": "apm-orchestrator",
+  "name": "quorumkit-orchestrator",
   "version": "0.1.0",
-  "description": "APM Autonomous Agent Orchestrator",
+  "description": "QuorumKit Autonomous Agent Orchestrator",
   "type": "module",
   "main": "index.js",
   "scripts": {

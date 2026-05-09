@@ -45,7 +45,7 @@ remaining items required for v3.0.0.
   --provenance`; protected `release` GitHub Environment; signed v* tags
   (FR-010, SC-009).
 - ✅ **T-13** Rewrite distributed workflows in `templates/github/workflows/`
-  to use `uses: dmitry-nalivaika/agentic-dev-stack/engine@<sha>` (FR-011). Remove the
+  to use `uses: dmitry-nalivaika/quorumkit/engine@<sha>` (FR-011). Remove the
   `# apm-allow: M8` markers from `orchestrator.yml` once landed.
 
 ### CI mirror enforcement (FR-015..FR-020, FR-031)

@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions
 
-This project uses the **Agentic Dev Stack** — a fully agentic development environment
+This project uses the **QuorumKit** — a fully agentic development environment
 with specialized AI agents, Spec Kit integration, and GitHub Actions workflows.
 
 ## Project Context

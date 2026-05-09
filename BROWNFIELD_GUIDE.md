@@ -1,6 +1,6 @@
 # Brownfield Adoption Guide
 
-How to introduce the Agentic Dev Stack into a **project that already exists** —
+How to introduce the QuorumKit into a **project that already exists** —
 with existing code, existing issues, possibly an existing CI pipeline, and a team
 that has not used AI agents before.
 
@@ -78,7 +78,7 @@ echo "=== Community files ==="
 After running `init.sh`, compare manually:
 
 ```zsh
-APM=/path/to/agentic-dev-stack
+QUORUMKIT=/path/to/quorumkit
 
 # Show diff between your current agent and the new version
 for agent in ba-product-agent developer-agent qa-test-agent reviewer-agent \
@@ -135,10 +135,10 @@ Code (or describe it to Copilot) to update it section by section.
 
 ```zsh
 diff .github/copilot-instructions.md \
-     /path/to/agentic-dev-stack/templates/seed/copilot-instructions.md
+     /path/to/quorumkit/templates/seed/copilot-instructions.md
 ```
 
-The APM template `copilot-instructions.md` adds:
+The QuorumKit template `copilot-instructions.md` adds:
 - A pointer to the agent definitions in `.github/agents/`
 - Standard activation phrases for each agent role
 
@@ -152,16 +152,16 @@ to the top of your existing file, then keep all your existing project context be
 `init.sh` skips any workflow file that already exists.
 
 Scenarios:
-1. **You have `agent-*.yml` from a previous version of APM** — compare and update
+1. **You have `agent-*.yml` from a previous version of QuorumKit** — compare and update
    manually; the new versions are delegation-only (simpler).
-2. **You have a non-APM workflow with the same name** — rename yours first, then run
+2. **You have a non-QuorumKit workflow with the same name** — rename yours first, then run
    `init.sh`, then reconcile.
 3. **You have a `ci.yml` or `test.yml`** — no conflict; agent workflows are
    independently triggered by PR comments.
 
 ```zsh
 # See which workflows would be skipped
-for wf in /path/to/agentic-dev-stack/templates/github/workflows/*.yml; do
+for wf in /path/to/quorumkit/templates/github/workflows/*.yml; do
   wf_name="$(basename "$wf")"
   [ -f ".github/workflows/$wf_name" ] \
     && echo "SKIP (exists): $wf_name" \
@@ -173,7 +173,7 @@ done
 
 ### Conflict: Existing CLAUDE.md {#conflict-existing-claudemd}
 
-`init.sh` skips `CLAUDE.md` if it exists. The APM template CLAUDE.md is minimal —
+`init.sh` skips `CLAUDE.md` if it exists. The QuorumKit template CLAUDE.md is minimal —
 it only adds `<!-- SPECKIT START/END -->` tags for constitution injection.
 
 Check whether your existing CLAUDE.md has the speckit tags:
@@ -200,9 +200,9 @@ If tags are missing, add them anywhere in your CLAUDE.md:
 cd /path/to/your-existing-project
 
 # Choose the mode that matches your team
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=both     # Claude + Copilot
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=claude   # Claude Code only
-bash /path/to/agentic-dev-stack/installer/init.sh --ai=copilot  # GitHub Copilot only
+bash /path/to/quorumkit/installer/init.sh --ai=both     # Claude + Copilot
+bash /path/to/quorumkit/installer/init.sh --ai=claude   # Claude Code only
+bash /path/to/quorumkit/installer/init.sh --ai=copilot  # GitHub Copilot only
 ```
 
 The script is safe to run on existing projects — it **skips any file that already

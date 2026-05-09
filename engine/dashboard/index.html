@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>APM Dark Factory — Agent Orchestrator</title>
+  <title>QuorumKit Dark Factory — Agent Orchestrator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -525,7 +525,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
   <div class="tb-logo">
     <span class="tb-logo-icon">🏭</span>
     <div>
-      <div class="tb-logo-name">APM Dark Factory</div>
+      <div class="tb-logo-name">QuorumKit Dark Factory</div>
       <div class="tb-logo-sub">Autonomous Agent Orchestrator</div>
     </div>
   </div>
@@ -731,13 +731,13 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
-//  APM DARK FACTORY — Agent Orchestrator UI
+//  QuorumKit Dark Factory — Agent Orchestrator UI
 //  Auto-generated from apm.yml + .apm/agents/*.md
 //  This file is managed by docs-agent — do not manually edit agent definitions
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Agent Definitions (synced from .apm/agents/*.md + apm.yml) ─────────────
-const APM_VERSION = "2.1.0";
+const QUORUMKIT_VERSION = "2.1.0";
 
 const AGENTS = [
   {
@@ -1450,7 +1450,7 @@ const CMDS = {
       `${a.emoji}  ${a.name.padEnd(26)}${busySet.has(a.id)?'⚡ WORKING':'● Idle'}`));
   },
   '/version': () => {
-    clog('system',`APM Dark Factory  v${APM_VERSION}`);
+    clog('system',`QuorumKit Dark Factory  v${QUORUMKIT_VERSION}`);
     clog('info',  `${AGENTS.length} agents  (${AGENTS.filter(x=>x.domain==='universal').length} universal + ${AGENTS.filter(x=>x.domain==='industrial').length} industrial)`);
     clog('info',  'Workflows: 25  │  Quality Gates: 13/13 ✓');
     clog('info',  'Works with Claude Code + GitHub Copilot');
@@ -1495,7 +1495,7 @@ const CMDS = {
     h.forEach(l => clog('funny','      '+l)); clog('funny','');
   },
   '/about': () => {
-    clog('system','🏭  APM Dark Factory — Autonomous SDLC Loop');
+    clog('system','🏭  QuorumKit Dark Factory — Autonomous SDLC Loop');
     clog('info',  'Triage → Spec → Architecture → Plan → TDD → Test → Review → Security → Merge');
     clog('info',  '→ Release → Docs → Deploy → Monitor → Alert → ↺ Triage');
     clog('info',  '"Dark Factory" = lights-out software factory. Not industrial hardware.');
@@ -1663,7 +1663,7 @@ function applyProjectInfo(cfg) {
   const pill = document.getElementById('pill-project');
   if (pill) pill.title = cfg.localPath ? `Project: ${cfg.localPath}` : 'No project set — click ⚙ to configure';
   // Update browser tab title too.
-  document.title = `${name} — APM Dark Factory`;
+  document.title = `${name} — QuorumKit Dark Factory`;
 }
 
 function handleServerMsg(msg) {
@@ -2077,7 +2077,7 @@ function init() {
   buildSdlc();
   seedKanban();
 
-  document.getElementById('ver').textContent       = `v${APM_VERSION}`;
+  document.getElementById('ver').textContent       = `v${QUORUMKIT_VERSION}`;
   document.getElementById('stat-agents').textContent = AGENTS.length;
   document.getElementById('a-agents').textContent  = AGENTS.length;
   document.getElementById('a-univ').textContent    = AGENTS.filter(a=>a.domain==='universal').length;
@@ -2138,8 +2138,8 @@ function init() {
   });
 
   // Boot
-  clog('system','🏭  APM Dark Factory — Agent Orchestrator');
-  clog('system',`v${APM_VERSION}  —  ${AGENTS.length} agents`);
+  clog('system','🏭  QuorumKit Dark Factory — Agent Orchestrator');
+  clog('system',`v${QUORUMKIT_VERSION}  —  ${AGENTS.length} agents`);
   clog('success','✓  All 13 quality gates passing');
   clog('info',   '💡  Type /help for commands  •  Click ⚙ to configure your project');
   clog('funny',  '☕  Connecting to orchestrator server…');

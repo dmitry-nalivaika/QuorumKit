@@ -1,7 +1,7 @@
 {
   "name": "apm-dashboard-server",
   "version": "2.0.0",
-  "description": "APM Dark Factory — real orchestrator backend",
+  "description": "QuorumKit Dark Factory — real orchestrator backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

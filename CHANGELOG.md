@@ -13,6 +13,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.0-rebranding] — 2026-05-09 (Issue #67)
+
+> **Breaking change.** Full rebranding from APM / Agentic Dev Stack to **QuorumKit**.
+> See `MIGRATION.md` for the complete before/after reference table.
+
+### ⚠️ Breaking changes
+
+- **`apm.yml` renamed to `quorumkit.yml`** — v3 does not accept the old filename.
+  `installer/init.sh` exits non-zero with a migration notice if `apm.yml` is detected.
+- **NPM package renamed**: `apm-engine` → `quorumkit-engine`, `apm-orchestrator` → `quorumkit-orchestrator`.
+  No backward-compatible alias is published.
+- **GitHub repository renamed**: `agentic-dev-stack` → `quorumkit`.
+  Consumer `uses:` paths must be updated to `uses: dmitry-nalivaika/quorumkit/engine@v3`.
+- **VS Code extension renamed**: `apm-copilot-bridge` → `quorumkit-copilot-bridge`;
+  command prefix changed from `apm.` to `quorumkit.`.
+
+### Changed
+
+- `engine/package.json` `name`: `apm-engine` → `quorumkit-engine`; `"private": true` removed.
+- `engine/orchestrator/package.json` `name`: `apm-orchestrator` → `quorumkit-orchestrator`.
+- `quorumkit.yml` replaces `apm.yml` (hard break — FR-004, ADR-067).
+- All root-level documentation updated to reflect QuorumKit brand (FR-006).
+- `.specify/memory/constitution.md` header updated to QuorumKit (FR-007, separate PR).
+
+### Internal (frozen, not renamed — FR-013, FR-014)
+
+- Wire-format tokens (`apm-msg`, `apm-state`, `apm-pipeline-state`) unchanged.
+- `.apm/` configuration directory unchanged.
+
+---
+
 ## [3.0.0] — 2026-05-09
 
 > **Breaking change.** Repository topology rewritten into three zones
