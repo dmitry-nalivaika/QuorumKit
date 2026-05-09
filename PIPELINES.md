@@ -12,7 +12,7 @@ backward-compat adapter, but every shipped pipeline is now v2.
 ## How it works
 
 ```
-GitHub event ─► .github/workflows/orchestrator.yml ─► scripts/orchestrator/index.js
+GitHub event ─► .github/workflows/orchestrator.yml ─► engine/orchestrator/index.js
                                                             │
               ┌─────────────────────────────────────────────┤
               ▼                                             │
@@ -223,8 +223,8 @@ validator emits `RUNTIME_KIND_NOT_ENABLED` until each gets its own ADR.
 3. Run the validator locally:
 
    ```zsh
-   node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines/my-pipeline.yml
-   node scripts/orchestrator/regulation-lint.js
+   node engine/orchestrator/pipeline-validator-cli.js .apm/pipelines/my-pipeline.yml
+   node engine/orchestrator/regulation-lint.js
    ```
 
 4. Commit. The orchestrator picks up new pipelines on the next event — no
@@ -236,10 +236,10 @@ validator emits `RUNTIME_KIND_NOT_ENABLED` until each gets its own ADR.
 
 | Check | Command | Reference |
 |---|---|---|
-| `pipeline-validator` | `node scripts/orchestrator/pipeline-validator-cli.js` | FR-020 |
+| `pipeline-validator` | `node engine/orchestrator/pipeline-validator-cli.js` | FR-020 |
 | `verify-mirror` | `bash scripts/verify-mirror.sh` | [ADR-006] |
-| `orchestrator-tests` | `cd scripts/orchestrator && npm test` | FR-023 |
-| `regulation-lint` | `node scripts/orchestrator/regulation-lint.js` | FR-014 |
+| `orchestrator-tests` | `cd engine/orchestrator && npm test` | FR-023 |
+| `regulation-lint` | `node engine/orchestrator/regulation-lint.js` | FR-014 |
 
 All four are wired into `.github/workflows/quality.yml`.
 

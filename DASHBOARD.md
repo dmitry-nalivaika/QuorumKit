@@ -37,8 +37,8 @@ The Orchestrator is a two-part system:
 
 | Part | File | What it does |
 |------|------|--------------|
-| **Backend server** | `dashboard/server.js` | Node.js HTTP + WebSocket server. Spawns agent processes, streams their output live, opens native terminal windows, manages project config. |
-| **Dashboard UI** | `dashboard/index.html` | Single-page app served by the backend. Shows all 15 agents as cards, a live console, a Kanban board, and a settings modal. |
+| **Backend server** | `engine/dashboard/server.js` | Node.js HTTP + WebSocket server. Spawns agent processes, streams their output live, opens native terminal windows, manages project config. |
+| **Dashboard UI** | `engine/dashboard/index.html` | Single-page app served by the backend. Shows all 15 agents as cards, a live console, a Kanban board, and a settings modal. |
 
 The two parts communicate over **WebSocket** (`ws://localhost:3131`). The UI degrades
 gracefully to a simulation mode when the server is not running — so you can open
@@ -61,7 +61,7 @@ gracefully to a simulation mode when the server is not running — so you can op
 └─────────┼─────────────────┼──────────────────────────────────────┘
           │                 │
 ┌─────────▼─────────────────▼──────────────────────────────────────┐
-│  dashboard/server.js  (Node.js, port 3131)                       │
+│  engine/dashboard/server.js  (Node.js, port 3131)                       │
 │                                                                   │
 │  HTTP routes          WebSocket broadcast                        │
 │  GET  /               → serves index.html                        │
@@ -209,7 +209,7 @@ From **your project directory**:
 
 ```zsh
 cd ~/work/legacy-billing-service
-bash ~/.agentic-dev-stack/dashboard/start.sh
+bash ~/.agentic-dev-stack/engine/dashboard/start.sh
 ```
 
 `start.sh` captures `$PWD` into `APM_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses it as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to fill in the **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
@@ -235,7 +235,7 @@ If you orchestrate several projects, a one-liner saves typing:
 
 ```zsh
 # In ~/.zshrc
-alias apm='bash ~/.agentic-dev-stack/dashboard/start.sh'
+alias apm='bash ~/.agentic-dev-stack/engine/dashboard/start.sh'
 ```
 
 Then from any project: `cd ~/work/foo && apm`.
@@ -245,7 +245,7 @@ Then from any project: `cd ~/work/foo && apm`.
 ```zsh
 APM_PORT=4000 apm
 # or
-bash ~/.agentic-dev-stack/dashboard/start.sh --port 4000
+bash ~/.agentic-dev-stack/engine/dashboard/start.sh --port 4000
 ```
 
 ### 5.4 — Override the auto-detected project
@@ -541,7 +541,7 @@ Use `--ai=claude` if you prefer Claude Code, or `--ai=both` for both.
 
 ```zsh
 cd ~/projects/todo-api
-bash ~/.agentic-dev-stack/dashboard/start.sh
+bash ~/.agentic-dev-stack/engine/dashboard/start.sh
 # → browser opens http://localhost:3131
 ```
 
@@ -738,7 +738,7 @@ changelog, release — was handled by agents.
 }
 ```
 
-This file lives in `dashboard/.apm-project.json` (inside the agentic-dev-stack repo, not your project).
+This file lives in `engine/dashboard/.apm-project.json` (inside the agentic-dev-stack repo, not your project).
 It is git-ignored so your paths stay local. The server re-derives `projectName` and any
 missing fields on every launch from `APM_PROJECT_DIR` + `git`, so older saved configs upgrade automatically.
 
@@ -906,7 +906,7 @@ The browser cannot reach `ws://localhost:3131`.
 
 1. Check the server is running: `ps aux | grep server.js`
 2. Check the port is not in use by something else: `lsof -i :3131`
-3. Try a different port: `node dashboard/server.js --port 4000` then open `http://localhost:4000`
+3. Try a different port: `node engine/dashboard/server.js --port 4000` then open `http://localhost:4000`
 4. Check for firewall rules blocking localhost connections
 
 ### "No project path configured" error on invoke
@@ -916,7 +916,7 @@ If you see it:
 
 1. Confirm you launched `start.sh` from inside the project (not from `~/`):
    ```zsh
-   cd ~/projects/todo-api && bash ~/.agentic-dev-stack/dashboard/start.sh
+   cd ~/projects/todo-api && bash ~/.agentic-dev-stack/engine/dashboard/start.sh
    ```
 2. Or set `APM_PROJECT_DIR` explicitly: `APM_PROJECT_DIR=~/projects/todo-api apm`
 3. Or open **⚙ Settings** and fill in **Local Project Path**. The path must exist on disk.
@@ -994,5 +994,5 @@ The server logs the exit code and the stderr output to the console. Common cause
 - [`DARK_FACTORY_GUIDE.md`](DARK_FACTORY_GUIDE.md) — Architectural philosophy and agent design
 - [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) — Adopting APM in an existing project
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — How to extend the stack
-- [`dashboard/server.js`](dashboard/server.js) — Orchestrator backend source
-- [`dashboard/index.html`](dashboard/index.html) — Dashboard UI source
+- [`engine/dashboard/server.js`](engine/dashboard/server.js) — Orchestrator backend source
+- [`engine/dashboard/index.html`](engine/dashboard/index.html) — Dashboard UI source

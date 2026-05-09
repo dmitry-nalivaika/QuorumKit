@@ -256,7 +256,7 @@ A browser-based control centre for live agent invocation, log streaming,
 a Kanban board, and a native terminal per agent.
 
 ```zsh
-bash dashboard/start.sh    # opens http://localhost:3131
+bash engine/dashboard/start.sh    # opens http://localhost:3131
 ```
 
 Full guide: [`DASHBOARD.md`](DASHBOARD.md).

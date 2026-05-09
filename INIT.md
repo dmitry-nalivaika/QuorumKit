@@ -30,10 +30,10 @@ Install only the tools for the mode(s) you are using.
 mkdir -p /path/to/my-project && cd /path/to/my-project
 
 # 2. Run init — choose your AI mode
-bash ~/path/to/agentic-dev-stack/scripts/init.sh                                # Claude only (default)
-bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=copilot                   # Copilot only
-bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=both                      # Both (universal)
-bash ~/path/to/agentic-dev-stack/scripts/init.sh --ai=both --domain=industrial  # Both + industrial pack
+bash ~/path/to/agentic-dev-stack/installer/init.sh                                # Claude only (default)
+bash ~/path/to/agentic-dev-stack/installer/init.sh --ai=copilot                   # Copilot only
+bash ~/path/to/agentic-dev-stack/installer/init.sh --ai=both                      # Both (universal)
+bash ~/path/to/agentic-dev-stack/installer/init.sh --ai=both --domain=industrial  # Both + industrial pack
 ```
 
 The script is **idempotent** — it skips any file that already exists, making it
@@ -154,15 +154,15 @@ for skill in /path/to/agentic-dev-stack/.apm/skills/*/; do
 done
 
 # Step 2: CLAUDE.md
-cp /path/to/agentic-dev-stack/templates/CLAUDE.md CLAUDE.md
+cp /path/to/agentic-dev-stack/templates/seed/CLAUDE.md CLAUDE.md
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
 cp /path/to/agentic-dev-stack/templates/github/workflows/agent-*.yml .github/workflows/
 cp /path/to/agentic-dev-stack/templates/github/pull_request_template.md .github/
 cp /path/to/agentic-dev-stack/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/agentic-dev-stack/templates/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/agentic-dev-stack/templates/SECURITY.md SECURITY.md
+cp /path/to/agentic-dev-stack/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/agentic-dev-stack/templates/seed/SECURITY.md SECURITY.md
 
 # Step 4: github-speckit
 npx github-speckit@latest
@@ -181,7 +181,7 @@ cp -r /path/to/agentic-dev-stack/.apm/agents/* .github/agents/
 
 # Step 2: Copilot context and instructions
 mkdir -p .github/instructions
-cp /path/to/agentic-dev-stack/templates/copilot-instructions.md .github/copilot-instructions.md
+cp /path/to/agentic-dev-stack/templates/seed/copilot-instructions.md .github/copilot-instructions.md
 cp /path/to/agentic-dev-stack/templates/github/instructions/*.instructions.md .github/instructions/
 
 # Step 3: GitHub templates
@@ -189,8 +189,8 @@ mkdir -p .github/workflows .github/ISSUE_TEMPLATE
 cp /path/to/agentic-dev-stack/templates/github/workflows/copilot-agent-*.yml .github/workflows/
 cp /path/to/agentic-dev-stack/templates/github/pull_request_template.md .github/
 cp /path/to/agentic-dev-stack/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/agentic-dev-stack/templates/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/agentic-dev-stack/templates/SECURITY.md SECURITY.md
+cp /path/to/agentic-dev-stack/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/agentic-dev-stack/templates/seed/SECURITY.md SECURITY.md
 
 # Step 4: Git
 git init && git add . && git commit -m "chore: initialize agentic dev stack"
@@ -235,8 +235,8 @@ it at every session start and treat it as non-negotiable.
 ### 3. Copy additional templates to your project root
 
 ```zsh
-cp /path/to/agentic-dev-stack/templates/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/agentic-dev-stack/templates/SECURITY.md SECURITY.md
+cp /path/to/agentic-dev-stack/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/agentic-dev-stack/templates/seed/SECURITY.md SECURITY.md
 ```
 
 Edit `SECURITY.md` to replace `[security@your-domain.com]` with your actual contact.
@@ -373,7 +373,7 @@ Common customisations:
 
 ```zsh
 # Re-run init (skips existing files)
-bash /path/to/agentic-dev-stack/scripts/init.sh --ai=both
+bash /path/to/agentic-dev-stack/installer/init.sh --ai=both
 
 # Or update a single agent
 cp /path/to/agentic-dev-stack/.apm/agents/security-agent.md .claude/agents/
@@ -465,5 +465,5 @@ apm install
 ```
 
 APM installs `.apm/agents/` → `.claude/agents/` and `.apm/skills/` → `.claude/skills/`
-automatically. Run `scripts/init.sh` separately for full setup (GitHub templates,
+automatically. Run `installer/init.sh` separately for full setup (GitHub templates,
 speckit, Copilot files).

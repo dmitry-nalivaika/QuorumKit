@@ -135,7 +135,7 @@ Code (or describe it to Copilot) to update it section by section.
 
 ```zsh
 diff .github/copilot-instructions.md \
-     /path/to/agentic-dev-stack/templates/copilot-instructions.md
+     /path/to/agentic-dev-stack/templates/seed/copilot-instructions.md
 ```
 
 The APM template `copilot-instructions.md` adds:
@@ -200,9 +200,9 @@ If tags are missing, add them anywhere in your CLAUDE.md:
 cd /path/to/your-existing-project
 
 # Choose the mode that matches your team
-bash /path/to/agentic-dev-stack/scripts/init.sh --ai=both     # Claude + Copilot
-bash /path/to/agentic-dev-stack/scripts/init.sh --ai=claude   # Claude Code only
-bash /path/to/agentic-dev-stack/scripts/init.sh --ai=copilot  # GitHub Copilot only
+bash /path/to/agentic-dev-stack/installer/init.sh --ai=both     # Claude + Copilot
+bash /path/to/agentic-dev-stack/installer/init.sh --ai=claude   # Claude Code only
+bash /path/to/agentic-dev-stack/installer/init.sh --ai=copilot  # GitHub Copilot only
 ```
 
 The script is safe to run on existing projects — it **skips any file that already

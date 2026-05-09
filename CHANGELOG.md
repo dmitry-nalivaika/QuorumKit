@@ -9,6 +9,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(no entries)
+
+---
+
+## [3.0.0] — 2026-05-09
+
+> **Breaking change.** Repository topology rewritten into three zones
+> (Package payload / Engine / Self-host) and the orchestrator engine is
+> now distributed as a versioned GitHub Action + npm package
+> (`apm-engine`). See `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
+> and `specs/047-repo-topology/spec.md` for the full rationale.
+
+### ⚠️ Breaking changes
+
+- **Engine moved.** `scripts/orchestrator/` → `engine/orchestrator/`,
+  `tests/orchestrator/` → `engine/tests/`, `dashboard/` → `engine/dashboard/`.
+  Consumer workflows that ran `node scripts/orchestrator/index.js` MUST
+  switch to `uses: dmitry-nalivaika/APM/engine@v3` (or a SHA pin).
+  Migration: `bash installer/init.sh --upgrade --apply --engine-ref=v3`.
+- **Installer moved.** `scripts/{init,verify-mirror,quality-check}.sh` →
+  `installer/`. Backward-compatible shims at `scripts/*.sh` `exec` the new
+  path; they will be removed in v4.0.0.
+- **Seed files moved.** `templates/{CLAUDE,CONTRIBUTING,SECURITY,copilot-instructions}.md`
+  → `templates/seed/`. The installer copies them from the new location;
+  external scripts that reference the old path must be updated.
+- **`apm.yml` `version: 2.1.0` → `3.0.0`** (T-25).
+- **`templates/.apm/pipelines/` removed.** Pipelines live only at
+  `.apm/pipelines/`; `installer/init.sh` copies them straight from the
+  SoT (FR-005, mirror gate M4).
+- **`.github/agents/` removed from this repo.** That directory is created
+  in *consumer* repos by the installer; in the SoT, agent definitions
+  live only at `.apm/agents/` (FR-006, mirror gate M6).
+- **Pipelines may now declare `apiVersion: 'X.Y'`.** The engine refuses
+  to load a pipeline whose `apiVersion` is newer than its own (FR-013).
+  `ENGINE_API_VERSION` is `1.0` in this release.
+
+### ✨ Features
+
+- **Three-zone repo topology** documented in `CONTRIBUTING.md` →
+  *Repo Topology* (FR-026). Mirror surfaces M4–M9 added to
+  `installer/verify-mirror.sh` with negative-test fixtures
+  (`installer/tests/test-verify-mirror.sh` — 13/13).
+- **Engine GitHub Action** (`engine/action.yml`) — `runs.using: 'node20'`,
+  `runs.main: 'dist/index.js'`. Bundle built via `@vercel/ncc` and committed
+  to `engine/dist/`. `.github/workflows/engine-build-gate.yml` rebuilds on
+  every PR and rejects bundle drift (T-09, FR-009).
+- **OIDC-trusted npm publishing.** `.github/workflows/engine-release.yml`
+  triggers on signed `v*` tags, runs in a protected `release` Environment,
+  verifies the tag signature, rebuilds `dist/`, and publishes
+  `apm-engine` with `--provenance` — no `NPM_TOKEN` ever read
+  (T-12, FR-010, SC-009, SEC-HIGH-001).
+- **Per-scope `engine/SECURITY.md`** with permission justification table,
+  threat-model snapshot, and change-control rules. Default consumer-side
+  permission posture is `contents: read` + `issues: write` +
+  `pull-requests: write` (T-11, FR-014, SEC-MED-001).
+- **`installer/init.sh --upgrade`** rewrites consumer `.github/workflows/*.yml`
+  from `node engine/orchestrator/index.js` to the Action `uses:` form.
+  Dry-run by default; refuses to broaden any `permissions:` block
+  (T-20, FR-024, SEC-MED-002).
+- **Dependabot** for `github-actions` (root) and `npm` (`/engine`,
+  `/engine/orchestrator`, `/engine/dashboard`) ecosystems
+  (T-17, FR-031, ADR-047 §6).
+- **Safe YAML loading** pinned to `js-yaml`'s `CORE_SCHEMA` across the
+  engine. Tag-aware loaders (`!!js/function`) are forbidden and
+  exercised in a regression test (T-10, FR-013).
+
+### 🔒 Security
+
+- **All third-party `uses:` SHA-pinned** in `.github/workflows/` and
+  `templates/github/workflows/` (T-16, FR-031, mirror gate M9).
+- **Engine release path is reproducible**: signed tag → rebuilt bundle
+  → provenance-attested npm tarball. Verifying GPG fingerprint published
+  in `docs/architecture/adr-047-action-runtime.md` and rotation procedure
+  in `engine/RELEASING.md` (T-23, SEC-MED-004).
+- **Pipeline `apiVersion` gate** prevents a newer-DSL pipeline from
+  triggering cryptic engine crashes (FR-013, T-10).
+
+### 📚 Documentation
+
+- `engine/RELEASING.md` — both channels, signed-tag procedure, rollback
+  via `npm deprecate` + dist-tag swap, fallback-token disaster recovery.
+- `engine/SECURITY.md` — per-scope permissions table + threat model.
+- `BROWNFIELD_GUIDE.md`, `INIT.md`, `PIPELINES.md`, `DASHBOARD.md`,
+  `README.md`, `CONTRIBUTING.md` — path references updated to `installer/`,
+  `engine/`, `templates/seed/`.
+- `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
+  + `docs/architecture/adr-047-action-runtime.md` — design record and
+  runtime amendment.
+
+### 🧪 Migration cheatsheet for consumer repos
+
+```bash
+# 1. Pull the new APM package.
+cd /path/to/apm-clone && git pull --ff-only
+
+# 2. From the consumer repo, dry-run the upgrade.
+cd /path/to/your-project
+bash /path/to/apm-clone/installer/init.sh --upgrade --engine-ref=v3
+# Review the diff. The script refuses if existing 'permissions:' blocks
+# lack required engine scopes — fix those by hand and re-run.
+
+# 3. Apply.
+bash /path/to/apm-clone/installer/init.sh --upgrade --apply --engine-ref=v3
+
+# 4. Commit + open a PR. Branch protection runs verify-mirror; the PR
+#    must be green before merge.
+```
+
+---
+
+
+
 ### ✨ Features — Orchestrator v2 (#44)
 
 - **v2 dispatch** wired into `runOrchestrator`: declarative `entry` / `transitions` graph with backward edges (loops), replacing v1's linear `steps[]` chain.
