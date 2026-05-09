@@ -134,8 +134,15 @@ const toolDefs = [
   },
   {
     name: 'run_command',
-    description: 'Run a shell command (e.g. npm test, npm run lint). Returns stdout+stderr.',
-    schema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+    description: 'Run a shell command (e.g. npm test, npm run lint). Returns stdout+stderr. Optionally pass `cwd` (repo-relative path) to run from a sub-package directory; defaults to repo root.',
+    schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string' },
+        cwd:     { type: 'string', description: 'Optional repo-relative working directory.' },
+      },
+      required: ['command'],
+    },
   },
   {
     name: 'git_commit',
@@ -197,7 +204,18 @@ async function executeTool(name, input) {
     case 'run_command': {
       const blocked = /(rm\s+-rf\s+\/|drop\s+table|format\s+c:|mkfs|:\s*\(\)\s*\{)/i;
       if (blocked.test(input.command)) return 'ERROR: command blocked by safety guard.';
-      return exec(input.command);
+      let runCwd = repoRoot;
+      if (input.cwd) {
+        const resolved = path.resolve(input.cwd);
+        if (!resolved.startsWith(repoRoot + path.sep) && resolved !== repoRoot) {
+          return `ERROR: cwd outside repo root rejected: ${input.cwd}`;
+        }
+        if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+          return `ERROR: cwd does not exist or is not a directory: ${input.cwd}`;
+        }
+        runCwd = resolved;
+      }
+      return exec(input.command, { cwd: runCwd });
     }
     case 'git_commit': {
       exec('git add -A');
@@ -264,8 +282,43 @@ async function executeTool(name, input) {
   }
 }
 
+// ─── Repo topology detection (give the model the layout) ────────────────────
+function detectRepoTopology() {
+  const lines = [];
+  // Detect Node package roots up to 2 levels deep, skipping noise dirs.
+  const skipDirs = new Set(['node_modules', '.git', 'dist', 'build', '.github', 'coverage']);
+  const pkgRoots = [];
+  function scan(dir, depth) {
+    if (depth > 2) return;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    if (entries.some(e => e.isFile() && e.name === 'package.json')) {
+      const rel = path.relative(repoRoot, dir) || '.';
+      pkgRoots.push(rel);
+    }
+    for (const e of entries) {
+      if (e.isDirectory() && !skipDirs.has(e.name) && !e.name.startsWith('.')) {
+        scan(path.join(dir, e.name), depth + 1);
+      }
+    }
+  }
+  scan(repoRoot, 0);
+  if (pkgRoots.length > 0) {
+    lines.push(`Node package roots (run \`npm test\`/\`npm install\` from these dirs via \`run_command\` with \`cwd\`):`);
+    for (const r of pkgRoots) lines.push(`  - ${r}`);
+  } else {
+    lines.push('No package.json found at repo root or top-level subdirectories.');
+  }
+  // Other manifests
+  for (const f of ['pyproject.toml', 'Cargo.toml', 'go.mod', 'pom.xml', 'build.gradle']) {
+    if (fs.existsSync(path.join(repoRoot, f))) lines.push(`Build manifest at repo root: ${f}`);
+  }
+  return lines.join('\n');
+}
+
 // ─── System prompt (built from manifests) ───────────────────────────────────
 function buildSystemPrompt() {
+  const topology = detectRepoTopology();
   return [
     manifests.agent        && `## Developer Agent Manifest\n${manifests.agent}`,
     manifests.skill        && `## Activation Skill\n${manifests.skill}`,
@@ -275,9 +328,20 @@ function buildSystemPrompt() {
     `at the current working directory with full read/write access. You have tools to`,
     `read/write files, run commands, commit, push branches, and open pull requests.`,
     ``,
+    `## Repository Topology`,
+    topology,
+    ``,
+    `Use \`run_command\` with the \`cwd\` field to run commands from a sub-package`,
+    `directory (e.g. \`{ "command": "npm test", "cwd": "engine" }\`). Do NOT assume`,
+    `there is a \`package.json\` at the repo root; check the topology above.`,
+    ``,
     `Branch naming: zero-pad the issue number to 3 digits (e.g. issue 78 -> "078-short-slug").`,
     `MUST NOT commit to \`main\`. MUST NOT open a PR while tests are failing.`,
     `Follow TDD: write a failing test first, then implement, then verify tests pass.`,
+    `Prefer fixing the issue with the smallest possible diff. If a sub-package has`,
+    `its own test runner, run it from that directory using \`cwd\`. If a command`,
+    `fails because of missing files in the wrong directory, retry from a different`,
+    `cwd rather than signalling blocker.`,
     `When done, call \`signal_outcome\` with one of: success, fail, needs-human, blocker.`,
     `If the task is complete and PR is open, call signal_outcome(outcome="success").`,
   ].filter(Boolean).join('\n\n');
