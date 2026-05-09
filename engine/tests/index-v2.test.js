@@ -130,7 +130,7 @@ describe('runOrchestrator — v2 dispatch path', () => {
 
     // Copilot kind dispatches via copilot-agent-<agent>.yml
     expect(client.triggerWorkflow).toHaveBeenCalledWith(
-      'o', 'r', 'copilot-agent-ba-agent.yml', 'main', expect.any(Object)
+      'o', 'r', 'copilot-agent-ba.yml', 'main', expect.any(Object)
     );
 
     const state = parseLatestState(client);
@@ -198,8 +198,8 @@ describe('runOrchestrator — v2 dispatch path', () => {
 
     // The dev agent must have been invoked.
     const dispatchedAgents = client.triggerWorkflow.mock.calls.map(c => c[2]);
-    expect(dispatchedAgents).toContain('copilot-agent-ba-agent.yml');
-    expect(dispatchedAgents).toContain('copilot-agent-dev-agent.yml');
+    expect(dispatchedAgents).toContain('copilot-agent-ba.yml');
+    expect(dispatchedAgents).toContain('copilot-agent-dev.yml');
   });
 
   it('marks the run failed with outcome=protocol-violation when the apm-msg block is malformed', async () => {

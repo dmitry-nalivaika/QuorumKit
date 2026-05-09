@@ -10,7 +10,7 @@ describe('agent-invoker.invokeAgent', () => {
     const client = makeClient();
     await invokeAgent(client, 'owner', 'repo', 'triage-agent', 42, null, 'copilot');
     expect(client.triggerWorkflow).toHaveBeenCalledWith(
-      'owner', 'repo', 'copilot-agent-triage-agent.yml', 'main', expect.any(Object)
+      'owner', 'repo', 'copilot-agent-triage.yml', 'main', expect.any(Object)
     );
   });
 
@@ -18,7 +18,7 @@ describe('agent-invoker.invokeAgent', () => {
     const client = makeClient();
     await invokeAgent(client, 'owner', 'repo', 'triage-agent', 42, null, 'claude');
     expect(client.triggerWorkflow).toHaveBeenCalledWith(
-      'owner', 'repo', 'agent-triage-agent.yml', 'main', expect.any(Object)
+      'owner', 'repo', 'agent-triage.yml', 'main', expect.any(Object)
     );
   });
 
@@ -26,7 +26,7 @@ describe('agent-invoker.invokeAgent', () => {
     const client = makeClient();
     await invokeAgent(client, 'owner', 'repo', 'triage-agent', 42, null, undefined);
     expect(client.triggerWorkflow).toHaveBeenCalledWith(
-      'owner', 'repo', 'copilot-agent-triage-agent.yml', 'main', expect.any(Object)
+      'owner', 'repo', 'copilot-agent-triage.yml', 'main', expect.any(Object)
     );
   });
 

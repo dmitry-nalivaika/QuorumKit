@@ -40,9 +40,12 @@ export async function invokeAgent(client, owner, repo, agentSlug, issueNumber, r
     );
   }
 
+  // Strip trailing `-agent` so e.g. `dev-agent` -> `copilot-agent-dev.yml`
+  // (matches actual workflow filenames on disk and the v2 adapter convention).
+  const slug = agentSlug.replace(/-agent$/, '');
   const workflow = runtime === 'claude'
-    ? `agent-${agentSlug}.yml`
-    : `copilot-agent-${agentSlug}.yml`;
+    ? `agent-${slug}.yml`
+    : `copilot-agent-${slug}.yml`;
 
   const dispatchRef = ref ?? 'main';
 

@@ -18,7 +18,7 @@ describe('agent-invoker.invokeAgentV2', () => {
       runtime: COPILOT_RT, runtimeName: 'copilot-default',
       env: { GITHUB_TOKEN: 'x' }, clock: fastClock,
     });
-    expect(r.workflow).toBe('copilot-agent-qa-agent.yml');
+    expect(r.workflow).toBe('copilot-agent-qa.yml');
     expect(r.runtimeName).toBe('copilot-default');
   });
 
@@ -29,7 +29,7 @@ describe('agent-invoker.invokeAgentV2', () => {
       issueNumber: 1, runtime: CLAUDE_RT, runtimeName: 'claude-default',
       env: { ANTHROPIC_API_KEY: 'x' }, clock: fastClock,
     });
-    expect(r.workflow).toBe('agent-dev-agent.yml');
+    expect(r.workflow).toBe('agent-dev.yml');
   });
 
   it('rejects reserved kinds with RUNTIME_KIND_NOT_ENABLED (ADR-005)', async () => {

@@ -162,11 +162,11 @@ describe('worked-example feature-pipeline-v2', () => {
     // Workflow dispatches happened for each forward step
     const wfs = client.triggerWorkflow.mock.calls.map(c => c[2]);
     expect(wfs).toEqual(expect.arrayContaining([
-      'copilot-agent-ba-agent.yml',
-      'copilot-agent-architect-agent.yml',
-      'copilot-agent-dev-agent.yml',
-      'copilot-agent-qa-agent.yml',
-      'copilot-agent-reviewer-agent.yml',
+      'copilot-agent-ba.yml',
+      'copilot-agent-architect.yml',
+      'copilot-agent-dev.yml',
+      'copilot-agent-qa.yml',
+      'copilot-agent-reviewer.yml',
     ]));
   });
 
@@ -212,14 +212,14 @@ describe('worked-example feature-pipeline-v2', () => {
     const dispatched = client.triggerWorkflow.mock.calls.map(c => c[2]);
     // BA, Architect, Dev → copilot-default → 'copilot-agent-*.yml'
     expect(dispatched).toEqual(expect.arrayContaining([
-      'copilot-agent-ba-agent.yml',
-      'copilot-agent-architect-agent.yml',
-      'copilot-agent-dev-agent.yml',
+      'copilot-agent-ba.yml',
+      'copilot-agent-architect.yml',
+      'copilot-agent-dev.yml',
     ]));
-    // QA → claude-default → 'agent-qa-agent.yml'
-    expect(dispatched).toContain('agent-qa-agent.yml');
+    // QA → claude-default → 'agent-qa.yml'
+    expect(dispatched).toContain('agent-qa.yml');
     // Reviewer dispatch is via copilot-fast (still the copilot kind → copilot-agent-*.yml)
-    expect(dispatched).toContain('copilot-agent-reviewer-agent.yml');
+    expect(dispatched).toContain('copilot-agent-reviewer.yml');
 
     // Verify state captured the runtime per step (last applicable runtime_used)
     const state = parseLatestState(client);
