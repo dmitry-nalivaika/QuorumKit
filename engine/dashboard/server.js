@@ -152,7 +152,7 @@ function autoDetectProject() {
   let localPath = process.env.QUORUMKIT_PROJECT_DIR || '';
   if (!localPath) {
     // Heuristic: if the dashboard lives under <project>/ (e.g. vendored as
-    // node_modules/agentic-dev-stack/dashboard or apm_modules/.../dashboard),
+    // node_modules/quorumkit/dashboard or vendor/.../dashboard),
     // walk up looking for a .git directory.
     let cur = path.resolve(DASHBOARD_DIR, '..');
     for (let i = 0; i < 5 && cur !== '/'; i++) {

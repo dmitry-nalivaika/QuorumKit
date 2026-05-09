@@ -5,7 +5,7 @@
 **Status**: Draft (security blockers resolved 2026-05-09)
 **Linked ADR**: `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
 **Extends**: ADR-006 (SoT + mirroring), ADR-007 (GH Actions substrate)
-**Issue**: [#47](https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/47)
+**Issue**: [#47](https://github.com/dmitry-nalivaika/quorumkit/issues/47)
 
 ## Overview
 

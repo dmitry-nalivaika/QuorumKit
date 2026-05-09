@@ -4,7 +4,7 @@
 **ADRs**: `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`,
 `docs/architecture/adr-047-action-runtime.md`
 **Branch**: `047-repo-topology`
-**Issue**: [#47](https://github.com/dmitry-nalivaika/agentic-dev-stack/issues/47)
+**Issue**: [#47](https://github.com/dmitry-nalivaika/quorumkit/issues/47)
 
 ## Constitution Check
 

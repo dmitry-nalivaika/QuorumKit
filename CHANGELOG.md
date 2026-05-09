@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Engine moved.** `scripts/orchestrator/` → `engine/orchestrator/`,
   `tests/orchestrator/` → `engine/tests/`, `dashboard/` → `engine/dashboard/`.
   Consumer workflows that ran `node scripts/orchestrator/index.js` MUST
-  switch to `uses: dmitry-nalivaika/agentic-dev-stack/engine@v3` (or a SHA pin).
+  switch to `uses: dmitry-nalivaika/quorumkit/engine@v3` (or a SHA pin).
   Migration: `bash installer/init.sh --upgrade --apply --engine-ref=v3`.
 - **Installer moved.** `scripts/{init,verify-mirror,quality-check}.sh` →
   `installer/`. Backward-compatible shims at `scripts/*.sh` `exec` the new

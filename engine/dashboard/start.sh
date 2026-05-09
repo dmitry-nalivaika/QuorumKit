@@ -5,8 +5,8 @@ set -e
 # Capture the directory the user invoked this script FROM, before we cd away.
 # This becomes the default project path in the orchestrator UI so users
 # don't have to fill in Settings manually for every project they install
-# the agentic-dev-stack into.
-export APM_PROJECT_DIR="${APM_PROJECT_DIR:-$PWD}"
+# QuorumKit into.
+export QUORUMKIT_PROJECT_DIR="${QUORUMKIT_PROJECT_DIR:-$PWD}"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
