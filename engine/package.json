@@ -1,6 +1,6 @@
 {
   "name": "quorumkit-engine",
-  "version": "0.0.0-dev",
+  "version": "3.0.0",
   "description": "QuorumKit autonomous-agent orchestrator — distributed as a GitHub Action (Issue #47, ADR-047 amendment).",
   "type": "module",
   "scripts": {
