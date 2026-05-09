@@ -10,10 +10,10 @@
 
 default_runtime: copilot-default
 
-agent_defaults:
-  # Per-agent overrides (FR-008). Empty by default.
-  # Example:
-  #   qa-agent: claude-default
+# Per-agent overrides (FR-008). Empty by default.
+# Example:
+#   qa-agent: claude-default
+agent_defaults: {}
 
 runtimes:
   copilot-default:
