@@ -64,7 +64,7 @@ jobs:
         run: |
           if [ ! -f engine/orchestrator/index.js ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Orchestrator not installed in this repo — skipping. Run scripts/init.sh to install."
+            echo "::notice::Orchestrator not installed in this repo — skipping. Run installer/init.sh to install."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi

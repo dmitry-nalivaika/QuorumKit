@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run quality gates
-        run: bash scripts/quality-check.sh
+        run: bash installer/quality-check.sh
 
   pipeline-validator:
     name: Pipeline Validator (FR-020)
@@ -42,7 +42,7 @@ jobs:
         run: npm ci
         working-directory: engine/orchestrator
       - name: Run verify-mirror.sh
-        run: bash scripts/verify-mirror.sh
+        run: bash installer/verify-mirror.sh
 
   orchestrator-tests:
     name: Orchestrator Tests (FR-023)

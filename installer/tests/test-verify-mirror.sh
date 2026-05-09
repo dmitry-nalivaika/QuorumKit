@@ -6,12 +6,12 @@
 # runs verify-mirror.sh, asserts it exits non-zero with a message naming the
 # rule ID, then reverts and asserts it exits zero again. (FR-020, SC-002.)
 #
-# Run with:  bash scripts/tests/test-verify-mirror.sh
+# Run with:  bash installer/tests/test-verify-mirror.sh
 # =============================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT_REL="scripts/verify-mirror.sh"
+SCRIPT_REL="installer/verify-mirror.sh"
 WORK="$(mktemp -d)"
 PASS=0; FAIL=0
 trap 'rm -rf "$WORK"' EXIT
