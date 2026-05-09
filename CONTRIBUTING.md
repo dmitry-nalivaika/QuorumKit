@@ -47,7 +47,7 @@ exactly one zone (ADR-047, FR-001).
 | Zone | Top-level folders | Purpose |
 |---|---|---|
 | **1. Package payload** | `.apm/`, `templates/`, `installer/` | Files that `installer/init.sh` copies into a consumer repo. SoT for agents, skills, pipelines, runtime registry, identity registry, seed docs, template workflows. |
-| **2. Engine** | `engine/orchestrator/`, `engine/dashboard/`, `engine/tests/`, `engine/dist/` | Orchestrator runtime + dashboard + their tests + the committed ncc bundle. Distributed as (a) a reusable GitHub Action (`uses: dmitry-nalivaika/APM/engine@<ref>`) and (b) an npm package. **Never copied** into a consumer repo. |
+| **2. Engine** | `engine/orchestrator/`, `engine/dashboard/`, `engine/tests/`, `engine/dist/` | Orchestrator runtime + dashboard + their tests + the committed ncc bundle. Distributed as (a) a reusable GitHub Action (`uses: dmitry-nalivaika/agentic-dev-stack/engine@<ref>`) and (b) an npm package. **Never copied** into a consumer repo. |
 | **3. Self-host** | `.github/`, `.claude/`, `.specify/`, `specs/`, `docs/`, `scripts/` (BC shims) | Files that exist solely so this repo can dogfood itself. **Not distributed.** `scripts/*.sh` are thin wrappers around `installer/*.sh` for one major version of backward compatibility. |
 
 Where to put what:

@@ -10,7 +10,7 @@ The engine ships through **two channels**, both released atomically from
 the same `engine/` source on every signed `v*` tag:
 
 1. **GitHub Action ref** — consumers pin via
-   `uses: dmitry-nalivaika/APM/engine@vX.Y.Z` (or `@vX` for floating major).
+   `uses: dmitry-nalivaika/agentic-dev-stack/engine@vX.Y.Z` (or `@vX` for floating major).
 2. **npm package `apm-engine`** — published with `--provenance` via
    OIDC trusted publishing (no `NPM_TOKEN`).
 
@@ -58,7 +58,7 @@ git push origin v3.0.0
 
 A successful run produces:
 
-- A GitHub Release at <https://github.com/dmitry-nalivaika/APM/releases/tag/vX.Y.Z>.
+- A GitHub Release at <https://github.com/dmitry-nalivaika/agentic-dev-stack/releases/tag/vX.Y.Z>.
 - An npm package at <https://www.npmjs.com/package/apm-engine/v/X.Y.Z>
   whose page shows the **"Built and signed on GitHub Actions"** provenance
   badge with a link to the workflow run that produced it.
@@ -70,7 +70,7 @@ A successful run produces:
 
 ```bash
 # Action ref (what consumer workflows pin):
-gh api repos/dmitry-nalivaika/APM/git/refs/tags/vX.Y.Z
+gh api repos/dmitry-nalivaika/agentic-dev-stack/git/refs/tags/vX.Y.Z
 
 # Tag signature:
 git fetch --tags

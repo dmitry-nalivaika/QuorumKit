@@ -342,7 +342,7 @@ install_github_templates() {
 # `--upgrade` rewrites consumer .github/workflows/*.yml files that still call
 # the engine via `node engine/orchestrator/index.js` (or the pre-#47
 # `node scripts/orchestrator/index.js`) so they instead use the published
-# Action ref `uses: dmitry-nalivaika/APM/engine@$ENGINE_REF`.
+# Action ref `uses: dmitry-nalivaika/agentic-dev-stack/engine@$ENGINE_REF`.
 #
 # Safety contract:
 #   • Dry-run by default. `--apply` is required to write changes.
@@ -361,7 +361,7 @@ run_upgrade() {
     exit 1
   fi
 
-  local action_ref="dmitry-nalivaika/APM/engine@$ENGINE_REF"
+  local action_ref="dmitry-nalivaika/agentic-dev-stack/engine@$ENGINE_REF"
   local mode_label
   if [ "$APPLY" -eq 1 ]; then
     mode_label="APPLY (writing changes)"
@@ -377,7 +377,7 @@ run_upgrade() {
   for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
     [ -f "$wf" ] || continue
     if ! grep -qE 'node[[:space:]]+(scripts|engine)/orchestrator/index\.js' "$wf"; then
-      if grep -qE "uses:[[:space:]]*dmitry-nalivaika/APM/engine@" "$wf"; then
+      if grep -qE "uses:[[:space:]]*dmitry-nalivaika/agentic-dev-stack/engine@" "$wf"; then
         already=$((already + 1))
         ok "$(basename "$wf") — already on Action form"
       else

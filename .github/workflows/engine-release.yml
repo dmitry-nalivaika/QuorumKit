@@ -4,7 +4,7 @@
 #
 # Trigger: push of a signed v* tag (e.g. v3.0.0).
 # Channels released atomically from the same engine/ source:
-#   1. GitHub Action ref — the tag itself (consumers use `uses: dmitry-nalivaika/APM/engine@v3.0.0`).
+#   1. GitHub Action ref — the tag itself (consumers use `uses: dmitry-nalivaika/agentic-dev-stack/engine@v3.0.0`).
 #   2. npm package — published with --provenance via OIDC trusted publishing.
 #
 # Hardening:

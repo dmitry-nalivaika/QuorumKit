@@ -4,7 +4,8 @@
     { "pattern": "node_modules" },
     { "pattern": "^#conflict-existing-" },
     { "pattern": "^https://github\\.com/[^/]+/[^/]+/(issues|pull|discussions)/[0-9]+" },
-    { "pattern": "^https://github\\.com/[^/]+/[^/]+/(actions|releases|commit|compare|tree|blob)/" }
+    { "pattern": "^https://github\\.com/[^/]+/[^/]+/(actions|releases|commit|compare|tree|blob)/" },
+    { "pattern": "^https://github\\.com/[^/]+/[^/]+/security$" }
   ],
   "aliveStatusCodes": [200, 206, 301, 302, 403],
   "retryOn429": true,

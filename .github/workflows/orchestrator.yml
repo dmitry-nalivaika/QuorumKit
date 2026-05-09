@@ -1,7 +1,7 @@
 name: APM Orchestrator
 # apm-allow-divergence: SoT dogfoods the engine via `node engine/orchestrator/index.js` so
 # changes to engine/ are exercised in this repo on every PR. The distributed template
-# (templates/github/workflows/orchestrator.yml) uses `uses: dmitry-nalivaika/APM/engine@<ref>`
+# (templates/github/workflows/orchestrator.yml) uses `uses: dmitry-nalivaika/agentic-dev-stack/engine@<ref>`
 # per FR-011 — that is the consumer-facing form. Both files MUST stay in functional sync.
 
 on:

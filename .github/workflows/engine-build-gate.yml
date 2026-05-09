@@ -3,7 +3,7 @@
 # Engine Build Gate (T-09, FR-009, ADR-047 amendment §3)
 #
 # The committed `engine/dist/` bundle is what consumer repos execute when they
-# pin `uses: dmitry-nalivaika/APM/engine@<sha>`. This workflow rebuilds the
+# pin `uses: dmitry-nalivaika/agentic-dev-stack/engine@<sha>`. This workflow rebuilds the
 # bundle from `engine/orchestrator/**` and fails the PR if the result differs
 # from what is committed. Reviewers MUST regenerate via `npm run build` in
 # `engine/` and commit the diff — never edit `dist/` by hand.

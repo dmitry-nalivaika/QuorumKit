@@ -84,6 +84,12 @@ jobs:
 
       - name: Check markdown links
         run: |
+          # Skip:
+          #   • node_modules — third-party docs.
+          #   • templates/seed/ — consumer-repo seed files; relative links
+          #     resolve against the *consumer's* root post-install, not against
+          #     the SoT path. Validating them here yields false negatives.
           find . -name "*.md" \
             -not -path "*/node_modules/*" \
+            -not -path "./templates/seed/*" \
             | xargs markdown-link-check --config .markdown-link-check.json
