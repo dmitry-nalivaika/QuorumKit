@@ -4,10 +4,10 @@
   "slug": "047-repo-topology",
   "specFile": "specs/047-repo-topology/spec.md",
   "adr": "docs/architecture/adr-047-repo-topology-and-engine-distribution.md",
-  "status": "spec-draft",
+  "status": "in-progress",
   "openQuestions": 0,
   "updatedAt": "2026-05-09",
-  "architectReviewResolved": false,
+  "architectReviewResolved": true,
   "archBlockers": [],
   "archConcerns": []
 }
