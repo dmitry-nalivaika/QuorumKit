@@ -117,7 +117,7 @@ install_claude() {
   # CLAUDE.md
   h1 "2. CLAUDE.md"
   if [ ! -f CLAUDE.md ]; then
-    cp "$APM_PACKAGE_DIR/templates/CLAUDE.md" CLAUDE.md
+    cp "$APM_PACKAGE_DIR/templates/seed/CLAUDE.md" CLAUDE.md
     ok "CLAUDE.md created"
   else
     warn "CLAUDE.md already exists — skipping (update manually if needed)"
@@ -206,7 +206,7 @@ install_copilot() {
   h1 "2. .github/copilot-instructions.md"
   if [ ! -f .github/copilot-instructions.md ]; then
     mkdir -p .github
-    cp "$APM_PACKAGE_DIR/templates/copilot-instructions.md" .github/copilot-instructions.md
+    cp "$APM_PACKAGE_DIR/templates/seed/copilot-instructions.md" .github/copilot-instructions.md
     ok ".github/copilot-instructions.md created"
   else
     warn ".github/copilot-instructions.md already exists — skipping"
@@ -320,7 +320,7 @@ install_github_templates() {
   # ── Root-level community files ─────────────────────────────────────────────
   for doc in CONTRIBUTING.md SECURITY.md; do
     if [ ! -f "$doc" ]; then
-      cp "$APM_PACKAGE_DIR/templates/$doc" "$doc"
+      cp "$APM_PACKAGE_DIR/templates/seed/$doc" "$doc"
       ok "$doc created (review and customise before committing)"
     else
       warn "$doc already exists — skipping"

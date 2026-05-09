@@ -4,7 +4,7 @@ This guide is for contributors who want to **enhance the APM library itself** �
 adding new agents, improving existing ones, updating workflows, or extending the
 framework for new domains (e.g. dark factory, fintech, healthcare).
 
-> **Using APM in your own project?** See `templates/CONTRIBUTING.md` — that file
+> **Using APM in your own project?** See `templates/seed/CONTRIBUTING.md` — that file
 > is for contributors to projects that _use_ this library, not for this library itself.
 
 ---
@@ -287,7 +287,7 @@ touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
 | Add a new GitHub Actions trigger | `templates/github/workflows/agent-<name>.yml` + `copilot-agent-<name>.yml` |
 | Add a new universal agent | See [Adding a New Agent](#adding-a-new-agent) |
 | Add a domain extension pack | See [Adding a Domain Pack](#adding-a-domain-pack) |
-| Change NNN convention | `ba-product-agent.md`, `developer-agent.md`, `qa-test-agent.md`, `reviewer-agent.md`, `INIT.md`, `templates/CONTRIBUTING.md`, `README.md` |
+| Change NNN convention | `ba-product-agent.md`, `developer-agent.md`, `qa-test-agent.md`, `reviewer-agent.md`, `INIT.md`, `templates/seed/CONTRIBUTING.md`, `README.md` |
 | Add a new issue template | `templates/github/ISSUE_TEMPLATE/<name>.md` + update `config.yml` |
 | Update init.sh | `scripts/init.sh` → always run `bash -n scripts/init.sh` after |
 | Add a domain guide | New `<DOMAIN>_GUIDE.md` at root + entry in `README.md` |
