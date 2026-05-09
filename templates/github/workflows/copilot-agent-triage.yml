@@ -155,12 +155,34 @@ jobs:
               } catch { /* label already exists — ignore */ }
             }
 
-            // Apply all labels in a single API call so issues.labeled fires for each
-            // (GitHub fires one event per label). The orchestrator's triaged+type:*
-            // gate means the pipeline won't start until both are present.
+            // Two-phase label application to avoid GitHub silently dropping the
+            // matching `issues.labeled` event under the orchestrator's concurrency
+            // group (cancel-in-progress: false → at most 1 running + 1 queued; the
+            // rest of a rapid-fire burst are dropped). Phase 1 applies all
+            // classification labels (these will produce no-match events that are
+            // safe to drop). Phase 2 adds `triaged` alone in a separate call,
+            // delayed slightly so it lands after the burst clears the queue.
+            // The lone `triaged` event has the full cumulative label set in its
+            // payload and is the one the orchestrator must see.
+            const classificationLabels = labelsToApply.filter(l => l !== 'triaged');
+            if (classificationLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: issueNumber,
+                labels:       classificationLabels,
+              });
+            }
+
+            // Small delay so the burst above clears the orchestrator's concurrency
+            // queue before we fire the matching event. 8s is well over the
+            // ~10s-per-run typical no-match orchestrator runtime observed in
+            // production.
+            await new Promise(r => setTimeout(r, 8000));
+
             await github.rest.issues.addLabels({
               owner:        context.repo.owner,
               repo:         context.repo.repo,
               issue_number: issueNumber,
-              labels:       allLabels,
+              labels:       ['triaged'],
             });
