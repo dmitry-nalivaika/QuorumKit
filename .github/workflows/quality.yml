@@ -11,7 +11,7 @@ jobs:
     name: Quality Gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run quality gates
         run: bash scripts/quality-check.sh
@@ -20,22 +20,22 @@ jobs:
     name: Pipeline Validator (FR-020)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
       - name: Install orchestrator deps
         run: npm ci
         working-directory: scripts/orchestrator
       - name: Validate every pipeline file under .apm/pipelines/
-        run: node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines
+        run: node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
   verify-mirror:
     name: Verify Mirror (ADR-006)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
       - name: Install orchestrator deps (for js-yaml in verify-mirror.sh)
@@ -48,8 +48,8 @@ jobs:
     name: Orchestrator Tests (FR-023)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
       - name: Install orchestrator deps
@@ -63,21 +63,21 @@ jobs:
     name: Regulation Lint (FR-014)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
       - name: Install orchestrator deps
         run: npm ci
         working-directory: scripts/orchestrator
       - name: Lint pipelines against regulation document
-        run: node scripts/orchestrator/regulation-lint.js
+        run: node scripts/orchestrator/regulation-lint.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
   markdown-links:
     name: Markdown Link Validator
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install markdown-link-check
         run: npm install -g markdown-link-check

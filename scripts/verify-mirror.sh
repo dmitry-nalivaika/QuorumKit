@@ -110,6 +110,125 @@ else
   fail "Missing docs/AGENT_PROTOCOL.md (FR-014, ADR-006 §5 — single regulation SoT)"
 fi
 
+# ─── M4: anti-mirror — templates/.apm/pipelines/ MUST NOT exist ──────────────
+h1 "M4. Pipelines are not mirrored (templates/.apm/pipelines/ must NOT exist)"
+
+if [ -e "templates/.apm/pipelines" ]; then
+  fail "M4: 'templates/.apm/pipelines/' MUST NOT exist (ADR-006 §3, FR-005 — pipelines are not mirrored). Remediation: rm -rf templates/.apm/pipelines && update scripts/init.sh to copy from .apm/pipelines/."
+else
+  ok "M4: templates/.apm/pipelines/ absent"
+fi
+
+# ─── M5: workflow byte-parity (overlap only) ─────────────────────────────────
+h1 "M5. Workflow byte-parity for files present in BOTH .github/workflows/ and templates/github/workflows/"
+
+if [ -d ".github/workflows" ] && [ -d "templates/github/workflows" ]; then
+  for wf in .github/workflows/*.yml; do
+    [ -f "$wf" ] || continue
+    name="$(basename "$wf")"
+    template="templates/github/workflows/$name"
+    if [ -f "$template" ]; then
+      if cmp -s "$wf" "$template"; then
+        ok "M5: $name byte-identical"
+      else
+        fail "M5: '$wf' diverges from '$template' (FR-016). Remediation: make the two files byte-identical, or remove one tree's copy if divergence is intentional. Diff:"
+        diff -u "$template" "$wf" | sed 's/^/    /' | head -40 || true
+      fi
+    fi
+  done
+else
+  warn "M5: skipped (one or both workflow trees missing)"
+fi
+
+# ─── M6: anti-mirror — .github/agents/ MUST NOT exist in SoT ─────────────────
+h1 "M6. .github/agents/ MUST NOT exist in the SoT repo"
+
+if [ -e ".github/agents" ]; then
+  fail "M6: '.github/agents/' MUST NOT exist in the SoT repo (FR-006). Remediation: rm -rf .github/agents — consumer repos receive it from scripts/init.sh."
+else
+  ok "M6: .github/agents/ absent"
+fi
+
+# ─── M7: self-host Principle IV parity (.apm/agents ↔ .claude/agents and .github/instructions) ──
+h1 "M7. Self-host Principle IV parity (.apm/agents ↔ .claude/agents AND .github/instructions)"
+
+if [ -d ".apm/agents" ] && [ -d ".claude/agents" ] && [ -d ".github/instructions" ]; then
+  for f in .apm/agents/*.md; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f")
+    short=$(mirror_short "$base")
+    claude_target=".claude/agents/$base"
+    instr_target=".github/instructions/${short}.instructions.md"
+    if [ ! -f "$claude_target" ]; then
+      fail "M7: '$base' has no Claude counterpart at '$claude_target' (FR-018, Principle IV). Remediation: cp '$f' '$claude_target'."
+    elif [ ! -f "$instr_target" ]; then
+      fail "M7: '$base' has no Copilot instruction counterpart at '$instr_target' (FR-018, Principle IV). Remediation: create '$instr_target' pointing at '.apm/agents/$base'."
+    else
+      ok "M7: $base ↔ Claude + Copilot self-host counterparts present"
+    fi
+  done
+else
+  warn "M7: skipped (.apm/agents, .claude/agents, or .github/instructions missing)"
+fi
+
+# ─── M8: engine must be invoked via uses:, not run: node scripts/orchestrator/ ──
+h1 "M8. Distributed workflows MUST invoke engine via 'uses:' (no 'node scripts/orchestrator/' or 'node engine/orchestrator/' references)"
+
+m8_paths=( ".github/workflows" "templates/github/workflows" )
+m8_violations=0
+for p in "${m8_paths[@]}"; do
+  [ -d "$p" ] || continue
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    # `# apm-allow:` exempts a documented transition reference (e.g. before the
+    # engine Action is published). The reason MUST appear inline.
+    if echo "$line" | grep -qE '#[[:space:]]*apm-allow:'; then
+      continue
+    fi
+    fail "M8: $line — engine must be invoked via 'uses:' Action ref (FR-019). Remediation: replace with 'uses: dmitry-nalivaika/APM/engine@<sha>'."
+    m8_violations=$((m8_violations + 1))
+  done < <(grep -RnE "run: *node (scripts|engine)/orchestrator/" "$p" 2>/dev/null || true)
+done
+if [ "$m8_violations" -eq 0 ]; then
+  ok "M8: no 'node (scripts|engine)/orchestrator/' references in distributed workflows"
+fi
+
+# ─── M9: third-party Actions MUST be SHA-pinned (40 hex chars) ───────────────
+h1 "M9. Third-party Actions MUST be pinned by full 40-character commit SHA"
+
+m9_paths=( ".github/workflows" "templates/github/workflows" "engine" )
+m9_violations=0
+for p in "${m9_paths[@]}"; do
+  [ -d "$p" ] || continue
+  # Find every 'uses:' line that is NOT a local action (./...) and NOT pinned by 40-hex.
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    # An explicit `# apm-allow:` comment exempts a placeholder line (e.g. an
+    # Action that has not yet published a tagged release). The reason MUST be
+    # documented inline; reviewers track these.
+    if echo "$line" | grep -qE '#[[:space:]]*apm-allow:'; then
+      continue
+    fi
+    # Extract the value after 'uses:' for filtering.
+    # `grep -Rn` output is `path:line:content`; strip the leading two ':'-separated fields,
+    # then drop the leading '- uses:' / 'uses:' prefix and any trailing comment.
+    target=$(echo "$line" | sed -E 's/^[^:]+:[0-9]+://; s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*//; s/[[:space:]]*#.*$//; s/[[:space:]]*$//' )
+    # Skip empty / local actions / docker images.
+    case "$target" in
+      ''|./*|docker://*) continue ;;
+    esac
+    # Pass if pinned by full 40-hex SHA (with optional comment already stripped).
+    if echo "$target" | grep -qE '^[A-Za-z0-9._/-]+@[0-9a-f]{40}$'; then
+      continue
+    fi
+    fail "M9: $line — third-party Action MUST be pinned by full 40-character commit SHA (FR-031). Remediation: replace with 'uses: <owner>/<repo>@<40-hex-sha>  # <tag>'."
+    m9_violations=$((m9_violations + 1))
+  done < <(grep -RnE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*[^./]" "$p" 2>/dev/null || true)
+done
+if [ "$m9_violations" -eq 0 ]; then
+  ok "M9: every third-party 'uses:' is SHA-pinned (40 hex chars)"
+fi
+
 # ─── Verdict ─────────────────────────────────────────────────────────────────
 echo ""
 if [ "$FAILED" -eq 0 ]; then
