@@ -30,7 +30,7 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/developer-agent.md');
+            const agentInstructions = readSafe('.github/agents/developer-agent.md') || readSafe('.apm/agents/developer-agent.md');
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');

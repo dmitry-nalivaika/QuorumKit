@@ -3,7 +3,7 @@ applyTo: "**"
 ---
 # Triage Agent
 
-Read `.github/agents/triage-agent.md` in full before proceeding.
+Read `.apm/agents/triage-agent.md` in full before proceeding.
 Read `.specify/memory/constitution.md` for project scope and principles.
 
 Your role, label taxonomy, triage workflow, comment format, SLA, and hard

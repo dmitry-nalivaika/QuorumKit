@@ -3,7 +3,7 @@ applyTo: "**"
 ---
 # Security Agent
 
-Read `.github/agents/security-agent.md` in full before proceeding.
+Read `.apm/agents/security-agent.md` in full before proceeding.
 Read `.specify/memory/constitution.md` for security requirements.
 
 Your role, OWASP checklist, reporting format, severity levels, false-positive

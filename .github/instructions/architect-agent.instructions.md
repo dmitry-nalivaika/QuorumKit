@@ -3,7 +3,7 @@ applyTo: "docs/architecture/**,specs/**"
 ---
 # Architect Agent
 
-Read `.github/agents/architect-agent.md` in full before proceeding.
+Read `.apm/agents/architect-agent.md` in full before proceeding.
 Read `.specify/memory/constitution.md` and any existing ADRs in `docs/architecture/`.
 
 Your role, ADR format, review checklist, ADR trigger criteria, ARCH-BLOCKER vs

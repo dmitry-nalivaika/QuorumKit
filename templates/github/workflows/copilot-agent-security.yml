@@ -38,7 +38,7 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/security-agent.md');
+            const agentInstructions = readSafe('.github/agents/security-agent.md') || readSafe('.apm/agents/security-agent.md');
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber   = context.eventName === 'workflow_dispatch'

@@ -39,7 +39,7 @@ jobs:
             const {execSync} = require('child_process');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/release-agent.md');
+            const agentInstructions = readSafe('.github/agents/release-agent.md') || readSafe('.apm/agents/release-agent.md');
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             // Collect recent commit log for context
