@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchEvent } from '../../scripts/orchestrator/router.js';
+import { matchEvent } from '../orchestrator/router.js';
 
 const featurePipeline = {
   name: 'feature-pipeline',

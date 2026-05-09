@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { reconstructTimeline } from '../../scripts/orchestrator/timeline-reconstructor.js';
-import { STATE_TAG } from '../../scripts/orchestrator/state-manager.js';
+import { reconstructTimeline } from '../orchestrator/timeline-reconstructor.js';
+import { STATE_TAG } from '../orchestrator/state-manager.js';
 
 function audit(state, at) {
   return { body: `prose\n${STATE_TAG}${JSON.stringify(state)} -->`, created_at: at };

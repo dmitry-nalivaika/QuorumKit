@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { parseRegulation, loadRegulation } from '../../scripts/orchestrator/regulation.js';
+import { parseRegulation, loadRegulation } from '../orchestrator/regulation.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 

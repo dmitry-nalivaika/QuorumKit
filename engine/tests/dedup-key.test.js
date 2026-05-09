@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeDedupKey } from '../../scripts/orchestrator/dedup-key.js';
+import { computeDedupKey } from '../orchestrator/dedup-key.js';
 
 describe('dedup-key.computeDedupKey', () => {
   it('issues: combines number, action, updated_at', () => {

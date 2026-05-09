@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate, mergeBudget, DEFAULT_LOOP_BUDGET } from '../../scripts/orchestrator/loop-budget.js';
+import { evaluate, mergeBudget, DEFAULT_LOOP_BUDGET } from '../orchestrator/loop-budget.js';
 
 const T0 = '2026-05-08T10:00:00Z';
 

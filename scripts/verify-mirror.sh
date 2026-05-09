@@ -87,8 +87,8 @@ for sot in .apm/runtimes.yml .apm/agent-identities.yml; do
       parsed=1
     fi
   fi
-  if [ "$parsed" -eq 0 ] && [ -d scripts/orchestrator/node_modules/js-yaml ]; then
-    if (cd scripts/orchestrator && node -e "require('js-yaml').load(require('fs').readFileSync('../../$sot','utf8'))") 2>/dev/null; then
+  if [ "$parsed" -eq 0 ] && [ -d engine/orchestrator/node_modules/js-yaml ]; then
+    if (cd engine/orchestrator && node -e "require('js-yaml').load(require('fs').readFileSync('../../$sot','utf8'))") 2>/dev/null; then
       ok "$sot parses (node + js-yaml)"
       parsed=1
     else
@@ -187,7 +187,7 @@ for p in "${m8_paths[@]}"; do
     fi
     fail "M8: $line — engine must be invoked via 'uses:' Action ref (FR-019). Remediation: replace with 'uses: dmitry-nalivaika/APM/engine@<sha>'."
     m8_violations=$((m8_violations + 1))
-  done < <(grep -RnE "run: *node (scripts|engine)/orchestrator/" "$p" 2>/dev/null || true)
+  done < <(grep -RnE --exclude-dir=node_modules "run: *node (scripts|engine)/orchestrator/" "$p" 2>/dev/null || true)
 done
 if [ "$m8_violations" -eq 0 ]; then
   ok "M8: no 'node (scripts|engine)/orchestrator/' references in distributed workflows"
@@ -223,7 +223,7 @@ for p in "${m9_paths[@]}"; do
     fi
     fail "M9: $line — third-party Action MUST be pinned by full 40-character commit SHA (FR-031). Remediation: replace with 'uses: <owner>/<repo>@<40-hex-sha>  # <tag>'."
     m9_violations=$((m9_violations + 1))
-  done < <(grep -RnE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*[^./]" "$p" 2>/dev/null || true)
+  done < <(grep -RnE --exclude-dir=node_modules "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*[^./]" "$p" 2>/dev/null || true)
 done
 if [ "$m9_violations" -eq 0 ]; then
   ok "M9: every third-party 'uses:' is SHA-pinned (40 hex chars)"

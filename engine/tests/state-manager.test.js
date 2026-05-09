@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loadState, saveState, postAuditEntry, STATE_TAG } from '../../scripts/orchestrator/state-manager.js';
+import { loadState, saveState, postAuditEntry, STATE_TAG } from '../orchestrator/state-manager.js';
 
 const mockState = {
   runId: 'run-001',

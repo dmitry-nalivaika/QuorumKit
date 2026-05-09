@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseApmMsg, redactBlock, validateContext } from '../../scripts/orchestrator/apm-msg-parser.js';
+import { parseApmMsg, redactBlock, validateContext } from '../orchestrator/apm-msg-parser.js';
 
 const validMsg = {
   version: '2',

@@ -4,7 +4,7 @@
  * Offline CLI for the pipeline validator (FR-020).
  *
  * Usage:
- *   node scripts/orchestrator/pipeline-validator-cli.js [path …]
+ *   node engine/orchestrator/pipeline-validator-cli.js [path …]
  *
  * Each argument may be a YAML file or a directory; directories are scanned
  * for *.yml / *.yaml. Exits 0 if all pipelines are valid, 1 otherwise.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { invokeAgent } from '../../scripts/orchestrator/agent-invoker.js';
+import { invokeAgent } from '../orchestrator/agent-invoker.js';
 
 function makeClient() {
   return { triggerWorkflow: vi.fn().mockResolvedValue(undefined) };

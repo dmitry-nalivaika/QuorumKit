@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import * as copilot from '../../scripts/orchestrator/runtimes/copilot.js';
-import * as claude from '../../scripts/orchestrator/runtimes/claude.js';
+import * as copilot from '../orchestrator/runtimes/copilot.js';
+import * as claude from '../orchestrator/runtimes/claude.js';
 
 const fastClock = { now: () => 0, sleep: vi.fn(async () => {}) };
 

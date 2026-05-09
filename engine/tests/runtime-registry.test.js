@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateRegistry, resolveRuntime, ENABLED_KINDS, RESERVED_KINDS } from '../../scripts/orchestrator/runtime-registry.js';
+import { validateRegistry, resolveRuntime, ENABLED_KINDS, RESERVED_KINDS } from '../orchestrator/runtime-registry.js';
 
 const goodRegistry = {
   default_runtime: 'copilot-default',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveTransition, buildStepIndex } from '../../scripts/orchestrator/router-v2.js';
+import { resolveTransition, buildStepIndex } from '../orchestrator/router-v2.js';
 
 const v2Pipe = {
   schemaVersion: '2',

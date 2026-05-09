@@ -16,7 +16,7 @@ import { dirname, resolve } from 'node:path';
 import { WebSocket } from 'ws';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DASHBOARD_DIR = resolve(REPO_ROOT, 'dashboard');
+const DASHBOARD_DIR = resolve(REPO_ROOT, 'engine', 'dashboard');
 
 const TEST_WEBHOOK_SECRET = 'test-secret-abc123';
 

@@ -425,7 +425,7 @@ fi
 echo "  ── Orchestrator dashboard (optional) ────────────────────────────────"
 echo "  Run from THIS project directory ($PROJECT_DIR) to auto-fill the"
 echo "  project path, git remote, and current branch in the dashboard:"
-echo "    bash $APM_PACKAGE_DIR/dashboard/start.sh"
+echo "    bash $APM_PACKAGE_DIR/engine/dashboard/start.sh"
 echo "  Then open http://localhost:3131 — agents are launchable from the UI."
 echo ""
 echo "  Comment on a PR or issue to trigger agents:"

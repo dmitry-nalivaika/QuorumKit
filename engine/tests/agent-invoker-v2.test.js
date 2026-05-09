@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { invokeAgentV2 } from '../../scripts/orchestrator/agent-invoker.js';
+import { invokeAgentV2 } from '../orchestrator/agent-invoker.js';
 
 const fastClock = { now: () => 0, sleep: vi.fn(async () => {}) };
 const COPILOT_RT = { kind: 'copilot', endpoint: 'https://x', credential_ref: 'GITHUB_TOKEN' };

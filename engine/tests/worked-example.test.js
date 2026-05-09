@@ -14,8 +14,8 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
-import { runOrchestrator } from '../../scripts/orchestrator/index.js';
-import { normalise } from '../../scripts/orchestrator/pipeline-loader.js';
+import { runOrchestrator } from '../orchestrator/index.js';
+import { normalise } from '../orchestrator/pipeline-loader.js';
 
 globalThis.__APM_TEST_NO_FS = true;
 

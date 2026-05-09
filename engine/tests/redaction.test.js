@@ -25,13 +25,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as claudeRuntime from '../../scripts/orchestrator/runtimes/claude.js';
-import * as copilotRuntime from '../../scripts/orchestrator/runtimes/copilot.js';
+import * as claudeRuntime from '../orchestrator/runtimes/claude.js';
+import * as copilotRuntime from '../orchestrator/runtimes/copilot.js';
 import {
   saveState,
   postAuditEntry,
   upsertLiveStatus,
-} from '../../scripts/orchestrator/state-manager.js';
+} from '../orchestrator/state-manager.js';
 
 const SENTINEL_REF = 'APM_TEST_FAKE_SECRET';
 const SENTINEL_VALUE = 'sk-leaked-sentinel-value-DO-NOT-LOG-7f3a9c1e';

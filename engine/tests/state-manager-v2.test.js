@@ -5,7 +5,7 @@ import {
   findLiveStatus,
   findDedupKeyHit,
   getRunStartedAt,
-} from '../../scripts/orchestrator/state-manager.js';
+} from '../orchestrator/state-manager.js';
 
 function client(comments) {
   return {

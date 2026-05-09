@@ -3,7 +3,7 @@ import {
   isApproveCommand,
   checkApprovalTimeout,
   verifyApproverPermission,
-} from '../../scripts/orchestrator/approval-gate.js';
+} from '../orchestrator/approval-gate.js';
 
 describe('approval-gate.isApproveCommand', () => {
   it('returns true for a comment body containing /approve', () => {

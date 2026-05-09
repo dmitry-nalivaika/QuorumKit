@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { withRetry, isRetryable } from '../../scripts/orchestrator/runtimes/_retry.js';
+import { withRetry, isRetryable } from '../orchestrator/runtimes/_retry.js';
 
 function fakeClock() {
   let t = 0;

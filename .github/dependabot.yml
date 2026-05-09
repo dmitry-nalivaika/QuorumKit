@@ -25,9 +25,9 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # ── npm: orchestrator engine (current path; will move to /engine/ per #47) ─
+  # ── npm: orchestrator engine ─────────────────────────────────────────────
   - package-ecosystem: "npm"
-    directory: "/scripts/orchestrator"
+    directory: "/engine/orchestrator"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -46,7 +46,7 @@ updates:
 
   # ── npm: dashboard ─────────────────────────────────────────────────────
   - package-ecosystem: "npm"
-    directory: "/dashboard"
+    directory: "/engine/dashboard"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

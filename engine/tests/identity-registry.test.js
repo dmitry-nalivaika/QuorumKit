@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLookup, resolveLogin } from '../../scripts/orchestrator/identity-registry.js';
+import { buildLookup, resolveLogin } from '../orchestrator/identity-registry.js';
 
 const sample = {
   identities: [

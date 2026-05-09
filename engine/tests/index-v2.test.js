@@ -14,7 +14,7 @@
  * does this); this lets the tests stay focused on dispatch logic.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runOrchestrator } from '../../scripts/orchestrator/index.js';
+import { runOrchestrator } from '../orchestrator/index.js';
 
 // Avoid /tmp filesystem writes during tests.
 globalThis.__APM_TEST_NO_FS = true;

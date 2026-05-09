@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { loadPipelines } from '../../scripts/orchestrator/pipeline-loader.js';
+import { loadPipelines } from '../orchestrator/pipeline-loader.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

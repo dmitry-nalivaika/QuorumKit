@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runOrchestrator } from '../../scripts/orchestrator/index.js';
+import { runOrchestrator } from '../orchestrator/index.js';
 
 // Minimal pipeline fixture — triage is now standalone, pipelines start with ba/dev
 const featurePipeline = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validatePipeline } from '../../scripts/orchestrator/pipeline-validator.js';
+import { validatePipeline } from '../orchestrator/pipeline-validator.js';
 
 const baseRegulation = {
   labels: new Set(['triaged', 'type:feature', 'type:bug']),

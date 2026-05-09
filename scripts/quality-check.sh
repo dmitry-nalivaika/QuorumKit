@@ -269,25 +269,25 @@ fi
 # =============================================================================
 h1 "13. Dashboard files present"
 # =============================================================================
-if [ -f "dashboard/index.html" ]; then
-  ok "dashboard/index.html present"
+if [ -f "engine/dashboard/index.html" ]; then
+  ok "engine/dashboard/index.html present"
 else
-  fail "Missing dashboard/index.html — run: node dashboard/generate-dashboard.js"
+  fail "Missing engine/dashboard/index.html — run: node engine/dashboard/generate-dashboard.js"
 fi
-if [ -f "dashboard/generate-dashboard.js" ]; then
-  ok "dashboard/generate-dashboard.js present"
+if [ -f "engine/dashboard/generate-dashboard.js" ]; then
+  ok "engine/dashboard/generate-dashboard.js present"
 else
-  fail "Missing dashboard/generate-dashboard.js"
+  fail "Missing engine/dashboard/generate-dashboard.js"
 fi
 if [ -f ".github/workflows/update-dashboard.yml" ]; then
   ok ".github/workflows/update-dashboard.yml present"
 else
   fail "Missing .github/workflows/update-dashboard.yml"
 fi
-if [ -f "dashboard/server.js" ]; then
-  ok "dashboard/server.js present"
+if [ -f "engine/dashboard/server.js" ]; then
+  ok "engine/dashboard/server.js present"
 else
-  fail "Missing dashboard/server.js — orchestrator backend missing"
+  fail "Missing engine/dashboard/server.js — orchestrator backend missing"
 fi
 if [ -f "DASHBOARD.md" ]; then
   ok "DASHBOARD.md present"
