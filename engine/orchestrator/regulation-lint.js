@@ -22,7 +22,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { loadRegulation } from './regulation.js';
 
-const PIPELINES_DIR = '.apm/pipelines';
+const PIPELINES_DIR = existsSync('.apm/pipelines') ? '.apm/pipelines' : 'src/pipelines';
 
 async function* yamlFiles(dir) {
   if (!existsSync(dir)) return;

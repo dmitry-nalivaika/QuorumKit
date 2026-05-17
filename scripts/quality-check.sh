@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Backward-compatibility shim — see installer/quality-check.sh (Issue #47, FR-003).
+# Backward-compatibility shim — see src/scripts/quality-check.sh.
 # Removal planned for v4.0.0.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec bash "$SCRIPT_DIR/../installer/quality-check.sh" "$@"
+exec bash "$SCRIPT_DIR/../src/scripts/quality-check.sh" "$@"

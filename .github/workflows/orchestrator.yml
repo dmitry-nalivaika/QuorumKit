@@ -1,8 +1,4 @@
 name: QuorumKit Orchestrator
-# apm-allow-divergence: SoT dogfoods the engine via `node engine/orchestrator/index.js` so
-# changes to engine/ are exercised in this repo on every PR. The distributed template
-# (templates/github/workflows/orchestrator.yml) uses `uses: dmitry-nalivaika/quorumkit/engine@<ref>`
-# per FR-011 — that is the consumer-facing form. Both files MUST stay in functional sync.
 
 on:
   issues:
@@ -63,45 +59,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Check orchestrator is installed
-        id: check
-        run: |
-          if [ ! -f engine/orchestrator/index.js ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Orchestrator not installed in this repo — skipping. Run installer/init.sh to install."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Node
-        if: steps.check.outputs.skip != 'true'
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '20'
-
-      - name: Install orchestrator dependencies
-        if: steps.check.outputs.skip != 'true'
-        run: npm ci
-        working-directory: engine/orchestrator
-
-      - name: Run Orchestrator
+      - name: Run QuorumKit Orchestrator
         id: run_orchestrator
-        if: steps.check.outputs.skip != 'true'
+        # Engine is distributed as a GitHub Action (Issue #47, ADR-047 §1).
+        # Pin to a major-version tag for automatic patch + minor updates;
+        # rotate to a SHA pin if your org's policy requires it (Dependabot
+        # `github-actions` ecosystem opens the rotation PRs).
+        uses: dmitry-nalivaika/quorumkit/engine@v3 # apm-allow: third-party — first-party QuorumKit engine
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
-        run: node engine/orchestrator/index.js # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
       # FR-029, ADR-007 §6: if the orchestrator itself crashed, post a
       # canonical orchestrator-failure audit comment so the run is observable
       # instead of silently dropped. The fallback uses gh CLI because the
       # orchestrator process is the failed party.
       - name: Post orchestrator-failure audit comment
-        if: steps.check.outputs.skip != 'true' && steps.run_orchestrator.outcome == 'failure'
+        if: steps.run_orchestrator.outcome == 'failure'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
@@ -126,7 +101,7 @@ jobs:
           exit 1
 
       - name: Broadcast to dashboard
-        if: steps.check.outputs.skip != 'true' && vars.DASHBOARD_WEBHOOK_URL != ''
+        if: vars.DASHBOARD_WEBHOOK_URL != ''
         env:
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
           QUORUMKIT_WEBHOOK_SECRET: ${{ secrets.QUORUMKIT_WEBHOOK_SECRET }}

@@ -1,5 +1,16 @@
-# Claude Code local settings (machine-specific permissions)
-.claude/settings.local.json
+# ── Local developer environment only ─────────────────────────────────────────
+# .claude/ is the local Claude Code context — not committed.
+# Everything else in .github/ and .specify/ IS tracked.
+.claude/
+.apm/
+.apm-workspaces/
+.copilot-agent-context.md
+CLAUDE.md
+
+# ── .specify/ dynamic metadata (timestamps written by specify init each run) ──
+.specify/extensions/.registry
+.specify/integrations/*.manifest.json
+.specify/workflows/workflow-registry.json
 
 # Editor
 .vscode/
@@ -9,12 +20,10 @@
 .DS_Store
 Thumbs.db
 
-# APM installed modules (like node_modules)
+# Installed modules (like node_modules)
 apm_modules/
 engine/dashboard/node_modules/
 engine/dashboard/.apm-project.json
-.copilot-agent-context.md
-.apm-workspaces/
 engine/orchestrator/node_modules/
 engine/node_modules/
 

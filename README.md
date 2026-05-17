@@ -20,14 +20,14 @@ Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 | Doc | Purpose |
 |-----|---------|
 | `README.md` *(this file)* | What you get, agent catalogue, quick start |
-| [`INIT.md`](INIT.md) | Initialisation guide (`init.sh` flags, examples) |
-| [`PIPELINES.md`](PIPELINES.md) | v2 orchestrator: pipeline YAML, runtime registry, two-channel state, apm-msg protocol |
+| [`docs/INIT.md`](docs/INIT.md) | Initialisation guide (`init.sh` flags, examples) |
+| [`docs/PIPELINES.md`](docs/PIPELINES.md) | v2 orchestrator: pipeline YAML, runtime registry, two-channel state, apm-msg protocol |
 | [`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md) | Agent contract: outcomes, apm-msg framing, `<!-- apm-state -->` |
-| [`DASHBOARD.md`](DASHBOARD.md) | Local browser dashboard for live agent invocation |
-| [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) | Adopting QuorumKit in an existing repo (conflict detection, gradual rollout) |
-| [`DARK_FACTORY_GUIDE.md`](DARK_FACTORY_GUIDE.md) | Greenfield industrial / lights-out manufacturing guide |
+| [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | Local browser dashboard for live agent invocation |
+| [`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md) | Adopting QuorumKit in an existing repo (conflict detection, gradual rollout) |
+| [`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md) | Greenfield industrial / lights-out manufacturing guide |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributing to this library (NNN convention, quality gates) |
-| [`ENHANCEMENTS.md`](ENHANCEMENTS.md) | Gap analysis & roadmap |
+| [`docs/ENHANCEMENTS.md`](docs/ENHANCEMENTS.md) | Gap analysis & roadmap |
 | [`CHANGELOG.md`](CHANGELOG.md) | Released changes |
 
 ---
@@ -75,7 +75,7 @@ routine SDLC work.
 |------------|-------|
 | Event-driven pipelines | Issues, PRs, labels, `workflow_run` events |
 | v2 schema | `entry` / `transitions` / `loop_budget`; runtime selected per step |
-| Runtime registry | `.apm/runtimes.yml` — supported: `claude`, `copilot` (ADR-005) |
+| Runtime registry | `src/runtimes.yml` — supported: `claude`, `copilot` (ADR-005) |
 | Two-channel state | Public timeline comments + idempotent `<!-- apm-state -->` block (ADR-004) |
 | apm-msg protocol | Agents emit `<!-- apm-msg v="1" outcome="…" -->…<!-- /apm-msg -->` |
 | Loop budget | Per-pipeline cap stops infinite ping-pongs (FR-018) |
@@ -83,7 +83,7 @@ routine SDLC work.
 | Approval gates | `approval: required` resumes on `/approve` from a `write`+ collaborator |
 | Dashboard broadcast | Pipeline state pushed to the dashboard within ~5 s |
 
-**Built-in pipelines** (`.apm/pipelines/*.yml`):
+**Built-in pipelines** (`src/pipelines/*.yml`):
 
 | Pipeline | Path |
 |----------|------|
@@ -91,7 +91,7 @@ routine SDLC work.
 | Bug-fix pipeline | triage → dev → qa → reviewer |
 | Release pipeline | qa → reviewer → **[approval]** → release |
 
-Full reference: **[PIPELINES.md](PIPELINES.md)**.
+Full reference: **[docs/PIPELINES.md](docs/PIPELINES.md)**.
 
 ### GitHub templates
 
@@ -139,9 +139,9 @@ bash ~/quorumkit/scripts/init.sh --ai=both
 bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
 ```
 
-Detailed flags: [`INIT.md`](INIT.md). Adding to an existing repo:
-[`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md). Industrial / OT projects:
-[`DARK_FACTORY_GUIDE.md`](DARK_FACTORY_GUIDE.md).
+Detailed flags: [`docs/INIT.md`](docs/INIT.md). Adding to an existing repo:
+[`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md). Industrial / OT projects:
+[`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md).
 
 ---
 
@@ -150,28 +150,24 @@ Detailed flags: [`INIT.md`](INIT.md). Adding to an existing repo:
 ```
 .
 ├── quorumkit.yml                         # QuorumKit package manifest
-├── README.md / INIT.md / PIPELINES.md / DASHBOARD.md / …
+├── README.md / CHANGELOG.md / CONTRIBUTING.md / SECURITY.md
 │
-├── .apm/                           # APM package content (platform-agnostic)
+├── src/                            # Single distributable source (what init.sh reads)
 │   ├── agents/                     # Agent definitions (single source of truth)
 │   ├── skills/                     # Slash-command wrappers
 │   ├── pipelines/                  # v2 orchestrator pipelines
 │   ├── runtimes.yml                # Runtime registry (claude, copilot)
-│   └── agent-identities.yml        # Agent → runtime defaults
+│   ├── agent-identities.yml        # Agent → runtime defaults
+│   ├── seed/                       # Seed docs: CLAUDE.md, CONTRIBUTING.md, SECURITY.md, …
+│   ├── .github/                    # Template workflows, instructions, issue/PR templates
+│   └── scripts/                    # init.sh, quality-check.sh, verify-mirror.sh
 │
-├── templates/
-│   ├── CLAUDE.md / copilot-instructions.md / CONTRIBUTING.md / SECURITY.md
-│   └── github/
-│       ├── instructions/           # Copilot per-agent instructions
-│       ├── workflows/              # 26 GitHub Actions workflows
-│       └── ISSUE_TEMPLATE/, pull_request_template.md
+├── engine/                         # Orchestrator runtime + dashboard (NOT distributed to consumers)
+│   ├── orchestrator/               # v2 orchestrator runtime (Node)
+│   └── dashboard/                  # Local browser control centre
 │
-├── orchestrator/                   # v2 orchestrator runtime (Node)
-├── dashboard/                      # Local browser control centre
-└── scripts/
-    ├── init.sh                     # One-command init
-    ├── quality-check.sh            # Library CI gates
-    └── verify-mirror.sh            # `.apm/` ↔ `templates/` parity check
+├── docs/                           # Documentation (INIT.md, PIPELINES.md, guides, ADRs, …)
+└── scripts/                        # Backward-compat shims (→ src/scripts/) + dev-setup.sh
 ```
 
 ---
@@ -259,7 +255,7 @@ a Kanban board, and a native terminal per agent.
 bash engine/dashboard/start.sh    # opens http://localhost:3131
 ```
 
-Full guide: [`DASHBOARD.md`](DASHBOARD.md).
+Full guide: [`docs/DASHBOARD.md`](docs/DASHBOARD.md).
 
 ---
 
@@ -271,8 +267,8 @@ After initialisation:
    tech stack, quality thresholds, and cost limits.
 2. **Edit agent definitions** in `.claude/agents/` (or
    `.github/instructions/` for Copilot) to add domain-specific rules.
-3. **Edit `.apm/pipelines/*.yml`** to customise agent chains, loop budgets,
-   approvals, and per-step timeouts (see [`PIPELINES.md`](PIPELINES.md)).
+3. **Edit `src/pipelines/*.yml`** to customise agent chains, loop budgets,
+   approvals, and per-step timeouts (see [`docs/PIPELINES.md`](docs/PIPELINES.md)).
 4. **Edit `.specify/extensions/git/git-config.yml`** to toggle auto-commits.
 5. **Edit `.github/workflows/`** for project-specific setup steps.
 
@@ -281,5 +277,5 @@ After initialisation:
 ## Contributing & roadmap
 
 - Contributing to this library: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Gap analysis & roadmap: [`ENHANCEMENTS.md`](ENHANCEMENTS.md)
+- Gap analysis & roadmap: [`docs/ENHANCEMENTS.md`](docs/ENHANCEMENTS.md)
 - Released changes: [`CHANGELOG.md`](CHANGELOG.md)
