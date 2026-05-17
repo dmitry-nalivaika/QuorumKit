@@ -259,7 +259,7 @@ install_speckit() {
     *)       primary="claude"  ;; # claude and both default to claude first
   esac
 
-  if specify init . --integration "$primary" --script sh; then
+  if specify init . --integration "$primary" --script sh --force; then
     ok ".specify/ initialized (integration: $primary)"
   else
     warn "specify init failed — .specify/ not created"

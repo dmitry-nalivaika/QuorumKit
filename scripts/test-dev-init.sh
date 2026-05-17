@@ -105,9 +105,11 @@ h1 "Step 3: Verifying installation (mode: $AI_MODE)"
 check_dir()  {
   local path="$1" min="${2:-1}"
   local count
-  count=$(find "$path" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+  # Count all entries (files + subdirectories) at depth 1
+  # Skills dirs use <name>/SKILL.md layout, so subdirs count as entries
+  count=$(find "$path" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
   if [ "$count" -ge "$min" ]; then
-    ok "$path/ ($count files)"
+    ok "$path/ ($count entries)"
   else
     fail "$path/ missing or empty (found $count, expected >= $min)"
   fi
