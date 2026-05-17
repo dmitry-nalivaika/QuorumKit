@@ -352,6 +352,21 @@ install_github_templates() {
       ;;
   esac
 
+  # ── .github/scripts/ — dev-agent-runner and helpers ──────────────────────
+  local scripts_src="$GITHUB_TMPL/scripts"
+  if [ -d "$scripts_src" ]; then
+    mkdir -p .github/scripts
+    for f in "$scripts_src"/*; do
+      local fname; fname="$(basename "$f")"
+      if [ ! -f ".github/scripts/$fname" ]; then
+        cp "$f" ".github/scripts/$fname"
+        ok "Script: $fname"
+      else
+        warn "Script $fname already exists — skipping (delete to reinstall)"
+      fi
+    done
+  fi
+
   # ── orchestrator.yml — always installed (autonomous agent orchestration) ───
   copy_workflow "$GITHUB_TMPL/workflows/orchestrator.yml"
 

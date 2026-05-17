@@ -40,63 +40,10 @@ done
 
 FAILURES=0
 
-# ── Step 1: Backup then clean all generated artifacts ─────────────────────────
+# ── Step 1: Backup and clean all generated artifacts ─────────────────────────
 h1 "Step 1: Backing up and cleaning generated artifacts"
-
-BACKUP_DIR="/tmp/quorumkit-dev-init-backup-$$"
-mkdir -p "$BACKUP_DIR"
-echo "  Backup dir: $BACKUP_DIR"
-
-# Helper: move to backup if it exists
-backup_and_remove() {
-  local src="$1"
-  if [ -e "$src" ]; then
-    local dest="$BACKUP_DIR/$src"
-    mkdir -p "$(dirname "$dest")"
-    mv "$src" "$dest"
-  fi
-}
-
-# Claude Code generated files
-backup_and_remove .claude/agents
-backup_and_remove .claude/skills
-backup_and_remove CLAUDE.md
-ok "Backed up .claude/agents, .claude/skills, CLAUDE.md"
-
-# Pipelines (not created in self-hosting, but clean just in case)
-backup_and_remove .apm
-ok "Backed up .apm/"
-
-# speckit
-backup_and_remove .specify
-ok "Backed up .specify/"
-
-# Root-level guide copies
-backup_and_remove BROWNFIELD_GUIDE.md
-backup_and_remove DARK_FACTORY_GUIDE.md
-backup_and_remove ENHANCEMENTS.md
-
-# Previously installed agent workflows (leave copilot-agent-dev.yml and
-# orchestrator.yml — those are QuorumKit-tracked customized versions)
-for wf in agent-{architect,compliance,digital-twin,docs,incident,ot-integration,qa,release,reviewer,security,tech-debt,triage}; do
-  backup_and_remove ".github/workflows/${wf}.yml"
-done
-
-# Remove copilot-agent workflows if they exist (installed by copilot/both mode)
-for wf in copilot-agent-{architect,ba,compliance,digital-twin,docs,incident,ot-integration,qa,release,reviewer,security,tech-debt,triage}; do
-  backup_and_remove ".github/workflows/${wf}.yml"
-done
-
-# Remove other installed templates (skip if they don't exist)
-backup_and_remove .github/pull_request_template.md
-for f in .github/ISSUE_TEMPLATE/*.md .github/ISSUE_TEMPLATE/config.yml; do
-  [ -e "$f" ] && backup_and_remove "$f" || true
-done
-
-# Remove specify-init copilot agents (installed by specify init --integration copilot)
-backup_and_remove .github/agents
-
-ok "Cleaned .github/ installed files (backup: $BACKUP_DIR)"
+BACKUP_DIR="$(bash "$SCRIPT_DIR/cleanup.sh")"
+ok "Artifacts backed up to: $BACKUP_DIR"
 
 # ── Step 2: Run dev-setup.sh ──────────────────────────────────────────────────
 h1 "Step 2: Running scripts/dev-setup.sh --ai=$AI_MODE"
