@@ -40,7 +40,7 @@ echo ""
 # --skip-pipelines: pipelines already live in src/pipelines/ (the source of
 #   truth), so no copy to .apm/pipelines/ is needed for self-hosting.
 QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
-  bash "$REPO_ROOT/src/scripts/init.sh" "$AI_ARG" --skip-pipelines "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
+  bash "$REPO_ROOT/src/scripts/init.sh" "$AI_ARG" --skip-pipelines --skip-guides "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
 
 # ── QuorumKit-internal files (self-hosting only, not installed to consumers) ──
 _seed() {

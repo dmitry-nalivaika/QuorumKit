@@ -42,10 +42,6 @@ _bak .apm
 # ── Speckit / project constitution ───────────────────────────────────────────
 _bak .specify
 
-# ── Root-level guide copies ───────────────────────────────────────────────────
-_bak BROWNFIELD_GUIDE.md
-_bak DARK_FACTORY_GUIDE.md
-_bak ENHANCEMENTS.md
 
 # ── .github/ installed directories ───────────────────────────────────────────
 _bak .github/agents

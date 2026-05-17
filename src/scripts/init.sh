@@ -31,6 +31,7 @@ h1()   { echo -e "\n${BOLD}$*${NC}"; }
 AI_MODE="claude"  # default
 DOMAIN=""         # optional domain extension pack
 SKIP_PIPELINES=0  # set by dev-setup.sh for self-hosting (pipelines live in src/)
+SKIP_GUIDES=0     # set by dev-setup.sh — guides already live in docs/ in this repo
 UPGRADE=0         # T-20 / FR-024: rewrite consumer workflows from
                   # `node engine/orchestrator/...` to `uses:` engine Action
 APPLY=0           # default to dry-run when --upgrade is set (SEC-MED-002)
@@ -46,6 +47,7 @@ for arg in "$@"; do
       warn "Unknown domain pack: $arg — only 'industrial' is currently available"
       ;;
     --skip-pipelines)  SKIP_PIPELINES=1      ;;
+    --skip-guides)     SKIP_GUIDES=1         ;;
     --upgrade)         UPGRADE=1             ;;
     --apply)           APPLY=1               ;;
     --engine-ref=*)    ENGINE_REF="${arg#--engine-ref=}" ;;
@@ -574,12 +576,14 @@ else
 fi
 
 # ── Copy guides ──────────────────────────────────────────────────────────────
-for guide in BROWNFIELD_GUIDE.md DARK_FACTORY_GUIDE.md ENHANCEMENTS.md; do
-  if [ ! -f "$guide" ]; then
-    cp "$QUORUMKIT_PACKAGE_DIR/docs/$guide" "$guide"
-    ok "$guide copied"
-  fi
-done
+if [ "$SKIP_GUIDES" -eq 0 ]; then
+  for guide in BROWNFIELD_GUIDE.md DARK_FACTORY_GUIDE.md ENHANCEMENTS.md; do
+    if [ ! -f "$guide" ]; then
+      cp "$QUORUMKIT_PACKAGE_DIR/docs/$guide" "$guide"
+      ok "$guide copied"
+    fi
+  done
+fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
