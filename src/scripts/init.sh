@@ -267,6 +267,16 @@ install_speckit() {
     return
   fi
 
+  # Populate .specify/memory/constitution.md from the package seed ──────────
+  local constitution_src="$QUORUMKIT_PACKAGE_DIR/src/seed/constitution.md"
+  if [ -f "$constitution_src" ]; then
+    mkdir -p ".specify/memory"
+    cp "$constitution_src" ".specify/memory/constitution.md"
+    ok ".specify/memory/constitution.md written"
+  else
+    warn "constitution.md seed not found at $constitution_src — skipping"
+  fi
+
   # For --ai=both: add copilot integration alongside claude ─────────────────
   if [ "$mode" = "both" ]; then
     if specify integration install copilot --force --script sh; then

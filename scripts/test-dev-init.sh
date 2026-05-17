@@ -40,35 +40,60 @@ done
 
 FAILURES=0
 
-# ── Step 1: Clean all generated artifacts ────────────────────────────────────
-h1 "Step 1: Cleaning generated artifacts"
+# ── Step 1: Backup then clean all generated artifacts ─────────────────────────
+h1 "Step 1: Backing up and cleaning generated artifacts"
+
+BACKUP_DIR="/tmp/quorumkit-dev-init-backup-$$"
+mkdir -p "$BACKUP_DIR"
+echo "  Backup dir: $BACKUP_DIR"
+
+# Helper: move to backup if it exists
+backup_and_remove() {
+  local src="$1"
+  if [ -e "$src" ]; then
+    local dest="$BACKUP_DIR/$src"
+    mkdir -p "$(dirname "$dest")"
+    mv "$src" "$dest"
+  fi
+}
 
 # Claude Code generated files
-rm -rf .claude/agents .claude/skills CLAUDE.md
-ok "Removed .claude/agents, .claude/skills, CLAUDE.md"
+backup_and_remove .claude/agents
+backup_and_remove .claude/skills
+backup_and_remove CLAUDE.md
+ok "Backed up .claude/agents, .claude/skills, CLAUDE.md"
 
 # Pipelines (not created in self-hosting, but clean just in case)
-rm -rf .apm
-ok "Removed .apm/"
+backup_and_remove .apm
+ok "Backed up .apm/"
 
 # speckit
-rm -rf .specify
-ok "Removed .specify/"
+backup_and_remove .specify
+ok "Backed up .specify/"
 
 # Root-level guide copies
-rm -f BROWNFIELD_GUIDE.md DARK_FACTORY_GUIDE.md ENHANCEMENTS.md
+backup_and_remove BROWNFIELD_GUIDE.md
+backup_and_remove DARK_FACTORY_GUIDE.md
+backup_and_remove ENHANCEMENTS.md
 
 # Previously installed agent workflows (leave copilot-agent-dev.yml and
 # orchestrator.yml — those are QuorumKit-tracked customized versions)
-rm -f .github/workflows/agent-{architect,compliance,digital-twin,docs,incident,ot-integration,qa,release,reviewer,security,tech-debt,triage}.yml
+for wf in agent-{architect,compliance,digital-twin,docs,incident,ot-integration,qa,release,reviewer,security,tech-debt,triage}; do
+  backup_and_remove ".github/workflows/${wf}.yml"
+done
 
 # Remove copilot-agent workflows if they exist (installed by copilot/both mode)
-rm -f .github/workflows/copilot-agent-{architect,ba,compliance,digital-twin,docs,incident,ot-integration,qa,release,reviewer,security,tech-debt,triage}.yml
+for wf in copilot-agent-{architect,ba,compliance,digital-twin,docs,incident,ot-integration,qa,release,reviewer,security,tech-debt,triage}; do
+  backup_and_remove ".github/workflows/${wf}.yml"
+done
 
 # Remove other installed templates (skip if they don't exist)
-rm -f .github/pull_request_template.md .github/ISSUE_TEMPLATE/*.md .github/ISSUE_TEMPLATE/config.yml
+backup_and_remove .github/pull_request_template.md
+for f in .github/ISSUE_TEMPLATE/*.md .github/ISSUE_TEMPLATE/config.yml; do
+  [ -e "$f" ] && backup_and_remove "$f" || true
+done
 
-ok "Cleaned .github/ installed files"
+ok "Cleaned .github/ installed files (backup: $BACKUP_DIR)"
 
 # ── Step 2: Run dev-setup.sh ──────────────────────────────────────────────────
 h1 "Step 2: Running scripts/dev-setup.sh --ai=$AI_MODE"
@@ -94,6 +119,11 @@ check_file() {
 check_speckit() {
   if [ -d ".specify" ]; then
     ok ".specify/ (specify-cli initialized)"
+    if [ -f ".specify/memory/constitution.md" ]; then
+      ok ".specify/memory/constitution.md present"
+    else
+      fail ".specify/memory/constitution.md MISSING"
+    fi
   else
     warn ".specify/ not present — specify-cli may not be installed (non-fatal)"
   fi
@@ -152,6 +182,7 @@ fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
+echo -e "${BOLD}Backup:${NC} $BACKUP_DIR"
 if [ "$FAILURES" -eq 0 ]; then
   echo -e "${GREEN}${BOLD}All checks passed (mode: $AI_MODE)${NC}"
 else
