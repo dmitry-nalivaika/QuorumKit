@@ -57,6 +57,10 @@ check_dir()  {
   local count
   # Count all entries (files + subdirectories) at depth 1
   # Skills dirs use <name>/SKILL.md layout, so subdirs count as entries
+  if [ ! -d "$path" ]; then
+    fail "$path/ missing (directory does not exist)"
+    return
+  fi
   count=$(find "$path" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
   if [ "$count" -ge "$min" ]; then
     ok "$path/ ($count entries)"
@@ -91,10 +95,10 @@ fi
 # ── Copilot mode checks ───────────────────────────────────────────────────────
 if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   check_file ".github/copilot-instructions.md"
+  check_dir  ".github/instructions"  11
 fi
 
 # ── Shared checks (all modes) ─────────────────────────────────────────────────
-check_dir  ".github/instructions"            11
 check_file ".github/workflows/orchestrator.yml"
 check_file ".github/workflows/alert-to-issue.yml"
 check_dir  ".github/ISSUE_TEMPLATE"          4
