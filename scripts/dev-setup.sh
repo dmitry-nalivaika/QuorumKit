@@ -17,8 +17,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Default to both AI integrations for contributors
-AI_ARG="--ai=both"
+# Default to Claude-only for the SoT repo: --ai=both would create .github/agents/
+# which violates M6 (must not exist in this repo). Copilot instructions are already
+# managed directly in .github/instructions/ and don't need regeneration.
+AI_ARG="--ai=claude"
 EXTRA_ARGS=()
 
 for arg in "$@"; do
