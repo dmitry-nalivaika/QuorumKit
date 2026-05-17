@@ -84,7 +84,7 @@ check_speckit() {
 # ── Claude mode checks ────────────────────────────────────────────────────────
 if [[ "$AI_MODE" == "claude" || "$AI_MODE" == "both" ]]; then
   check_dir  ".claude/agents"  11
-  check_dir  ".claude/skills"  12
+  check_dir  ".claude/skills"  16
   check_file "CLAUDE.md"
 fi
 

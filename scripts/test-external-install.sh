@@ -97,7 +97,7 @@ run_mode_test() {
   if [[ "$ai_mode" == "claude" || "$ai_mode" == "both" ]]; then
     h1 "Claude Code files"
     check_dir  ".claude/agents"  11
-    check_dir  ".claude/skills"  12
+    check_dir  ".claude/skills"  16
     check_file "CLAUDE.md"
   fi
 
