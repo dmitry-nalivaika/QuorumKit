@@ -156,8 +156,12 @@ install_claude() {
     echo "  Context file     → CLAUDE.md (default)"
     echo "  Script type      → sh"
     echo ""
-    npx github-speckit@latest
-    ok "github-speckit initialized"
+    if npx github-speckit@latest; then
+      ok "github-speckit initialized"
+    else
+      warn "github-speckit setup failed (package unavailable or network error) — skipping"
+      echo "  To set up manually, run:  npx github-speckit@latest"
+    fi
   else
     warn "npx not found — skipping github-speckit setup"
     echo "  Install Node.js (https://nodejs.org) then run:"
