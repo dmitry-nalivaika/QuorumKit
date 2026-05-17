@@ -148,16 +148,6 @@ install_claude() {
     warn "CLAUDE.md already exists — skipping (update manually if needed)"
   fi
 
-  # .specify/ constitution — created by Copilot chat, not an npm package
-  h1 "3. Project constitution (.specify/)"
-  if [ -d ".specify" ]; then
-    ok ".specify/ already exists — skipping"
-  else
-    warn ".specify/ not found"
-    echo "  Create it by running this Copilot Chat command in VS Code:"
-    echo "    /speckit-constitution"
-    echo "  (The prompt is already installed at .github/prompts/speckit.constitution.prompt.md)"
-  fi
 }
 
 # =============================================================================
@@ -228,11 +218,65 @@ install_copilot() {
   else
     warn ".github/copilot-instructions.md already exists — skipping"
   fi
+
 }
 
 # =============================================================================
-# SHARED GITHUB TEMPLATES
+# SPECIFY-CLI / PROJECT CONSTITUTION
 # =============================================================================
+install_speckit() {
+  local mode="$1"  # claude | copilot | both
+  h1 "Project constitution (.specify/ via specify-cli)"
+
+  if [ -d ".specify" ]; then
+    ok ".specify/ already exists — skipping"
+    return
+  fi
+
+  # Ensure specify CLI is installed ─────────────────────────────────────────
+  if ! command -v specify &>/dev/null; then
+    echo "  Installing specify-cli (github/spec-kit)..."
+    if command -v uv &>/dev/null; then
+      uv tool install specify-cli
+    elif command -v pipx &>/dev/null; then
+      pipx install specify-cli
+    elif command -v pip3 &>/dev/null; then
+      warn "uv/pipx not found — falling back to pip3 (prefer uv: https://docs.astral.sh/uv/)"
+      pip3 install --user specify-cli
+    else
+      warn "Cannot install specify-cli: uv, pipx, and pip3 not found"
+      echo "  Install uv:  https://docs.astral.sh/uv/"
+      echo "  Then run:    uv tool install specify-cli"
+      echo "  Then re-run this script to initialize .specify/"
+      return
+    fi
+  fi
+
+  # Run specify init (primary integration) ──────────────────────────────────
+  local primary
+  case "$mode" in
+    copilot) primary="copilot" ;;
+    *)       primary="claude"  ;; # claude and both default to claude first
+  esac
+
+  if specify init . --integration "$primary" --script sh; then
+    ok ".specify/ initialized (integration: $primary)"
+  else
+    warn "specify init failed — .specify/ not created"
+    echo "  Run manually: specify init . --integration $primary --script sh"
+    return
+  fi
+
+  # For --ai=both: add copilot integration alongside claude ─────────────────
+  if [ "$mode" = "both" ]; then
+    if specify integration install copilot --force --script sh; then
+      ok "specify: copilot integration added"
+    else
+      warn "specify: copilot integration install failed (add manually)"
+      echo "  Run manually: specify integration install copilot --force --script sh"
+    fi
+  fi
+}
 
 # =============================================================================
 # PIPELINE TEMPLATES (FR-012)
@@ -476,17 +520,20 @@ case "$AI_MODE" in
   claude)
     install_claude
     install_github_templates "claude"
+    install_speckit "claude"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     ;;
   copilot)
     install_copilot
     install_github_templates "copilot"
+    install_speckit "copilot"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     ;;
   both)
     install_claude
     install_copilot
     install_github_templates "both"
+    install_speckit "both"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     ;;
 esac
