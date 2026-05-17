@@ -1,0 +1,30 @@
+name: Triage Agent
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  id-token: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: anthropics/claude-code-action@ad67978e5eb3fc76e3c86855adc19db5673fa818 # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read `.claude/agents/triage-agent.md` in full — it defines your role,
+            label taxonomy, triage workflow, comment format, and hard constraints.
+            Read `.specify/memory/constitution.md` for project scope and principles.
+
+            Your task: triage issue #${{ github.event.issue.number }}.
+            Follow every step in triage-agent.md exactly.
+          claude_args: "--max-turns 10"

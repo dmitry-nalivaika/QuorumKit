@@ -1,0 +1,36 @@
+name: Security Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  security:
+    if: |
+      contains(github.event.comment.body, '@security-agent') &&
+      (github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: anthropics/claude-code-action@ad67978e5eb3fc76e3c86855adc19db5673fa818 # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read `.claude/agents/security-agent.md` in full — it defines your role,
+            OWASP checklist, reporting format, severity levels, and hard constraints.
+            Read `.specify/memory/constitution.md` in full.
+
+            Your task: perform a security review of PR #${{ github.event.issue.number }}
+            and post the Security Review report.
+            Follow every step in security-agent.md exactly.
+          claude_args: "--max-turns 20"
