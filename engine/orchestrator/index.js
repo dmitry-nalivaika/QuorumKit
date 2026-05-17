@@ -749,7 +749,9 @@ async function main() {
     } catch { /* use default */ }
   }
 
-  const pipelinesDir = path.join(process.cwd(), '.apm', 'pipelines');
+  const pipelinesDir = existsSync(path.join(process.cwd(), '.apm', 'pipelines'))
+    ? path.join(process.cwd(), '.apm', 'pipelines')          // consumer project install
+    : path.join(process.cwd(), 'src', 'pipelines');           // self-hosting fallback
   const { valid: pipelines, errors } = await loadPipelines(pipelinesDir);
   for (const err of errors) {
     console.error(`[orchestrator] Pipeline validation error: ${err.file} — ${err.message}`);

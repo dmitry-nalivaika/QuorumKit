@@ -30,6 +30,7 @@ h1()   { echo -e "\n${BOLD}$*${NC}"; }
 # ── Parse arguments ───────────────────────────────────────────────────────────
 AI_MODE="claude"  # default
 DOMAIN=""         # optional domain extension pack
+SKIP_PIPELINES=0  # set by dev-setup.sh for self-hosting (pipelines live in src/)
 UPGRADE=0         # T-20 / FR-024: rewrite consumer workflows from
                   # `node engine/orchestrator/...` to `uses:` engine Action
 APPLY=0           # default to dry-run when --upgrade is set (SEC-MED-002)
@@ -44,6 +45,7 @@ for arg in "$@"; do
     --domain=*)
       warn "Unknown domain pack: $arg — only 'industrial' is currently available"
       ;;
+    --skip-pipelines)  SKIP_PIPELINES=1      ;;
     --upgrade)         UPGRADE=1             ;;
     --apply)           APPLY=1               ;;
     --engine-ref=*)    ENGINE_REF="${arg#--engine-ref=}" ;;
@@ -146,27 +148,15 @@ install_claude() {
     warn "CLAUDE.md already exists — skipping (update manually if needed)"
   fi
 
-  # github-speckit
-  h1 "3. Setting up github-speckit (Claude)"
-  if command -v npx &> /dev/null; then
-    echo "Running: npx github-speckit@latest"
-    echo "When prompted:"
-    echo "  AI integration  → claude"
-    echo "  Branch numbering → sequential"
-    echo "  Context file     → CLAUDE.md (default)"
-    echo "  Script type      → sh"
-    echo ""
-    if npx github-speckit@latest; then
-      ok "github-speckit initialized"
-    else
-      warn "github-speckit setup failed (package unavailable or network error) — skipping"
-      echo "  To set up manually, run:  npx github-speckit@latest"
-    fi
+  # .specify/ constitution — created by Copilot chat, not an npm package
+  h1 "3. Project constitution (.specify/)"
+  if [ -d ".specify" ]; then
+    ok ".specify/ already exists — skipping"
   else
-    warn "npx not found — skipping github-speckit setup"
-    echo "  Install Node.js (https://nodejs.org) then run:"
-    echo "    npx github-speckit@latest"
-    echo "  Answers: AI=claude / sequential / CLAUDE.md / sh"
+    warn ".specify/ not found"
+    echo "  Create it by running this Copilot Chat command in VS Code:"
+    echo "    /speckit-constitution"
+    echo "  (The prompt is already installed at .github/prompts/speckit.constitution.prompt.md)"
   fi
 }
 
@@ -486,18 +476,18 @@ case "$AI_MODE" in
   claude)
     install_claude
     install_github_templates "claude"
-    install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     ;;
   copilot)
     install_copilot
     install_github_templates "copilot"
-    install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     ;;
   both)
     install_claude
     install_copilot
     install_github_templates "both"
-    install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     ;;
 esac
 
