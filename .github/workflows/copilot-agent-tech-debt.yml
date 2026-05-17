@@ -1,0 +1,100 @@
+name: Tech-Debt Agent (Copilot)
+
+on:
+  schedule:
+    - cron: '0 8 1-7 * 1'
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: 'Analysis focus area'
+        required: false
+        type: choice
+        options: [all, complexity, dead-code, dependencies, mutations]
+        default: all
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  tech-debt:
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'tech-debt-review')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Tech-Debt Agent via GitHub Models
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FOCUS: ${{ github.event.inputs.focus || 'all' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const agentInstructions = readSafe('.github/agents/tech-debt-agent.md') || readSafe('.apm/agents/tech-debt-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const issueNumber   = context.payload.issue?.number;   // set when triggered via 'issues: labeled'
+            const focusArea     = process.env.FOCUS;
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub tech-debt analysis agent.';
+
+            const userContent =
+              `Trigger: ${context.eventName}.\n` +
+              `Focus area: ${focusArea}.\n` +
+              (issueNumber ? `Issue: #${issueNumber}\n` : '') +
+              `Run a tech-debt health review for focus area "${focusArea}". ` +
+              `Produce a structured report and list up to 5 items above threshold that should ` +
+              `become GitHub Issues. Be specific about files/modules involved.`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data   = await res.json();
+            const report = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Tech-debt agent produced no output.';
+
+            const today = new Date().toISOString().slice(0,7); // YYYY-MM
+            await github.rest.issues.create({
+              owner:  context.repo.owner,
+              repo:   context.repo.repo,
+              title:  `🔧 Tech-Debt Report – ${today} (${focusArea})`,
+              body:   report,
+              labels: ['tech-debt', 'agent-report'],
+            });

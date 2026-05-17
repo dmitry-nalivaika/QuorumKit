@@ -1,0 +1,188 @@
+name: Triage Agent (Copilot)
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to triage (manual re-triage)'
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  models: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Run Triage Agent via GitHub Models
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const agentInstructions = readSafe('.github/agents/triage-agent.md') || readSafe('.apm/agents/triage-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const issueNumber = context.eventName === 'workflow_dispatch'
+              ? Number(context.payload.inputs.issue_number)
+              : context.payload.issue.number;
+            const issueData = context.eventName === 'workflow_dispatch'
+              ? (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data
+              : context.payload.issue;
+            const issueTitle  = issueData.title  ?? '';
+            const issueBody   = issueData.body   ?? '';
+            const issueAuthor = issueData.user?.login ?? '';
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub triage agent.';
+
+            // Ask the model for structured JSON so we can apply labels programmatically.
+            // The comment field is the human-readable markdown triage summary.
+            // The labels field must contain ONLY valid label names from the taxonomy.
+            const userContent =
+              `Triage issue #${issueNumber} opened by @${issueAuthor}.\n` +
+              `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
+              `Respond with a JSON object (no markdown fences) with exactly two keys:\n` +
+              `  "comment": the full markdown triage summary to post on the issue\n` +
+              `  "labels": an array of label names to apply from this allowed set:\n` +
+              `    type: type:bug, type:feature, type:docs, type:chore, type:security, type:performance\n` +
+              `    priority: priority:critical, priority:high, priority:medium, priority:low\n` +
+              `    status: status:needs-info, status:confirmed, status:wont-fix, status:duplicate\n` +
+              `    routing: agent:ba, agent:dev, agent:architect, agent:security, agent:release, agent:docs\n` +
+              `  Always include exactly one type:* label and exactly one priority:* label.\n` +
+              `  Do NOT include "triaged" — it is applied separately.`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+                response_format: { type: 'json_object' },
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data = await res.json();
+            const rawContent = data.choices?.[0]?.message?.content?.trim() ?? '{}';
+
+            let reply = '⚠️ Triage agent produced no output.';
+            let labelsToApply = [];
+            try {
+              const parsed = JSON.parse(rawContent);
+              reply = parsed.comment?.trim() || reply;
+              // Only allow labels that match known prefixes — guards against prompt injection
+              const ALLOWED_PREFIXES = ['type:', 'priority:', 'status:', 'agent:'];
+              labelsToApply = (parsed.labels ?? []).filter(
+                l => typeof l === 'string' && ALLOWED_PREFIXES.some(p => l.startsWith(p))
+              );
+            } catch (parseErr) {
+              console.warn('Triage agent response was not valid JSON — falling back to raw text:', parseErr.message);
+              reply = rawContent || reply;
+            }
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              body:         reply,
+            });
+
+            // Ensure all required labels exist before applying them
+            const labelDefs = {
+              'type:bug':          { color: 'd73a4a', description: 'Something isn\'t working' },
+              'type:feature':      { color: 'a2eeef', description: 'New feature or request' },
+              'type:docs':         { color: '0075ca', description: 'Documentation improvement' },
+              'type:chore':        { color: 'e4e669', description: 'Maintenance or refactoring' },
+              'type:security':     { color: 'ee0701', description: 'Security vulnerability or concern' },
+              'type:performance':  { color: 'f9d0c4', description: 'Performance improvement' },
+              'priority:critical': { color: 'b60205', description: 'Production down or data loss' },
+              'priority:high':     { color: 'd93f0b', description: 'Major functionality broken' },
+              'priority:medium':   { color: 'e99695', description: 'Notable issue, workaround exists' },
+              'priority:low':      { color: 'f9d0c4', description: 'Minor issue or nice to have' },
+              'status:needs-info': { color: 'd4c5f9', description: 'More information needed' },
+              'status:confirmed':  { color: '0e8a16', description: 'Issue reproduced and confirmed' },
+              'status:wont-fix':   { color: 'ffffff', description: 'Intentional or out of scope' },
+              'status:duplicate':  { color: 'cfd3d7', description: 'Duplicate issue' },
+              'agent:ba':          { color: 'bfd4f2', description: 'Needs BA spec writing' },
+              'agent:dev':         { color: 'bfd4f2', description: 'Ready for implementation' },
+              'agent:architect':   { color: 'bfd4f2', description: 'Needs architecture decision' },
+              'agent:security':    { color: 'bfd4f2', description: 'Needs security review' },
+              'agent:release':     { color: 'bfd4f2', description: 'Ready for release' },
+              'agent:docs':        { color: 'bfd4f2', description: 'Documentation update needed' },
+              'triaged':           { color: '0075ca', description: 'Issue has been processed by the triage agent' },
+            };
+
+            const allLabels = [...labelsToApply, 'triaged'];
+            for (const labelName of allLabels) {
+              const def = labelDefs[labelName];
+              if (!def) continue;
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name:  labelName,
+                  color: def.color,
+                  description: def.description,
+                });
+              } catch { /* label already exists — ignore */ }
+            }
+
+            // Two-phase label application to avoid GitHub silently dropping the
+            // matching `issues.labeled` event under the orchestrator's concurrency
+            // group (cancel-in-progress: false → at most 1 running + 1 queued; the
+            // rest of a rapid-fire burst are dropped). Phase 1 applies all
+            // classification labels (these will produce no-match events that are
+            // safe to drop). Phase 2 adds `triaged` alone in a separate call,
+            // delayed slightly so it lands after the burst clears the queue.
+            // The lone `triaged` event has the full cumulative label set in its
+            // payload and is the one the orchestrator must see.
+            const classificationLabels = labelsToApply.filter(l => l !== 'triaged');
+            if (classificationLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: issueNumber,
+                labels:       classificationLabels,
+              });
+            }
+
+            // Small delay so the burst above clears the orchestrator's concurrency
+            // queue before we fire the matching event. 8s is well over the
+            // ~10s-per-run typical no-match orchestrator runtime observed in
+            // production.
+            await new Promise(r => setTimeout(r, 8000));
+
+            await github.rest.issues.addLabels({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: issueNumber,
+              labels:       ['triaged'],
+            });

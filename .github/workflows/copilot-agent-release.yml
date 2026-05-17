@@ -1,0 +1,94 @@
+name: Release Agent (Copilot)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump override (patch|minor|major)'
+        required: false
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Release Agent via GitHub Models
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUMP_OVERRIDE: ${{ github.event.inputs.bump || 'auto' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs   = require('fs');
+            const {execSync} = require('child_process');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const agentInstructions = readSafe('.github/agents/release-agent.md') || readSafe('.apm/agents/release-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            // Collect recent commit log for context
+            let commitLog = '';
+            try { commitLog = execSync('git log --oneline -50', {encoding:'utf8'}); } catch {}
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub release agent.';
+
+            const userContent =
+              `Bump override: ${process.env.BUMP_OVERRIDE}\n\n` +
+              `Recent commits (last 50):\n${commitLog}\n\n` +
+              `Determine the correct semver bump from commits since the last Git tag, ` +
+              `generate the CHANGELOG delta, and describe the exact changes needed to ` +
+              `update the version file and CHANGELOG.md so a Version Bump PR can be opened.`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data   = await res.json();
+            const report = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Release agent produced no output.';
+
+            await github.rest.issues.create({
+              owner:  context.repo.owner,
+              repo:   context.repo.repo,
+              title:  `🚀 Release Agent Report – ${new Date().toISOString().slice(0,10)}`,
+              body:   report,
+              labels: ['release', 'agent-report'],
+            });

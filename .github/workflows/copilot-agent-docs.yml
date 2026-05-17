@@ -1,0 +1,112 @@
+name: Docs Agent (Copilot)
+
+on:
+  push:
+    branches: [main]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue or PR number (used when triggered by the Orchestrator)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  docs:
+    if: |
+      github.event_name == 'push' ||
+      (contains(github.event.comment.body, '@docs-agent') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Docs Agent via GitHub Models
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const agentInstructions = readSafe('.github/agents/docs-agent.md') || readSafe('.apm/agents/docs-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            const trigger =
+              context.eventName === 'push'
+                ? `push to ${context.payload.ref} (${context.sha?.slice(0,7)})`
+                : `comment by @${context.payload.comment?.user?.login ?? 'unknown'}`;
+
+            const issueNumber   = context.eventName === 'workflow_dispatch'
+              ? Number(context.payload.inputs.issue_number)
+              : context.payload.issue?.number;
+            const commentBody   = context.payload.comment?.body ?? '';
+
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub documentation agent.';
+
+            const userContent =
+              `Triggered by: ${trigger}.\n` +
+              (commentBody ? `Comment:\n${commentBody}\n` : '') +
+              `Audit documentation for the most recently merged PR or the PR referenced in the trigger. ` +
+              `If any updates are needed, describe them clearly so a follow-up PR can be opened.`;
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 2048,
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data   = await res.json();
+            const report = data.choices?.[0]?.message?.content?.trim()
+              ?? '⚠️ Docs agent produced no output.';
+
+            // Post as comment if triggered by a comment, otherwise open an issue
+            if (issueNumber) {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: issueNumber,
+                body:         report,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner:  context.repo.owner,
+                repo:   context.repo.repo,
+                title:  `📄 Docs Agent Report – ${new Date().toISOString().slice(0,10)}`,
+                body:   report,
+                labels: ['documentation', 'agent-report'],
+              });
+            }
