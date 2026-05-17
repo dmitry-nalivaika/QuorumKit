@@ -93,6 +93,9 @@ for f in .github/ISSUE_TEMPLATE/*.md .github/ISSUE_TEMPLATE/config.yml; do
   [ -e "$f" ] && backup_and_remove "$f" || true
 done
 
+# Remove specify-init copilot agents (installed by specify init --integration copilot)
+backup_and_remove .github/agents
+
 ok "Cleaned .github/ installed files (backup: $BACKUP_DIR)"
 
 # ── Step 2: Run dev-setup.sh ──────────────────────────────────────────────────
