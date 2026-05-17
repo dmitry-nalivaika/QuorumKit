@@ -180,7 +180,7 @@ The orchestrator:
 4. Increments the per-edge counter if backward, evaluates loop budget.
 5. Appends an audit state and dispatches the next agent (or stops).
 
-Full schema and worked examples in [`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md).
+Full schema and worked examples in [`AGENT_PROTOCOL.md`](AGENT_PROTOCOL.md).
 
 ---
 
@@ -269,6 +269,6 @@ All four are wired into `.github/workflows/quality.yml`.
 - `docs/architecture/adr-007-orchestrator-github-actions-substrate-contract.md` — concurrency, dedup, timeouts
 - `specs/044-orchestrator-v2-design/spec.md` — full v2 functional spec
 
-[ADR-004]: docs/architecture/adr-004-orchestrator-state-comment-model-v2.md
-[ADR-005]: docs/architecture/adr-005-pluggable-runtime-registry-interface.md
-[ADR-006]: docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md
+[ADR-004]: architecture/adr-004-orchestrator-state-comment-model-v2.md
+[ADR-005]: architecture/adr-005-pluggable-runtime-registry-interface.md
+[ADR-006]: architecture/adr-006-dual-runtime-source-of-truth-and-sync.md

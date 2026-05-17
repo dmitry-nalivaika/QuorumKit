@@ -144,13 +144,26 @@ else
   warn "M5: skipped (one or both workflow trees missing)"
 fi
 
-# ─── M6: anti-mirror — .github/agents/ MUST NOT exist in SoT ─────────────────
-h1 "M6. .github/agents/ MUST NOT exist in the SoT repo"
+# ─── M6: .github/agents/ must be byte-identical to src/agents/ when present ──
+h1 "M6. .github/agents/ byte-parity with src/agents/ (if present)"
 
-if [ -e ".github/agents" ]; then
-  fail "M6: '.github/agents/' MUST NOT exist in the SoT repo (FR-006). Remediation: rm -rf .github/agents — consumer repos receive it from installer/init.sh."
+if [ -d ".github/agents" ]; then
+  m6_fail=0
+  for f in src/agents/*.md; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f")
+    target=".github/agents/$base"
+    if [ ! -f "$target" ]; then
+      fail "M6: 'src/agents/$base' has no counterpart at '$target'. Run dev-setup.sh or init.sh to sync."
+      m6_fail=1
+    elif ! diff -q "$f" "$target" > /dev/null 2>&1; then
+      fail "M6: '$target' differs from 'src/agents/$base'. Run dev-setup.sh to resync."
+      m6_fail=1
+    fi
+  done
+  [ "$m6_fail" -eq 0 ] && ok "M6: .github/agents/ present and byte-identical to src/agents/"
 else
-  ok "M6: .github/agents/ absent"
+  ok "M6: .github/agents/ absent (will be created by dev-setup.sh / init.sh)"
 fi
 
 # ─── M7: self-host Principle IV parity (.apm/agents ↔ .claude/agents and .github/instructions) ──

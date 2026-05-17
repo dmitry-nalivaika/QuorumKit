@@ -990,9 +990,9 @@ The server logs the exit code and the stderr output to the console. Common cause
 
 ## See Also
 
-- [`README.md`](README.md) — Stack overview, agent table, NNN convention
+- [`README.md`](../README.md) — Stack overview, agent table, NNN convention
 - [`DARK_FACTORY_GUIDE.md`](DARK_FACTORY_GUIDE.md) — Architectural philosophy and agent design
 - [`BROWNFIELD_GUIDE.md`](BROWNFIELD_GUIDE.md) — Adopting QuorumKit in an existing project
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — How to extend the stack
-- [`engine/dashboard/server.js`](engine/dashboard/server.js) — Orchestrator backend source
-- [`engine/dashboard/index.html`](engine/dashboard/index.html) — Dashboard UI source
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — How to extend the stack
+- [`engine/dashboard/server.js`](../engine/dashboard/server.js) — Orchestrator backend source
+- [`engine/dashboard/index.html`](../engine/dashboard/index.html) — Dashboard UI source

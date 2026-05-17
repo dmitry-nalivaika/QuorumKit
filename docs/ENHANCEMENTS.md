@@ -526,4 +526,4 @@ A dark factory platform often manages multiple factory sites.
 1. Open a GitHub Issue using the Feature Request template.
 2. Reference this document and the specific gap number (e.g. "Gap 21 — Release Agent").
 3. The Triage Agent will label it; the BA Agent will spec it.
-4. Follow the [CONTRIBUTING.md](CONTRIBUTING.md) agent enhancement workflow.
+4. Follow the [CONTRIBUTING.md](../CONTRIBUTING.md) agent enhancement workflow.
