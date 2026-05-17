@@ -2,16 +2,16 @@
 # =============================================================================
 # verify-mirror.sh — ADR-006 §4 source-of-truth + mirror integrity check
 #
-# `.apm/` is the canonical home for agent definitions, runtime registry, and
+# `src/` is the canonical home for agent definitions, runtime registry, and
 # pipeline files (FR-002, FR-007, FR-014). The Copilot-tree under
-# `templates/github/instructions/` (and any installed `.github/instructions/`)
-# is a generated mirror produced by `installer/init.sh`. This script blocks PRs
+# `src/.github/instructions/` (and any installed `.github/instructions/`)
+# is a generated mirror produced by `src/scripts/init.sh`. This script blocks PRs
 # whose changes leave the mirror stale.
 #
 # Checks:
-#   M1. Every `.apm/agents/<slug>-agent.md` (or `<slug>.md`) has a matching
-#       `templates/github/instructions/<short>.instructions.md` entry.
-#   M2. The `.apm/runtimes.yml` and `.apm/agent-identities.yml` SoT files exist
+#   M1. Every `src/agents/<slug>-agent.md` (or `<slug>.md`) has a matching
+#       `src/.github/instructions/<short>.instructions.md` entry.
+#   M2. The `src/runtimes.yml` and `src/agent-identities.yml` SoT files exist
 #       and parse as YAML (no Copilot-tree mirror is required for these — they
 #       are read by the orchestrator directly).
 #   M3. `docs/AGENT_PROTOCOL.md` exists (regulation document — single SoT,
@@ -28,10 +28,10 @@ fail() { echo -e "${RED}✗${NC}  $*"; FAILED=$((FAILED + 1)); }
 h1()   { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 FAILED=0
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# Map an `.apm/agents/<filename>` to its mirror short name.
+# Map a `src/agents/<filename>` to its mirror short name.
 # The convention used by init.sh:
 #   ba-product-agent.md     → ba-agent.instructions.md
 #   developer-agent.md      → dev-agent.instructions.md
@@ -53,26 +53,26 @@ mirror_short() {
 # ─── M1: agent definition mirror parity ──────────────────────────────────────
 h1 "M1. Agent definitions mirrored to Copilot tree"
 
-if [ ! -d ".apm/agents" ]; then
-  warn ".apm/agents/ not found — skipping M1"
+if [ ! -d "src/agents" ]; then
+  warn "src/agents/ not found — skipping M1"
 else
-  for f in .apm/agents/*.md; do
+  for f in src/agents/*.md; do
     [ -f "$f" ] || continue
     base=$(basename "$f")
     short=$(mirror_short "$base")
-    target="templates/github/instructions/${short}.instructions.md"
+    target="src/.github/instructions/${short}.instructions.md"
     if [ -f "$target" ]; then
       ok "$base ↔ $target"
     else
-      fail "$base has no Copilot-tree mirror at $target — run installer/init.sh to regenerate"
+      fail "$base has no Copilot-tree mirror at $target — run src/scripts/init.sh to regenerate"
     fi
   done
 fi
 
 # ─── M2: source-of-truth registry files exist + parse ────────────────────────
-h1 "M2. Source-of-truth registry files (.apm/runtimes.yml, .apm/agent-identities.yml)"
+h1 "M2. Source-of-truth registry files (src/runtimes.yml, src/agent-identities.yml)"
 
-for sot in .apm/runtimes.yml .apm/agent-identities.yml; do
+for sot in src/runtimes.yml src/agent-identities.yml; do
   if [ ! -f "$sot" ]; then
     fail "Missing $sot (FR-007 / FR-013 — required SoT)"
     continue
@@ -111,30 +111,26 @@ else
 fi
 
 # ─── M4: anti-mirror — templates/.apm/pipelines/ MUST NOT exist ──────────────
-h1 "M4. Pipelines are not mirrored (templates/.apm/pipelines/ must NOT exist)"
+h1 "M4. Pipelines are not mirrored (src/.github/pipelines/ must NOT exist)"
 
-if [ -e "templates/.apm/pipelines" ]; then
-  fail "M4: 'templates/.apm/pipelines/' MUST NOT exist (ADR-006 §3, FR-005 — pipelines are not mirrored). Remediation: rm -rf templates/.apm/pipelines && update installer/init.sh to copy from .apm/pipelines/."
+if [ -e "src/.github/pipelines" ]; then
+  fail "M4: 'src/.github/pipelines/' MUST NOT exist (ADR-006 §3, FR-005 — pipelines are not mirrored). Remediation: rm -rf src/.github/pipelines && update src/scripts/init.sh to copy from src/pipelines/."
 else
-  ok "M4: templates/.apm/pipelines/ absent"
+  ok "M4: src/.github/pipelines/ absent"
 fi
 
 # ─── M5: workflow byte-parity (overlap only) ─────────────────────────────────
-h1 "M5. Workflow byte-parity for files present in BOTH .github/workflows/ and templates/github/workflows/"
+h1 "M5. Workflow byte-parity for files present in BOTH .github/workflows/ and src/.github/workflows/"
 
-if [ -d ".github/workflows" ] && [ -d "templates/github/workflows" ]; then
+if [ -d ".github/workflows" ] && [ -d "src/.github/workflows" ]; then
   for wf in .github/workflows/*.yml; do
     [ -f "$wf" ] || continue
     name="$(basename "$wf")"
-    template="templates/github/workflows/$name"
+    template="src/.github/workflows/$name"
     if [ -f "$template" ]; then
       if cmp -s "$wf" "$template"; then
         ok "M5: $name byte-identical"
       else
-        # An explicit `# apm-allow-divergence: <reason>` marker on either copy
-        # exempts a documented intentional split (e.g. the SoT orchestrator
-        # workflow dogfoods via `node engine/...` while the distributed
-        # template uses `uses: dmitry-nalivaika/quorumkit/engine@<ref>` per FR-011).
         if grep -qE '#[[:space:]]*apm-allow-divergence:' "$wf" "$template"; then
           ok "M5: $name divergence acknowledged via 'apm-allow-divergence:' marker"
         else
@@ -158,10 +154,10 @@ else
 fi
 
 # ─── M7: self-host Principle IV parity (.apm/agents ↔ .claude/agents and .github/instructions) ──
-h1 "M7. Self-host Principle IV parity (.apm/agents ↔ .claude/agents AND .github/instructions)"
+h1 "M7. Self-host Principle IV parity (src/agents \u2194 .claude/agents AND .github/instructions)"
 
-if [ -d ".apm/agents" ] && [ -d ".claude/agents" ] && [ -d ".github/instructions" ]; then
-  for f in .apm/agents/*.md; do
+if [ -d "src/agents" ] && [ -d ".claude/agents" ] && [ -d ".github/instructions" ]; then
+  for f in src/agents/*.md; do
     [ -f "$f" ] || continue
     base=$(basename "$f")
     short=$(mirror_short "$base")
@@ -170,19 +166,19 @@ if [ -d ".apm/agents" ] && [ -d ".claude/agents" ] && [ -d ".github/instructions
     if [ ! -f "$claude_target" ]; then
       fail "M7: '$base' has no Claude counterpart at '$claude_target' (FR-018, Principle IV). Remediation: cp '$f' '$claude_target'."
     elif [ ! -f "$instr_target" ]; then
-      fail "M7: '$base' has no Copilot instruction counterpart at '$instr_target' (FR-018, Principle IV). Remediation: create '$instr_target' pointing at '.apm/agents/$base'."
+      fail "M7: '$base' has no Copilot instruction counterpart at '$instr_target' (FR-018, Principle IV). Remediation: create '$instr_target' pointing at 'src/agents/$base'."
     else
       ok "M7: $base ↔ Claude + Copilot self-host counterparts present"
     fi
   done
 else
-  warn "M7: skipped (.apm/agents, .claude/agents, or .github/instructions missing)"
+  warn "M7: skipped (src/agents, .claude/agents, or .github/instructions missing)"
 fi
 
 # ─── M8: engine must be invoked via uses:, not run: node scripts/orchestrator/ ──
 h1 "M8. Distributed workflows MUST invoke engine via 'uses:' (no 'node scripts/orchestrator/' or 'node engine/orchestrator/' references)"
 
-m8_paths=( ".github/workflows" "templates/github/workflows" )
+m8_paths=( ".github/workflows" "src/.github/workflows" )
 m8_violations=0
 for p in "${m8_paths[@]}"; do
   [ -d "$p" ] || continue
@@ -204,7 +200,7 @@ fi
 # ─── M9: third-party Actions MUST be SHA-pinned (40 hex chars) ───────────────
 h1 "M9. Third-party Actions MUST be pinned by full 40-character commit SHA"
 
-m9_paths=( ".github/workflows" "templates/github/workflows" "engine" )
+m9_paths=( ".github/workflows" "src/.github/workflows" "engine" )
 m9_violations=0
 for p in "${m9_paths[@]}"; do
   [ -d "$p" ] || continue

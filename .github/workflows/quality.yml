@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run quality gates
-        run: bash installer/quality-check.sh
+        run: bash src/scripts/quality-check.sh
 
   pipeline-validator:
     name: Pipeline Validator (FR-020)
@@ -27,8 +27,8 @@ jobs:
       - name: Install orchestrator deps
         run: npm ci
         working-directory: engine/orchestrator
-      - name: Validate every pipeline file under .apm/pipelines/
-        run: node engine/orchestrator/pipeline-validator-cli.js .apm/pipelines # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
+      - name: Validate every pipeline file under src/pipelines/
+        run: node engine/orchestrator/pipeline-validator-cli.js src/pipelines # apm-allow: M8 — engine Action not yet published (#47 step 9 — pending engine/ relocation + release workflow)
 
   verify-mirror:
     name: Verify Mirror (ADR-006)
@@ -42,7 +42,7 @@ jobs:
         run: npm ci
         working-directory: engine/orchestrator
       - name: Run verify-mirror.sh
-        run: bash installer/verify-mirror.sh
+        run: bash src/scripts/verify-mirror.sh
 
   orchestrator-tests:
     name: Orchestrator Tests (FR-023)

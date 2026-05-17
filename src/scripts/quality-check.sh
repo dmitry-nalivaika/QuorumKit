@@ -2,7 +2,7 @@
 # =============================================================================
 # quality-check.sh — QuorumKit Library Quality Gates
 # Run before every PR to this repository.
-# Usage: bash installer/quality-check.sh [--fix]
+# Usage: bash src/scripts/quality-check.sh [--fix]
 # =============================================================================
 set -euo pipefail
 
@@ -19,23 +19,23 @@ h1()   { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 FAILED=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(dirname "$SCRIPT_DIR")"
+ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 cd "$ROOT"
 
 # =============================================================================
 h1 "1. Shell script syntax"
 # =============================================================================
-if bash -n installer/init.sh 2>&1; then
-  ok "installer/init.sh syntax valid"
+if bash -n src/scripts/init.sh 2>&1; then
+  ok "src/scripts/init.sh syntax valid"
 else
-  fail "installer/init.sh has syntax errors"
+  fail "src/scripts/init.sh has syntax errors"
 fi
 
 # =============================================================================
 h1 "2. No filepath header comments in shipped files"
 # =============================================================================
-found=$(grep -rln '^# filepath:\|^<!-- filepath:' .apm/ templates/ 2>/dev/null || true)
+found=$(grep -rln '^# filepath:\|^<!-- filepath:' src/ 2>/dev/null || true)
 if [ -z "$found" ]; then
   ok "No filepath headers found"
 else
@@ -49,21 +49,21 @@ h1 "3. Agent skills are thin wrappers (≤ 45 lines)"
 # Note: speckit-* skills are full implementations and are exempt from this check.
 # =============================================================================
 agent_skills=(
-  ".apm/skills/ba-agent/SKILL.md"
-  ".apm/skills/dev-agent/SKILL.md"
-  ".apm/skills/qa-agent/SKILL.md"
-  ".apm/skills/reviewer-agent/SKILL.md"
-  ".apm/skills/architect-agent/SKILL.md"
-  ".apm/skills/devops-agent/SKILL.md"
-  ".apm/skills/security-agent/SKILL.md"
-  ".apm/skills/triage-agent/SKILL.md"
-  ".apm/skills/ot-integration-agent/SKILL.md"
-  ".apm/skills/digital-twin-agent/SKILL.md"
-  ".apm/skills/compliance-agent/SKILL.md"
-  ".apm/skills/incident-agent/SKILL.md"
-  ".apm/skills/release-agent/SKILL.md"
-  ".apm/skills/docs-agent/SKILL.md"
-  ".apm/skills/tech-debt-agent/SKILL.md"
+  "src/skills/ba-agent/SKILL.md"
+  "src/skills/dev-agent/SKILL.md"
+  "src/skills/qa-agent/SKILL.md"
+  "src/skills/reviewer-agent/SKILL.md"
+  "src/skills/architect-agent/SKILL.md"
+  "src/skills/devops-agent/SKILL.md"
+  "src/skills/security-agent/SKILL.md"
+  "src/skills/triage-agent/SKILL.md"
+  "src/skills/ot-integration-agent/SKILL.md"
+  "src/skills/digital-twin-agent/SKILL.md"
+  "src/skills/compliance-agent/SKILL.md"
+  "src/skills/incident-agent/SKILL.md"
+  "src/skills/release-agent/SKILL.md"
+  "src/skills/docs-agent/SKILL.md"
+  "src/skills/tech-debt-agent/SKILL.md"
 )
 for f in "${agent_skills[@]}"; do
   if [ ! -f "$f" ]; then continue; fi
@@ -78,7 +78,7 @@ done
 # =============================================================================
 h1 "4. Copilot instruction files are thin wrappers (≤ 20 lines)"
 # =============================================================================
-for f in templates/github/instructions/*.instructions.md; do
+for f in src/.github/instructions/*.instructions.md; do
   lines=$(wc -l < "$f" | tr -d ' ')
   if [ "$lines" -gt 20 ]; then
     fail "$f has $lines lines — instruction files must be thin pointers; move rules to the agent definition"
@@ -91,7 +91,7 @@ done
 h1 "5. No project-specific technology names in agent definitions"
 # =============================================================================
 TECH_PATTERN='React\b|Vue\b|Angular\b|Django\b|Rails\b|Spring Boot\b|Laravel\b|Next\.js\b|Express\b|FastAPI\b'
-if grep -rEn "$TECH_PATTERN" .apm/agents/ 2>/dev/null; then
+if grep -rEn "$TECH_PATTERN" src/agents/ 2>/dev/null; then
   fail "Project-specific technology names found in agent definitions (agents must be universal)"
 else
   ok "No project-specific tech names in agents"
@@ -105,7 +105,7 @@ h1 "6. Conditional auth rules — must have qualifier"
 # "constitution requires", "only if", "N/A", or are inside an example template
 # (indented with spaces or start with |) are correctly conditioned.
 unconditional=$(grep -n 'scope.*to authenticated\|authenticated user can only\|auth.*required on all' \
-  .apm/agents/*.md 2>/dev/null | \
+  src/agents/*.md 2>/dev/null | \
   grep -v 'if applicable\|if auth\|per constitution\|constitution requires\|only if\|if the constitution\|N/A\|\[ \]\|- \[ \]' || true)
 if [ -n "$unconditional" ]; then
   warn "Possible unconditional auth rules (review manually):"
@@ -135,10 +135,10 @@ required_agents=(
   "tech-debt-agent.md"
 )
 for agent in "${required_agents[@]}"; do
-  if [ -f ".apm/agents/$agent" ]; then
-    ok ".apm/agents/$agent"
+  if [ -f "src/agents/$agent" ]; then
+    ok "src/agents/$agent"
   else
-    fail "Missing agent definition: .apm/agents/$agent"
+    fail "Missing agent definition: src/agents/$agent"
   fi
 done
 
@@ -164,10 +164,10 @@ required_skills=(
   "tech-debt-agent"
 )
 for skill in "${required_skills[@]}"; do
-  if [ -f ".apm/skills/$skill/SKILL.md" ]; then
-    ok ".apm/skills/$skill/SKILL.md"
+  if [ -f "src/skills/$skill/SKILL.md" ]; then
+    ok "src/skills/$skill/SKILL.md"
   else
-    fail "Missing skill wrapper: .apm/skills/$skill/SKILL.md"
+    fail "Missing skill wrapper: src/skills/$skill/SKILL.md"
   fi
 done
 
@@ -202,17 +202,17 @@ required_workflows=(
   "copilot-agent-tech-debt.yml"
 )
 for wf in "${required_workflows[@]}"; do
-  if [ -f "templates/github/workflows/$wf" ]; then
-    ok "templates/github/workflows/$wf"
+  if [ -f "src/.github/workflows/$wf" ]; then
+    ok "src/.github/workflows/$wf"
   else
-    fail "Missing workflow template: templates/github/workflows/$wf"
+    fail "Missing workflow template: src/.github/workflows/$wf"
   fi
 done
 
 # =============================================================================
 h1 "10. Hard Constraints section present in every agent"
 # =============================================================================
-for agent in .apm/agents/*.md; do
+for agent in src/agents/*.md; do
   if grep -q '## Hard Constraints' "$agent"; then
     ok "$agent — Hard Constraints section present"
   else
@@ -223,7 +223,7 @@ done
 # =============================================================================
 h1 "11. MUST/MUST NOT language in Hard Constraints"
 # =============================================================================
-for agent in .apm/agents/*.md; do
+for agent in src/agents/*.md; do
   in_constraints=false
   while IFS= read -r line; do
     if echo "$line" | grep -q '## Hard Constraints'; then
@@ -289,10 +289,10 @@ if [ -f "engine/dashboard/server.js" ]; then
 else
   fail "Missing engine/dashboard/server.js — orchestrator backend missing"
 fi
-if [ -f "DASHBOARD.md" ]; then
-  ok "DASHBOARD.md present"
+if [ -f "docs/DASHBOARD.md" ]; then
+  ok "docs/DASHBOARD.md present"
 else
-  fail "Missing DASHBOARD.md"
+  fail "Missing docs/DASHBOARD.md"
 fi
 
 # =============================================================================
@@ -300,8 +300,8 @@ h1 "14. Every agent workflow declares timeout-minutes (FR-028, ADR-007 §4)"
 # =============================================================================
 agent_workflow_globs=(
   ".github/workflows/copilot-agent-*.yml"
-  "templates/github/workflows/copilot-agent-*.yml"
-  "templates/github/workflows/agent-*.yml"
+  "src/.github/workflows/copilot-agent-*.yml"
+  "src/.github/workflows/agent-*.yml"
 )
 for glob in "${agent_workflow_globs[@]}"; do
   for f in $glob; do

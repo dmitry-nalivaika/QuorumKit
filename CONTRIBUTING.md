@@ -4,7 +4,7 @@ This guide is for contributors who want to **enhance the QuorumKit library itsel
 adding new agents, improving existing ones, updating workflows, or extending the
 framework for new domains (e.g. dark factory, fintech, healthcare).
 
-> **Using QuorumKit in your own project?** See `templates/seed/CONTRIBUTING.md` — that file
+> **Using QuorumKit in your own project?** See `src/seed/CONTRIBUTING.md` — that file
 > is for contributors to projects that _use_ this library, not for this library itself.
 
 ---
@@ -12,9 +12,9 @@ framework for new domains (e.g. dark factory, fintech, healthcare).
 ## Principles
 
 1. **Single source of truth** — every rule lives in exactly one place:
-   `.apm/agents/<agent>.md`. Skills, workflow prompts, and Copilot instruction
+   `src/agents/<agent>.md`. Skills, workflow prompts, and Copilot instruction
    files are thin wrappers that delegate to agent definitions. Never duplicate.
-2. **Universal agents** — no project-specific content in `.apm/agents/`. Domain
+2. **Universal agents** — no project-specific content in `src/agents/`. Domain
    guidance belongs in dedicated guides and domain extension packs, not in
    universal agent definitions.
 3. **Conditional rules** — any rule that does not apply to all project types must
@@ -46,40 +46,40 @@ exactly one zone (ADR-047, FR-001).
 
 | Zone | Top-level folders | Purpose |
 |---|---|---|
-| **1. Package payload** | `.apm/`, `templates/`, `installer/` | Files that `installer/init.sh` copies into a consumer repo. SoT for agents, skills, pipelines, runtime registry, identity registry, seed docs, template workflows. |
+| **1. Package source** | `src/` | Single canonical directory that `src/scripts/init.sh` reads from and installs. Contains agents, skills, pipelines, registry files, template workflows, instructions, and seed docs. SoT for everything distributed to consumers. |
 | **2. Engine** | `engine/orchestrator/`, `engine/dashboard/`, `engine/tests/`, `engine/dist/` | Orchestrator runtime + dashboard + their tests + the committed ncc bundle. Distributed as (a) a reusable GitHub Action (`uses: dmitry-nalivaika/quorumkit/engine@<ref>`) and (b) an npm package. **Never copied** into a consumer repo. |
-| **3. Self-host** | `.github/`, `.claude/`, `.specify/`, `specs/`, `docs/`, `scripts/` (BC shims) | Files that exist solely so this repo can dogfood itself. **Not distributed.** `scripts/*.sh` are thin wrappers around `installer/*.sh` for one major version of backward compatibility. |
+| **3. Self-host** | `.github/`, `specs/`, `docs/`, `scripts/` | Files that exist solely so this repo can dogfood itself. `.claude/` and `.specify/` are generated locally by `scripts/dev-setup.sh` and are gitignored. `scripts/*.sh` are thin wrappers around `src/scripts/*.sh`. |
 
 Where to put what:
 
-- **A new agent definition** → `.apm/agents/<slug>-agent.md`. Re-run
-  `installer/init.sh` to regenerate the `templates/github/instructions/`
+- **A new agent definition** → `src/agents/<slug>-agent.md`. Re-run
+  `src/scripts/init.sh` to regenerate the `src/.github/instructions/`
   mirror. `verify-mirror.sh` (M1 + M7) enforces parity to `.claude/agents/`
   and `.github/instructions/`.
 - **An orchestrator bug fix** → `engine/orchestrator/`. Tests under
   `engine/tests/`. Re-run `cd engine && npm run build` and commit the
   `engine/dist/` diff (the `engine-build-gate` workflow rejects PRs whose
   bundle is out of sync).
-- **An installer enhancement** → `installer/init.sh`. The shim at
+- **An installer enhancement** → `src/scripts/init.sh`. The shim at
   `scripts/init.sh` simply `exec`s the new path and is removed in v4.0.0.
 - **A first-time-init seed file** (`CLAUDE.md`, `CONTRIBUTING.md`,
-  `SECURITY.md`, `copilot-instructions.md`) → `templates/seed/` (FR-004).
+  `SECURITY.md`, `copilot-instructions.md`) → `src/seed/` (FR-004).
 
-What **MUST NOT** exist in this repo (enforced by `installer/verify-mirror.sh`):
+What **MUST NOT** exist in this repo (enforced by `src/scripts/verify-mirror.sh`):
 
-- `templates/.apm/pipelines/` — pipelines are read directly from
-  `.apm/pipelines/` per ADR-006 §3 (M4).
+- `src/.github/pipelines/` — pipelines are read directly from
+  `src/pipelines/` per ADR-006 §3 (M4).
 - `.github/agents/` — that directory is generated in *consumer* repos by
-  `installer/init.sh`; in this SoT repo, agent definitions live only at
-  `.apm/agents/` (M6).
+  `src/scripts/init.sh`; in this SoT repo, agent definitions live only at
+  `src/agents/` (M6).
 
 Mirror surfaces:
 
 | ID | SoT | Mirror / invariant |
 |---|---|---|
-| M1 | `.apm/agents/<x>.md` | `templates/github/instructions/<short>.instructions.md` parity |
-| M5 | `templates/github/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` byte-identity (if both exist; `# apm-allow-divergence:` exempts an intentional split) |
-| M7 | `.apm/agents/<x>.md` | `.claude/agents/<x>.md` AND `.github/instructions/<short>.instructions.md` |
+| M1 | `src/agents/<x>.md` | `src/.github/instructions/<short>.instructions.md` parity |
+| M5 | `src/.github/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` byte-identity (if both exist; `# apm-allow-divergence:` exempts an intentional split) |
+| M7 | `src/agents/<x>.md` | `.claude/agents/<x>.md` AND `.github/instructions/<short>.instructions.md` |
 | M8 | — | no `node (scripts\|engine)/orchestrator/` in distributed workflows (engine invoked via `uses:` only) |
 | M9 | — | every third-party `uses:` SHA-pinned (40 hex) |
 
@@ -93,15 +93,20 @@ condition resolves.
 ## Prerequisites
 
 ```zsh
-git clone <this-repo-url> ~/apm-dev && cd ~/apm-dev
+git clone <this-repo-url> ~/quorumkit-dev && cd ~/quorumkit-dev
+
+# Step 1 (mandatory): install the package into itself for agent-assisted development
+bash scripts/dev-setup.sh
+# This generates .specify/, .claude/, and all other local artifacts.
+# These files are gitignored. Re-run any time to recreate the environment.
 
 # Claude Code (recommended for library contributions)
 npm i -g @anthropic-ai/claude-code
 export ANTHROPIC_API_KEY=<your key>
 
 # Verify agents load correctly
-ls .apm/agents/
-ls .apm/skills/
+ls src/agents/
+ls src/skills/
 ```
 
 ---
@@ -220,18 +225,18 @@ the new agent is **universal** (applies to all software projects) or **domain-sp
 
 - [ ] Open a GitHub Issue and write a spec via BA Agent
 - [ ] Spec must justify why existing agents cannot cover this responsibility
-- [ ] Create `.apm/agents/<name>-agent.md` following the section order above
-- [ ] Create `.apm/skills/<name>-agent/SKILL.md` (activation wrapper only, ≤ 45 lines)
-- [ ] Create `templates/github/instructions/<name>-agent.instructions.md` (pointer only, ≤ 20 lines)
-- [ ] Create `templates/github/workflows/agent-<name>.yml` (Claude Actions)
-- [ ] Create `templates/github/workflows/copilot-agent-<name>.yml` (Copilot Actions)
-- [ ] Add agent to `UNIVERSAL_AGENTS` array in `scripts/init.sh` (both `install_claude` and `install_copilot`)
-- [ ] Add agent to `required_agents` array in `scripts/quality-check.sh`
+- [ ] Create `src/agents/<name>-agent.md` following the section order above
+- [ ] Create `src/skills/<name>-agent/SKILL.md` (activation wrapper only, ≤ 45 lines)
+- [ ] Create `src/.github/instructions/<name>-agent.instructions.md` (pointer only, ≤ 20 lines)
+- [ ] Create `src/.github/workflows/agent-<name>.yml` (Claude Actions)
+- [ ] Create `src/.github/workflows/copilot-agent-<name>.yml` (Copilot Actions)
+- [ ] Add agent to `UNIVERSAL_AGENTS` array in `src/scripts/init.sh` (both `install_claude` and `install_copilot`)
+- [ ] Add agent to `required_agents` array in `src/scripts/quality-check.sh`
 - [ ] Add skill to `UNIVERSAL_SKILLS` / `required_skills` arrays in both scripts
-- [ ] Add workflows to `required_workflows` in `scripts/quality-check.sh`
+- [ ] Add workflows to `required_workflows` in `src/scripts/quality-check.sh`
 - [ ] Add agent to `agents.universal` list in `quorumkit.yml`
 - [ ] Add agent to `README.md` universal agent table
-- [ ] Add slash command to `INIT.md` quick reference
+- [ ] Add slash command to `docs/INIT.md` quick reference
 - [ ] `@architect-agent` review required — structural change to the framework
 
 ---
@@ -244,12 +249,12 @@ Domain extension packs add opt-in agents for a specific industry vertical.
 
 - [ ] Open a GitHub Issue with domain scope definition
 - [ ] Create all agent/skill/workflow files following the new-agent checklist above
-- [ ] Add a `--domain=<pack>` case to the argument parser in `scripts/init.sh`
+- [ ] Add a `--domain=<pack>` case to the argument parser in `src/scripts/init.sh`
 - [ ] Add domain agent arrays (`DOMAIN_AGENTS`, `DOMAIN_SKILLS`, `DOMAIN_WF_PATTERNS`) to both install functions
 - [ ] Add domain entry to `agents.domain/<pack>` in `quorumkit.yml`
-- [ ] Create or update `<DOMAIN>_GUIDE.md` at repo root
+- [ ] Create or update `docs/<DOMAIN>_GUIDE.md`
 - [ ] Add domain pack to `README.md` domain table and Quick Start examples
-- [ ] Add domain pack to `ENHANCEMENTS.md` Phase 5/6 table
+- [ ] Add domain pack to `docs/ENHANCEMENTS.md` Phase 5/6 table
 - [ ] `@architect-agent` review required
 
 ---
@@ -271,7 +276,7 @@ guidance without polluting the universal agent definitions.
 
 ```zsh
 # Create a new domain guide
-touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
+touch docs/FINTECH_GUIDE.md   # or docs/HEALTHCARE_GUIDE.md, etc.
 # Then: /ba-agent Write a domain guide for fintech projects using this QuorumKit stack
 ```
 
@@ -281,17 +286,17 @@ touch FINTECH_GUIDE.md   # or HEALTHCARE_GUIDE.md, etc.
 
 | Task | Files to change |
 |------|----------------|
-| Add a new rule to an agent | `.apm/agents/<agent>.md` only |
-| Change agent section order | `.apm/agents/<agent>.md` only |
-| Add a new slash command | `.apm/skills/<name>/SKILL.md` + update `INIT.md` |
-| Add a new GitHub Actions trigger | `templates/github/workflows/agent-<name>.yml` + `copilot-agent-<name>.yml` |
+| Add a new rule to an agent | `src/agents/<agent>.md` only |
+| Change agent section order | `src/agents/<agent>.md` only |
+| Add a new slash command | `src/skills/<name>/SKILL.md` + update `docs/INIT.md` |
+| Add a new GitHub Actions trigger | `src/.github/workflows/agent-<name>.yml` + `copilot-agent-<name>.yml` |
 | Add a new universal agent | See [Adding a New Agent](#adding-a-new-agent) |
 | Add a domain extension pack | See [Adding a Domain Pack](#adding-a-domain-pack) |
-| Change NNN convention | `ba-product-agent.md`, `developer-agent.md`, `qa-test-agent.md`, `reviewer-agent.md`, `INIT.md`, `templates/seed/CONTRIBUTING.md`, `README.md` |
-| Add a new issue template | `templates/github/ISSUE_TEMPLATE/<name>.md` + update `config.yml` |
-| Update init.sh | `scripts/init.sh` → always run `bash -n scripts/init.sh` after |
-| Add a domain guide | New `<DOMAIN>_GUIDE.md` at root + entry in `README.md` |
-| Update agent/skill/workflow counts | `scripts/quality-check.sh` arrays + `quorumkit.yml` + `README.md` + `CONTRIBUTING.md` |
+| Change NNN convention | `src/agents/ba-product-agent.md`, `developer-agent.md`, `qa-test-agent.md`, `reviewer-agent.md`, `docs/INIT.md`, `src/seed/CONTRIBUTING.md`, `README.md` |
+| Add a new issue template | `src/.github/ISSUE_TEMPLATE/<name>.md` + update `config.yml` |
+| Update init.sh | `src/scripts/init.sh` → always run `bash -n src/scripts/init.sh` after |
+| Add a domain guide | New `docs/<DOMAIN>_GUIDE.md` + entry in `README.md` |
+| Update agent/skill/workflow counts | `src/scripts/quality-check.sh` arrays + `quorumkit.yml` + `README.md` + `CONTRIBUTING.md` |
 
 ---
 
@@ -301,33 +306,33 @@ Before pushing any branch:
 
 ```zsh
 # 1. Shell script syntax
-bash -n scripts/init.sh && echo "init.sh OK"
+bash -n src/scripts/init.sh && echo "init.sh OK"
 
 # 2. No filepath headers in agent/template files
-grep -rn '^# filepath:\|^<!-- filepath:' .apm/ templates/ && echo "FAIL — remove filepath headers" || echo "OK"
+grep -rn '^# filepath:\|^<!-- filepath:' src/ && echo "FAIL — remove filepath headers" || echo "OK"
 
 # 3. No duplication — skills are wrappers
-for f in .apm/skills/*/SKILL.md; do
+for f in src/skills/*/SKILL.md; do
   lines=$(wc -l < "$f")
   [ "$lines" -gt 20 ] && echo "WARN: $f has $lines lines — may contain duplicated rules"
 done
 
 # 4. No project-specific tech in agent definitions
-grep -rn '\bReact\b\|\bDjango\b\|\bRails\b\|\bSpring\b\|\bLaravel\b' .apm/agents/ \
+grep -rn '\bReact\b\|\bDjango\b\|\bRails\b\|\bSpring\b\|\bLaravel\b' src/agents/ \
   && echo "FAIL — project-specific tech found in agents" || echo "OK"
 
 # 5. Conditional check — auth rules must have qualifier
-grep -n 'scope.*authenticated\|auth.*required\|multi.user' .apm/agents/*.md | \
+grep -n 'scope.*authenticated\|auth.*required\|multi.user' src/agents/*.md | \
   grep -v 'if applicable\|if auth\|per constitution\|constitution requires' \
   && echo "WARN — unconditional auth rule found" || echo "OK"
 ```
 
 Run the full suite:
 ```zsh
-cd /path/to/apm && bash scripts/quality-check.sh
+bash src/scripts/quality-check.sh
 ```
 
-> `scripts/quality-check.sh` is created automatically — see [Automation](#automation) below.
+> `src/scripts/quality-check.sh` is created automatically — see [Automation](#automation) below.
 
 ---
 
@@ -369,4 +374,4 @@ docs(guides): add dark factory project guide
 
 - Open a GitHub Issue — Triage Agent will classify it
 - Comment `@architect-agent` on a PR for framework design questions
-- Read the agent definitions in `.apm/agents/` — they are the canonical reference
+- Read the agent definitions in `src/agents/` — they are the canonical reference

@@ -6,12 +6,12 @@
 # runs verify-mirror.sh, asserts it exits non-zero with a message naming the
 # rule ID, then reverts and asserts it exits zero again. (FR-020, SC-002.)
 #
-# Run with:  bash installer/tests/test-verify-mirror.sh
+# Run with:  bash src/scripts/tests/test-verify-mirror.sh
 # =============================================================================
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT_REL="installer/verify-mirror.sh"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_REL="src/scripts/verify-mirror.sh"
 WORK="$(mktemp -d)"
 PASS=0; FAIL=0
 trap 'rm -rf "$WORK"' EXIT
@@ -57,8 +57,8 @@ assert_violation() {
 assert_baseline_passes
 
 assert_violation "M4" \
-  "mkdir -p templates/.apm/pipelines && touch templates/.apm/pipelines/foo.yml" \
-  "rm -rf templates/.apm"
+  "mkdir -p src/.github/pipelines && touch src/.github/pipelines/foo.yml" \
+  "rm -rf src/.github/pipelines"
 
 assert_violation "M5" \
   "perl -i -pe 's/timeout-minutes: 30/timeout-minutes: 31/' .github/workflows/copilot-agent-dev.yml" \
@@ -69,8 +69,8 @@ assert_violation "M6" \
   "rm -rf .github/agents"
 
 assert_violation "M7" \
-  "echo '# stray' > .apm/agents/test-stray-agent.md" \
-  "rm -f .apm/agents/test-stray-agent.md"
+  "echo '# stray' > src/agents/test-stray-agent.md" \
+  "rm -f src/agents/test-stray-agent.md"
 
 assert_violation "M8" \
   "echo '        run: node scripts/orchestrator/foo.js' >> .github/workflows/copilot-agent-dev.yml" \

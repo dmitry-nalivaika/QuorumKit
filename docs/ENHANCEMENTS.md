@@ -470,7 +470,7 @@ involve time-series pipelines, not user-facing functions.
 - [ ] Offline-mode behaviour tested (cloud disconnected)
 - [ ] Resource limits (CPU/RAM) set in container manifest
 
-And a `templates/github/workflows/agent-edge-deploy.yml` example workflow.
+And a `src/.github/workflows/agent-edge-deploy.yml` example workflow.
 
 **Status**: Medium effort — open a GitHub Issue.
 

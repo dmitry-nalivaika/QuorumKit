@@ -85,7 +85,7 @@ for agent in ba-product-agent developer-agent qa-test-agent reviewer-agent \
              architect-agent devops-agent security-agent triage-agent; do
   echo ""
   echo "══ $agent ══"
-  diff ".claude/agents/$agent.md" "$APM/.apm/agents/$agent.md" | head -30 \
+  diff ".claude/agents/$agent.md" "$APM/src/agents/$agent.md" | head -30 \
     && echo "(no diff)" || true
 done
 ```
@@ -135,7 +135,7 @@ Code (or describe it to Copilot) to update it section by section.
 
 ```zsh
 diff .github/copilot-instructions.md \
-     /path/to/quorumkit/templates/seed/copilot-instructions.md
+     /path/to/quorumkit/src/seed/copilot-instructions.md
 ```
 
 The QuorumKit template `copilot-instructions.md` adds:
@@ -161,7 +161,7 @@ Scenarios:
 
 ```zsh
 # See which workflows would be skipped
-for wf in /path/to/quorumkit/templates/github/workflows/*.yml; do
+for wf in /path/to/quorumkit/src/.github/workflows/*.yml; do
   wf_name="$(basename "$wf")"
   [ -f ".github/workflows/$wf_name" ] \
     && echo "SKIP (exists): $wf_name" \
@@ -200,9 +200,9 @@ If tags are missing, add them anywhere in your CLAUDE.md:
 cd /path/to/your-existing-project
 
 # Choose the mode that matches your team
-bash /path/to/quorumkit/installer/init.sh --ai=both     # Claude + Copilot
-bash /path/to/quorumkit/installer/init.sh --ai=claude   # Claude Code only
-bash /path/to/quorumkit/installer/init.sh --ai=copilot  # GitHub Copilot only
+bash /path/to/quorumkit/src/scripts/init.sh --ai=both     # Claude + Copilot
+bash /path/to/quorumkit/src/scripts/init.sh --ai=claude   # Claude Code only
+bash /path/to/quorumkit/src/scripts/init.sh --ai=copilot  # GitHub Copilot only
 ```
 
 The script is safe to run on existing projects — it **skips any file that already

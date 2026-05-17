@@ -79,7 +79,7 @@ gracefully to a simulation mode when the server is not running — so you can op
     ┌─────────────────────────────────────┐
     │  AI Agent Process                   │
     │  e.g. claude --system-prompt        │
-    │       .apm/skills/qa-agent/SKILL.md │
+    │       src/skills/qa-agent/SKILL.md  │
     │       --cwd /your/project           │
     │                                     │
     │  stdout/stderr → streamed over WS   │
@@ -755,21 +755,21 @@ The server maps each agent card ID to the correct skill file:
 
 | Card ID | Skill folder | Agent definition file |
 |---------|-------------|----------------------|
-| `ba` | `.apm/skills/ba-agent/SKILL.md` | `.apm/agents/ba-product-agent.md` |
-| `developer` | `.apm/skills/dev-agent/SKILL.md` | `.apm/agents/developer-agent.md` |
-| `qa` | `.apm/skills/qa-agent/SKILL.md` | `.apm/agents/qa-test-agent.md` |
-| `reviewer` | `.apm/skills/reviewer-agent/SKILL.md` | `.apm/agents/reviewer-agent.md` |
-| `architect` | `.apm/skills/architect-agent/SKILL.md` | `.apm/agents/architect-agent.md` |
-| `devops` | `.apm/skills/devops-agent/SKILL.md` | `.apm/agents/devops-agent.md` |
-| `security` | `.apm/skills/security-agent/SKILL.md` | `.apm/agents/security-agent.md` |
-| `triage` | `.apm/skills/triage-agent/SKILL.md` | `.apm/agents/triage-agent.md` |
-| `release` | `.apm/skills/release-agent/SKILL.md` | `.apm/agents/release-agent.md` |
-| `docs` | `.apm/skills/docs-agent/SKILL.md` | `.apm/agents/docs-agent.md` |
-| `techdebt` | `.apm/skills/tech-debt-agent/SKILL.md` | `.apm/agents/tech-debt-agent.md` |
-| `ot` | `.apm/skills/ot-integration-agent/SKILL.md` | `.apm/agents/ot-integration-agent.md` |
-| `twin` | `.apm/skills/digital-twin-agent/SKILL.md` | `.apm/agents/digital-twin-agent.md` |
-| `compliance` | `.apm/skills/compliance-agent/SKILL.md` | `.apm/agents/compliance-agent.md` |
-| `incident` | `.apm/skills/incident-agent/SKILL.md` | `.apm/agents/incident-agent.md` |
+| `ba` | `src/skills/ba-agent/SKILL.md` | `src/agents/ba-product-agent.md` |
+| `developer` | `src/skills/dev-agent/SKILL.md` | `src/agents/developer-agent.md` |
+| `qa` | `src/skills/qa-agent/SKILL.md` | `src/agents/qa-test-agent.md` |
+| `reviewer` | `src/skills/reviewer-agent/SKILL.md` | `src/agents/reviewer-agent.md` |
+| `architect` | `src/skills/architect-agent/SKILL.md` | `src/agents/architect-agent.md` |
+| `devops` | `src/skills/devops-agent/SKILL.md` | `src/agents/devops-agent.md` |
+| `security` | `src/skills/security-agent/SKILL.md` | `src/agents/security-agent.md` |
+| `triage` | `src/skills/triage-agent/SKILL.md` | `src/agents/triage-agent.md` |
+| `release` | `src/skills/release-agent/SKILL.md` | `src/agents/release-agent.md` |
+| `docs` | `src/skills/docs-agent/SKILL.md` | `src/agents/docs-agent.md` |
+| `techdebt` | `src/skills/tech-debt-agent/SKILL.md` | `src/agents/tech-debt-agent.md` |
+| `ot` | `src/skills/ot-integration-agent/SKILL.md` | `src/agents/ot-integration-agent.md` |
+| `twin` | `src/skills/digital-twin-agent/SKILL.md` | `src/agents/digital-twin-agent.md` |
+| `compliance` | `src/skills/compliance-agent/SKILL.md` | `src/agents/compliance-agent.md` |
+| `incident` | `src/skills/incident-agent/SKILL.md` | `src/agents/incident-agent.md` |
 
 ---
 

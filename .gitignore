@@ -1,5 +1,11 @@
-# Claude Code local settings (machine-specific permissions)
-.claude/settings.local.json
+# ── Generated local artifacts (produced by scripts/dev-setup.sh / init.sh) ───
+# These are local working-environment outputs, not source of truth.
+# Run `bash scripts/dev-setup.sh` to regenerate them.
+.specify/
+.claude/
+.apm-workspaces/
+.copilot-agent-context.md
+CLAUDE.md
 
 # Editor
 .vscode/
@@ -9,12 +15,10 @@
 .DS_Store
 Thumbs.db
 
-# APM installed modules (like node_modules)
+# Installed modules (like node_modules)
 apm_modules/
 engine/dashboard/node_modules/
 engine/dashboard/.apm-project.json
-.copilot-agent-context.md
-.apm-workspaces/
 engine/orchestrator/node_modules/
 engine/node_modules/
 

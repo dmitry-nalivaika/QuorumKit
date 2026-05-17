@@ -3,7 +3,7 @@ applyTo: "src/**,lib/**,app/**,tests/**,test/**,__tests__/**"
 ---
 # Developer Agent
 
-Read `.apm/agents/developer-agent.md` in full before proceeding.
+Read `src/agents/developer-agent.md` in full before proceeding.
 Read `.specify/memory/constitution.md` for quality standards.
 
 Your role, TDD workflow, code standards, Constitution Check format, branch naming

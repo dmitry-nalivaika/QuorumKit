@@ -3,7 +3,7 @@ applyTo: "specs/**"
 ---
 # BA/Product Agent
 
-Read `.apm/agents/ba-product-agent.md` in full before proceeding.
+Read `src/agents/ba-product-agent.md` in full before proceeding.
 Read `.specify/memory/constitution.md` for non-negotiable rules.
 
 Your role, responsibilities, required spec.md format, constraints, and handoff
