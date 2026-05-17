@@ -49,6 +49,9 @@ _bak ENHANCEMENTS.md
 
 # ── .github/ installed directories ───────────────────────────────────────────
 _bak .github/agents
+_bak .github/copilot-instructions.md
+_bak .github/dependabot.yml
+_bak .github/mlc-config.json
 _bak .github/instructions
 _bak .github/scripts
 _bak .github/prompts
@@ -62,5 +65,10 @@ for f in .github/workflows/agent-*.yml .github/workflows/copilot-agent-*.yml; do
 done
 _bak .github/workflows/orchestrator.yml
 _bak .github/workflows/alert-to-issue.yml
+# QuorumKit-internal CI workflows
+_bak .github/workflows/engine-build-gate.yml
+_bak .github/workflows/engine-release.yml
+_bak .github/workflows/quality.yml
+_bak .github/workflows/update-dashboard.yml
 
 echo "$BACKUP_DIR"

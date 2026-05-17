@@ -100,6 +100,15 @@ check_file ".github/workflows/alert-to-issue.yml"
 check_dir  ".github/ISSUE_TEMPLATE"          4
 check_file ".github/pull_request_template.md"
 
+# ── QuorumKit-internal files (installed by dev-setup.sh only) ────────────────
+check_file ".github/copilot-instructions.md"
+check_file ".github/dependabot.yml"
+check_file ".github/mlc-config.json"
+check_file ".github/workflows/engine-build-gate.yml"
+check_file ".github/workflows/engine-release.yml"
+check_file ".github/workflows/quality.yml"
+check_file ".github/workflows/update-dashboard.yml"
+
 # ── Agent workflows ───────────────────────────────────────────────────────────
 if [[ "$AI_MODE" == "claude" || "$AI_MODE" == "both" ]]; then
   for wf in agent-architect agent-docs agent-qa agent-release agent-reviewer agent-security agent-tech-debt agent-triage; do
