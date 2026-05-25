@@ -8,9 +8,9 @@ on:
         required: true
 
 permissions:
-  contents: read
+  contents: write
   issues: write
-  pull-requests: read
+  pull-requests: write
   models: read
 
 jobs:
@@ -92,4 +92,212 @@ jobs:
               repo:         context.repo.repo,
               issue_number: issueNumber,
               body:         reply,
+            });
+
+      - name: Push spec branch and open PR
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { execSync, spawnSync } = require('child_process');
+            const fs = require('fs');
+
+            const issueNumber = Number('${{ github.event.inputs.issue_number }}');
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // ── 1. Determine spec path and branch name ───────────────────────
+            // Derive branch from the spec directory whose name starts with NNN-
+            const nnn = String(issueNumber).padStart(3, '0');
+            const specsDir = 'specs';
+            let specDir = null;
+            if (fs.existsSync(specsDir)) {
+              const entries = fs.readdirSync(specsDir);
+              specDir = entries.find(e => e.startsWith(`${nnn}-`)) ?? null;
+            }
+            if (!specDir) {
+              core.warning(`No specs/${nnn}-* directory found; skipping branch/PR step.`);
+              return;
+            }
+            const branchName = specDir;
+            const specPath   = `${specsDir}/${specDir}/spec.md`;
+
+            if (!fs.existsSync(specPath)) {
+              core.warning(`${specPath} not found; skipping branch/PR step.`);
+              return;
+            }
+
+            // ── 2. Dirty-tree guard ───────────────────────────────────────────
+            const dirty = execSync('git status --porcelain', { encoding: 'utf8' })
+              .split('\n')
+              .map(l => l.trim())
+              .filter(l => l.length > 0)
+              .filter(l => {
+                const file = l.replace(/^[A-Z?!]{1,2}\s+/, '');
+                return file !== specPath && file !== '.specify/feature.json';
+              });
+            if (dirty.length > 0) {
+              const fileList = dirty.map(l => `- \`${l}\``).join('\n');
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issueNumber,
+                body: `**BA Agent — Publish Error**\n\nAborting: the working tree has uncommitted changes to files outside the expected spec paths:\n\n${fileList}\n\nPlease resolve these before re-running the BA agent.`,
+              });
+              core.setFailed('Dirty working tree — aborting spec publish.');
+              return;
+            }
+
+            // ── 3. Configure git identity ─────────────────────────────────────
+            execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
+            execSync('git config user.name "github-actions[bot]"');
+
+            // ── 4. Create or check out branch ─────────────────────────────────
+            {
+              const verifyResult = spawnSync('git', ['rev-parse', '--verify', branchName], { encoding: 'utf8', stdio: 'pipe' });
+              if (verifyResult.status === 0) {
+                // Branch already exists — check it out without resetting (FR-003)
+                const coResult = spawnSync('git', ['checkout', branchName], { encoding: 'utf8' });
+                if (coResult.status !== 0) {
+                  core.setFailed(`Failed to checkout branch ${branchName}: ${coResult.stderr}`);
+                  return;
+                }
+              } else {
+                // Branch is new — create from HEAD
+                const coResult = spawnSync('git', ['checkout', '-b', branchName], { encoding: 'utf8' });
+                if (coResult.status !== 0) {
+                  core.setFailed(`Failed to create branch ${branchName}: ${coResult.stderr}`);
+                  return;
+                }
+              }
+            }
+
+            // ── 5. Stage spec files ───────────────────────────────────────────
+            spawnSync('git', ['add', specPath], { encoding: 'utf8' });
+            if (fs.existsSync('.specify/feature.json')) {
+              execSync('git add .specify/feature.json');
+            }
+
+            // ── 6. Extract feature title from spec heading ────────────────────
+            const specContent = fs.readFileSync(specPath, 'utf8');
+            const titleMatch  = specContent.match(/^# Spec:\s*(.+?)\s*(?:—|-).*Issue #\d+/m);
+            const featureTitle = titleMatch ? titleMatch[1].trim() : `Issue #${issueNumber}`;
+
+            // ── 7. Commit ─────────────────────────────────────────────────────
+            // Determine new vs. update using the PR list (more reliable than git log exit code)
+            const existingPrs = await github.rest.pulls.list({
+              owner, repo, head: `${owner}:${branchName}`, state: 'open',
+            });
+            const isUpdate = existingPrs.data.length > 0;
+
+            const commitMsg = isUpdate
+              ? `docs(spec): refine spec for #${issueNumber} — ${featureTitle}`
+              : `docs(spec): add spec for #${issueNumber} — ${featureTitle}`;
+
+            {
+              // Use spawnSync so commitMsg is never interpreted by the shell (OWASP A03)
+              const commitResult = spawnSync('git', ['commit', '-m', commitMsg], { encoding: 'utf8' });
+              if (commitResult.status !== 0) {
+                // Nothing to commit (spec unchanged) — continue to PR upsert.
+                core.info('Nothing to commit; proceeding to PR upsert.');
+              }
+            }
+
+            // ── 8. Push ───────────────────────────────────────────────────────
+            {
+              const pushArgs = ['push', ...(isUpdate ? ['--force-with-lease'] : []), 'origin', branchName];
+              const pushResult = spawnSync('git', pushArgs, { encoding: 'utf8' });
+              if (pushResult.status !== 0) {
+                const pushStderr = pushResult.stderr ?? '';
+                if (pushStderr.includes('403')) {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: issueNumber,
+                    body: `**BA Agent — Permission Error**\n\nFailed to push branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`contents: write\` scope. Please grant this permission in the workflow file and re-run.`,
+                  });
+                  core.setFailed('Missing contents: write permission.');
+                  return;
+                }
+                core.setFailed(`git push failed: ${pushStderr}`);
+                return;
+              }
+            }
+
+            // ── 9. ADR-trigger heuristic ──────────────────────────────────────
+            const adrKeywords = ['new external', 'new storage', 'new protocol', 'new service', 'ADR'];
+            const needsAdr = adrKeywords.some(kw => specContent.toLowerCase().includes(kw.toLowerCase()));
+            const nextAgentLabel = needsAdr ? 'agent:architect' : 'agent:dev';
+
+            // ── 10. PR title and body ─────────────────────────────────────────
+            const prTitle = `docs(spec): #${issueNumber} — ${featureTitle}`;
+            const prBody  = [
+              `Refs #${issueNumber}`,
+              '',
+              `**Spec:** \`${specPath}\``,
+              '',
+              `## BA Handoff Summary`,
+              '',
+              `- User stories: ${(specContent.match(/^### US-/gm) ?? []).length}`,
+              `- Functional requirements: ${(specContent.match(/^- \*\*FR-/gm) ?? []).length}`,
+              `- Open questions resolved: ${specContent.includes('## Open Questions') && !specContent.match(/^\d+\./m) ? 'Yes (no unresolved items detected)' : 'See spec for details'}`,
+              '',
+              `**Originating issue:** https://github.com/${owner}/${repo}/issues/${issueNumber}`,
+            ].join('\n');
+
+            // ── 11. Create or update PR ───────────────────────────────────────
+            let prUrl;
+            try {
+              if (existingPrs.data.length > 0) {
+                const existingPr = existingPrs.data[0];
+                await github.rest.pulls.update({
+                  owner, repo, pull_number: existingPr.number, body: prBody,
+                });
+                prUrl = existingPr.html_url;
+              } else {
+                const defaultBranch = (await github.rest.repos.get({ owner, repo })).data.default_branch;
+                const newPr = await github.rest.pulls.create({
+                  owner, repo, head: branchName, base: defaultBranch,
+                  title: prTitle, body: prBody,
+                });
+                prUrl = newPr.data.html_url;
+                // Apply labels
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: newPr.data.number,
+                  labels: ['type:spec', nextAgentLabel],
+                });
+              }
+            } catch (e) {
+              if (e.status === 403) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issueNumber,
+                  body: `**BA Agent — Permission Error**\n\nFailed to create/update PR for branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`pull-requests: write\` scope. Please grant this permission in the workflow file and re-run.`,
+                });
+                core.setFailed('Missing pull-requests: write permission.');
+                return;
+              }
+              throw e;
+            }
+
+            // ── 12. Post PR URL + apm-msg on originating issue ────────────────
+            const apmMsg = JSON.stringify({
+              version: '2',
+              step: 'ba',
+              agent: 'ba-agent',
+              outcome: 'spec-ready',
+              summary: `Spec published for #${issueNumber}. PR: ${prUrl}`,
+              payload: { specPath, branch: branchName, prUrl },
+            }, null, 2);
+
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issueNumber,
+              body: [
+                `**BA Agent — Spec Published**`,
+                '',
+                `Spec for issue #${issueNumber} has been committed to branch \`${branchName}\` and a PR is ready for review.`,
+                '',
+                `**PR:** ${prUrl}`,
+                '',
+                '```apm-msg',
+                apmMsg,
+                '```',
+              ].join('\n'),
             });
