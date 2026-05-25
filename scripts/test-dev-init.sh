@@ -126,7 +126,8 @@ if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   done
 fi
 
-# ── src/pipelines/ must already exist (self-hosting: pipelines live in src/) ──────────
+# ── src/pipelines/ must already exist (QuorumKit self-hosting: pipelines ship ──
+# ── in src/pipelines/ and are read from there directly by the orchestrator) ────
 if [ -d "src/pipelines" ]; then
   ok "src/pipelines/ present (correct — self-hosting uses src/pipelines/ directly)"
 else

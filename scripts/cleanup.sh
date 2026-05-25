@@ -36,8 +36,10 @@ _bak .claude/agents
 _bak .claude/skills
 _bak CLAUDE.md
 
-# ── Orchestrator pipelines ────────────────────────────────────────────────────
+# ── Orchestrator pipelines + runtime/identity configs ────────────────────────
 _bak src/pipelines
+_bak src/runtimes.yml
+_bak src/agent-identities.yml
 
 # ── Speckit / project constitution ───────────────────────────────────────────
 _bak .specify

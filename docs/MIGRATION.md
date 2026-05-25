@@ -109,7 +109,6 @@ in a future release with a dedicated protocol-migration ADR:
 
 | Identifier | Reason frozen |
 |-----------|--------------|
-| `.apm/` directory | Renamed to `src/` in Issue #251 — see [upgrade section](#upgrading-from-apm-layout-to-src-layout-issue-251) |
 | `apm-msg` (HTML comment token) | Changing breaks existing GitHub Issue state recovery |
 | `apm-state` (HTML comment token) | Same — embedded in live Issue bodies |
 | `apm-pipeline-state` (HTML comment token) | Same |
