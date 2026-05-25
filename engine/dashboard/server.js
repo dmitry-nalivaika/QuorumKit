@@ -578,6 +578,7 @@ function parseCommentToEvent(comment) {
         iteration: parsed.iteration,
         pipelineId: parsed.pipeline_id,
         commentId: comment.id,
+        commentUrl: comment.html_url || '',
         body:      safeBody,
       };
     } catch { /* malformed JSON — fall through */ }
@@ -602,6 +603,7 @@ function parseCommentToEvent(comment) {
       summary,
       timestamp: comment.created_at,
       commentId: comment.id,
+      commentUrl: comment.html_url || '',
       body:      safeBody,
     };
   }

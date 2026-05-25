@@ -53,6 +53,7 @@ function makeGhStub(comments) {
 // ─── Sample comment bodies ────────────────────────────────────────────────────
 const APM_MSG_COMMENT = {
   id: 1,
+  html_url: 'https://github.com/test-owner/test-repo/issues/42#issuecomment-1',
   body: `<!-- agent-footprint: complete -->\n**Agent complete:** \`developer-agent\`\n- **Timestamp:** \`2026-05-25T10:00:00Z\`\n- **Summary:** Implementation done.\n\n\`\`\`apm-msg\n{"version":"2","runId":"abc123","step":"implement","agent":"developer-agent","iteration":1,"outcome":"success","summary":"Implementation done.","event_type":"complete","pipeline_id":"42","issue":"42","branch":"42-my-feature","timestamp":"2026-05-25T10:00:00Z"}\n\`\`\``,
   created_at: '2026-05-25T10:00:00Z',
   user: { login: 'github-actions[bot]' },
@@ -60,6 +61,7 @@ const APM_MSG_COMMENT = {
 
 const FOOTPRINT_START_COMMENT = {
   id: 2,
+  html_url: 'https://github.com/test-owner/test-repo/issues/42#issuecomment-2',
   body: `<!-- agent-footprint: start -->\n**Agent started:** \`reviewer-agent\`\n- **Event type:** \`agent-start\`\n- **PR:** #55\n- **Timestamp:** \`2026-05-25T11:00:00Z\``,
   created_at: '2026-05-25T11:00:00Z',
   user: { login: 'github-actions[bot]' },
@@ -67,6 +69,7 @@ const FOOTPRINT_START_COMMENT = {
 
 const PLAIN_COMMENT = {
   id: 3,
+  html_url: 'https://github.com/test-owner/test-repo/issues/42#issuecomment-3',
   body: 'Just a regular human comment with no structured data.',
   created_at: '2026-05-25T12:00:00Z',
   user: { login: 'human-user' },
@@ -91,6 +94,7 @@ beforeAll(async () => {
         QUORUMKIT_PORT:          String(port),
         QUORUMKIT_REPO_URL:      'https://github.com/test-owner/test-repo',
         QUORUMKIT_TEST_GH_BIN:   join(ghStubDir, 'gh'),
+        QUORUMKIT_PIPELINES_DIR: '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
@@ -168,6 +172,15 @@ describe('GET /api/timeline/:issueNumber — success path', () => {
     expect(typeof body.meta).toBe('object');
     expect(body.meta.totalComments).toBe(3);
     expect(body.meta.structuredEvents).toBe(2);
+  });
+
+  it('includes commentUrl on structured events (FR-177 BLOCKER 1)', async () => {
+    const { body } = await httpGet(port, '/api/timeline/42');
+    for (const ev of body.events) {
+      expect(typeof ev.commentUrl).toBe('string');
+    }
+    const apmEvent = body.events.find(e => e.source === 'apm-msg');
+    expect(apmEvent?.commentUrl).toBe('https://github.com/test-owner/test-repo/issues/42#issuecomment-1');
   });
 
   it('includes overall pipeline status field', async () => {
