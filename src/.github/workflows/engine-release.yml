@@ -92,7 +92,7 @@ jobs:
         # Provenance is generated automatically when publishing via Trusted
         # Publisher; the --provenance flag is kept for explicitness.
         working-directory: engine
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --loglevel verbose
 
       - name: Create the GitHub Release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
