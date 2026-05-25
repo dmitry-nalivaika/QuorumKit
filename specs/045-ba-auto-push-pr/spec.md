@@ -3,7 +3,7 @@
 **Issue:** #45
 **Branch:** `045-ba-auto-push-pr`
 **Type:** feature
-**Status:** draft
+**Status:** ready
 
 ---
 
