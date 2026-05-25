@@ -767,7 +767,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
       </div>
       <div class="lp-modal-row">
         <label>BRANCH SLUG</label>
-        <input id="lp-modal-slug" type="text" placeholder="e.g. add-login" autocomplete="off" />
+        <input id="lp-modal-slug" type="text" placeholder="e.g. add-login (optional — auto-derived if blank)" autocomplete="off" pattern="[a-z0-9][a-z0-9-]*" />
       </div>
       <div class="lp-modal-row">
         <label>MODE</label>
@@ -788,6 +788,27 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
   </div>
 </div>
 
+<!-- ─── Join Pipeline Modal (FR-176-011) ────────────────────────────────── -->
+<div id="lp-join-modal-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:901">
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:20px 24px;display:flex;flex-direction:column;gap:12px;min-width:340px;max-width:460px;width:90%">
+    <div class="modal-hd">
+      <h2>⎇ Join Pipeline</h2>
+      <button id="lp-join-close">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div class="lp-modal-row"><label>BRANCH</label><input id="lp-join-branch" readonly style="background:var(--surface3);border:1px solid var(--border);border-radius:var(--r-xs);color:var(--text);font-size:12px;padding:5px 8px;font-family:var(--mono)" /></div>
+      <div class="lp-modal-row"><label>WORKTREE PATH</label><input id="lp-join-path" readonly style="background:var(--surface3);border:1px solid var(--border);border-radius:var(--r-xs);color:var(--text);font-size:12px;padding:5px 8px;font-family:var(--mono)" /></div>
+    </div>
+    <div class="modal-ft">
+      <span id="lp-join-copied" style="font-size:11px;color:var(--green)"></span>
+      <div style="display:flex;gap:8px">
+        <button class="cancel-btn" id="lp-join-cancel">Close</button>
+        <button class="save-btn" id="lp-join-copy">📋 Copy Path</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ─── Invoke Confirm Modal ────────────────────────────────────────────── -->
 <div id="invoke-backdrop">
   <div id="invoke-modal">
@@ -801,6 +822,13 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
         <input id="invoke-issue-input" type="text" placeholder="e.g. 42" autocomplete="off"
                pattern="[0-9]*" inputmode="numeric" />
         <div class="hint">The agent will receive this as pipeline context (<code style="font-family:var(--mono);color:var(--cyan)">pipeline_id</code>). Leave blank to invoke without feature context.</div>
+      </div>
+      <div class="mfield" id="invoke-pipeline-field">
+        <label>RUN IN PIPELINE <span style="font-weight:400;color:var(--textMute)">(optional — FR-176-012)</span></label>
+        <select id="invoke-pipeline-select" style="background:var(--surface3);border:1px solid var(--border);border-radius:var(--r-xs);color:var(--text);font-size:12px;padding:5px 8px;outline:none;width:100%;font-family:var(--font)">
+          <option value="">— none (run in main project) —</option>
+        </select>
+        <div class="hint">Select a local feature worktree to run this agent inside.</div>
       </div>
     </div>
     <div class="modal-ft">
@@ -1519,6 +1547,19 @@ function showInvokeModal(id, agent) {
   document.getElementById('invoke-modal-title').textContent = `▶ Invoke ${agent.name}`;
   document.getElementById('invoke-issue-input').value = '';
   document.getElementById('invoke-modal-status').textContent = '';
+  // FR-176-012: populate pipeline selector from live list
+  const sel = document.getElementById('invoke-pipeline-select');
+  if (sel) {
+    sel.innerHTML = '<option value="">— none (run in main project) —</option>';
+    fetch(`${SERVER}/api/local-pipelines`).then(r => r.json()).then(list => {
+      (list || []).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = String(p.issueNumber);
+        opt.textContent = `#${p.issueNumber} ${p.branch}`;
+        sel.appendChild(opt);
+      });
+    }).catch(() => {});
+  }
   document.getElementById('invoke-backdrop').classList.add('vis');
   setTimeout(() => document.getElementById('invoke-issue-input').focus(), 80);
 }
@@ -1922,6 +1963,11 @@ function handleServerMsg(msg) {
     case 'pipeline-event':
       upsertPipelineRun(msg);
       break;
+
+    case 'pipelineListChanged':
+      // FR-176-017: broadcast from server keeps all open tabs in sync
+      loadLocalPipelines();
+      break;
   }
 }
 
@@ -2189,32 +2235,51 @@ async function loadLocalPipelines() {
     for (const p of data) {
       const row = document.createElement('div');
       row.className = 'lp-row';
-      // SEC: values come from server (validated branch names + paths), displayed via textContent
+      // SEC: values from server (validated branch names + paths), rendered via textContent
       const num = document.createElement('span');
       num.className = 'lp-num';
       num.textContent = `#${p.issueNumber}`;
       const branch = document.createElement('span');
       branch.className = 'lp-branch';
       branch.textContent = p.branch;
+      // Mode badge
+      const modeBadge = document.createElement('span');
+      modeBadge.style.cssText = 'font-size:9px;padding:1px 5px;border-radius:3px;background:var(--surface3);color:var(--text3);font-weight:600';
+      modeBadge.textContent = p.mode || 'isolated';
+      // Running-agent indicator (FR-176-007)
+      if (p.runningAgent) {
+        const dot = document.createElement('span');
+        dot.title = 'Agent currently running in this worktree';
+        dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.4s infinite';
+        row.appendChild(dot);
+      }
       const path = document.createElement('span');
       path.className = 'lp-path';
       path.textContent = p.path;
+      // Creation time (FR-176-007)
+      if (p.createdAt) {
+        const age = document.createElement('span');
+        age.style.cssText = 'font-size:10px;color:var(--textMute);flex-basis:100%';
+        age.textContent = `Created ${relativeTime(p.createdAt)}`;
+        row.appendChild(age);
+      }
       const actions = document.createElement('div');
       actions.className = 'lp-actions';
       const stopBtn = document.createElement('button');
       stopBtn.className = 'lp-btn lp-btn-stop';
       stopBtn.textContent = '■ Stop';
       stopBtn.title = `Stop pipeline for issue #${p.issueNumber}`;
-      stopBtn.addEventListener('click', () => stopLocalPipeline(p.issueNumber, stopBtn));
+      stopBtn.addEventListener('click', () => stopLocalPipeline(p.issueNumber, p.runningAgent, stopBtn));
       const joinBtn = document.createElement('button');
       joinBtn.className = 'lp-btn lp-btn-join';
       joinBtn.textContent = '⎇ Join';
-      joinBtn.title = `Copy worktree path for issue #${p.issueNumber}`;
+      joinBtn.title = `Show worktree info for issue #${p.issueNumber}`;
       joinBtn.addEventListener('click', () => joinLocalPipeline(p.issueNumber, joinBtn));
       actions.appendChild(stopBtn);
       actions.appendChild(joinBtn);
       row.appendChild(num);
       row.appendChild(branch);
+      row.appendChild(modeBadge);
       row.appendChild(actions);
       row.appendChild(path);
       listEl.appendChild(row);
@@ -2224,8 +2289,12 @@ async function loadLocalPipelines() {
   }
 }
 
-async function stopLocalPipeline(issueNumber, btn) {
-  if (!confirm(`Stop pipeline for issue #${issueNumber}?`)) return;
+async function stopLocalPipeline(issueNumber, runningAgent, btn) {
+  // FR-176-010: show distinct warning when an agent is actively running
+  const msg = runningAgent
+    ? `⚠️  An agent is currently running in pipeline #${issueNumber}!\nStopping now may corrupt its work.\n\nStop anyway?`
+    : `Stop pipeline for issue #${issueNumber}?`;
+  if (!confirm(msg)) return;
   btn.disabled = true;
   try {
     const res = await fetch(`${SERVER}/api/local-pipelines/stop`, {
@@ -2246,20 +2315,23 @@ async function stopLocalPipeline(issueNumber, btn) {
   btn.disabled = false;
 }
 
+// FR-176-011: show Join modal with branch + path + copy button
 async function joinLocalPipeline(issueNumber, btn) {
   try {
     const res = await fetch(`${SERVER}/api/local-pipelines/${issueNumber}/join`);
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.path) {
-      await navigator.clipboard.writeText(data.path).catch(() => {});
-      const orig = btn.textContent;
-      btn.textContent = '✓ Copied';
-      setTimeout(() => { btn.textContent = orig; }, 2000);
-      clog('info', `Worktree path for #${issueNumber}: ${data.path}`, 'PIPELINES');
+      document.getElementById('lp-join-branch').value = data.branch || '';
+      document.getElementById('lp-join-path').value   = data.path   || '';
+      document.getElementById('lp-join-copied').textContent = '';
+      document.getElementById('lp-join-modal-backdrop').style.display = 'flex';
     } else {
       clog('error', data.error || 'Join failed', 'PIPELINES');
     }
   } catch {
+    clog('error', 'Server not reachable', 'PIPELINES');
+  }
+}
     clog('error', 'Server not reachable', 'PIPELINES');
   }
 }
@@ -2319,6 +2391,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('lp-start-modal-backdrop')?.addEventListener('click', e => {
     if (e.target === document.getElementById('lp-start-modal-backdrop')) hideStartPipelineModal();
   });
+
+  // FR-176-011: Join modal wiring
+  const hideJoin = () => { document.getElementById('lp-join-modal-backdrop').style.display = 'none'; };
+  document.getElementById('lp-join-close')?.addEventListener('click', hideJoin);
+  document.getElementById('lp-join-cancel')?.addEventListener('click', hideJoin);
+  document.getElementById('lp-join-modal-backdrop')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('lp-join-modal-backdrop')) hideJoin();
+  });
+  document.getElementById('lp-join-copy')?.addEventListener('click', async () => {
+    const pathVal = document.getElementById('lp-join-path').value;
+    await navigator.clipboard.writeText(pathVal).catch(() => {});
+    const copied = document.getElementById('lp-join-copied');
+    copied.textContent = '✓ Copied to clipboard';
+    clog('info', `Worktree path: ${pathVal}`, 'PIPELINES');
+    setTimeout(() => { copied.textContent = ''; }, 2500);
+  });
+
   // Load list when Pipelines tab is opened
   document.querySelectorAll('.dtab[data-dt="pipelines"]').forEach(btn =>
     btn.addEventListener('click', loadLocalPipelines)
@@ -2632,9 +2721,12 @@ function init() {
       document.getElementById('invoke-modal-status').textContent = '⚠ Must be a number';
       return;
     }
+    // FR-176-012: use pipeline selector value as pipeline_id (overrides issue input when set)
+    const selPipeline = document.getElementById('invoke-pipeline-select')?.value;
+    const pipelineId  = selPipeline || raw || null;
     const { id, agent } = _pendingInvoke;
     hideInvokeModal();
-    invokeAgentReal(id, agent.name, raw || null);
+    invokeAgentReal(id, agent.name, pipelineId);
   });
   document.getElementById('cfg-tool').addEventListener('change', toggleCustomRow);
 

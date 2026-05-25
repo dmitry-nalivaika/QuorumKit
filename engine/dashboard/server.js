@@ -452,9 +452,18 @@ function runPipelineSh(localPath, args) {
  * @param {string} localPath  — project root (where .git lives)
  * @returns {Promise<Array<{issueNumber:number, branch:string, path:string, head:string}>>}
  */
+/**
+ * Returns all worktrees whose branch matches the NNN-slug pattern.
+ * Extended response includes createdAt (from git log), mode (from path vs
+ * QUORUMKIT_PIPELINES_DIR), and runningAgent (true if a managed process is
+ * currently running with cwd inside the worktree path).
+ *
+ * FR-176-001, FR-176-007, FR-176-015
+ */
 function listLocalPipelines(localPath) {
   return new Promise((resolve, reject) => {
     if (!localPath) { resolve([]); return; }
+    const pipelinesDir = process.env.QUORUMKIT_PIPELINES_DIR || '';
     const proc = require('child_process').spawn(
       'git', ['worktree', 'list', '--porcelain'],
       { cwd: localPath, env: spawnEnv(), stdio: ['ignore', 'pipe', 'pipe'] }
@@ -463,24 +472,78 @@ function listLocalPipelines(localPath) {
     proc.stdout.on('data', d => { out += d; });
     proc.on('close', () => {
       const pipelines = [];
-      // Each worktree block is separated by a blank line.
       const blocks = out.trim().split(/\n\n+/);
       for (const block of blocks) {
-        const lines = block.trim().split('\n');
+        const lines  = block.trim().split('\n');
         const wt     = lines.find(l => l.startsWith('worktree '))?.slice('worktree '.length).trim();
         const head   = lines.find(l => l.startsWith('HEAD '))?.slice('HEAD '.length).trim();
         const branch = lines.find(l => l.startsWith('branch '))
                              ?.slice('branch '.length).replace('refs/heads/', '').trim();
-        // Feature branches match NNN-slug
-        if (branch && /^\d+-[a-z0-9][a-z0-9-]*$/.test(branch)) {
-          const num = parseInt(branch.split('-')[0], 10);
-          pipelines.push({ issueNumber: num, branch, path: wt || '', head: head || '' });
+        if (!branch || !/^\d+-[a-z0-9][a-z0-9-]*$/.test(branch)) continue;
+
+        // FR-176-015: filter to QUORUMKIT_PIPELINES_DIR when set
+        if (pipelinesDir && wt && !wt.startsWith(pipelinesDir)) continue;
+
+        const num = parseInt(branch.split('-')[0], 10);
+
+        // Derive creation date from the worktree HEAD commit timestamp
+        let createdAt = null;
+        if (wt && head) {
+          try {
+            const cp   = require('child_process');
+            const res  = cp.spawnSync('git', ['log', '-1', '--format=%cI', head],
+              { cwd: wt, env: spawnEnv(), encoding: 'utf8', timeout: 2000 });
+            if (res.status === 0 && res.stdout) createdAt = res.stdout.trim();
+          } catch { /* non-fatal */ }
         }
+
+        // Derive mode: 'shared' if worktree is under the main repo (same git dir),
+        // 'isolated' if it lives in a separate directory (the typical parallel case).
+        const mode = (wt && localPath && wt.startsWith(localPath)) ? 'shared' : 'isolated';
+
+        // runningAgent: true if any tracked agent process has cwd inside this worktree
+        const runningAgent = wt
+          ? [...(global._agentProcesses || new Map()).values()]
+              .some(p => p.cwd && p.cwd.startsWith(wt))
+          : false;
+
+        pipelines.push({ issueNumber: num, branch, path: wt || '', head: head || '',
+                         createdAt, mode, runningAgent });
       }
       resolve(pipelines);
     });
     proc.on('error', reject);
   });
+}
+
+/**
+ * Derive a branch slug from a GitHub Issue title.
+ * Lowercases, strips non-alphanumeric, truncates to 40 chars.
+ * FR-176-003
+ */
+async function deriveSlugFromIssue(issueNumber, cfg) {
+  const repoUrl   = cfg.repoUrl || process.env.QUORUMKIT_REPO_URL || '';
+  const repoMatch = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+  if (!repoMatch) return `${issueNumber}-feature`;
+  const owner = repoMatch[1];
+  const repo  = repoMatch[2].replace(/\.git$/, '');
+  try {
+    const ghBin = process.env.QUORUMKIT_TEST_GH_BIN || resolveBin('gh');
+    const res   = require('child_process').spawnSync(
+      ghBin, ['api', `repos/${owner}/${repo}/issues/${issueNumber}`, '--jq', '.title'],
+      { env: spawnEnv(), encoding: 'utf8', timeout: 8000 }
+    );
+    if (res.status === 0 && res.stdout) {
+      const title = res.stdout.trim();
+      const slug  = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'feature';
+      return slug;
+    }
+  } catch { /* fall through */ }
+  return `${issueNumber}-feature`;
 }
 
 // ─── Timeline fetch + parse (FR-177) ─────────────────────────────────────────
@@ -884,21 +947,23 @@ async function handleRequest(req, res) {
   // ── POST /api/local-pipelines/start ────────────────────────────
   if (method === 'POST' && url.pathname === '/api/local-pipelines/start') {
     const body = await readBody(req);
-    const { issueNumber, slug, mode = 'isolated' } = body;
+    let { issueNumber, slug, mode = 'isolated' } = body;
     if (!issueNumber || !Number.isInteger(Number(issueNumber)) || Number(issueNumber) <= 0) {
       json(res, 400, { error: 'issueNumber must be a positive integer' }); return;
     }
-    if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+    if (slug && !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
       json(res, 400, { error: 'slug must match ^[a-z0-9][a-z0-9-]*$' }); return;
     }
     if (!['isolated', 'shared'].includes(mode)) {
       json(res, 400, { error: 'mode must be isolated or shared' }); return;
     }
     const cfg = loadConfig();
+    // FR-176-003: auto-derive slug from GitHub Issue title when not supplied
+    if (!slug) slug = await deriveSlugFromIssue(Number(issueNumber), cfg);
     const result = await runPipelineSh(cfg.localPath, ['start', String(Number(issueNumber)),
       `${Number(issueNumber)}-${slug}`, `--mode=${mode}`]);
     broadcast('pipelineListChanged', {});
-    json(res, 200, { ok: true, ...result }); return;
+    json(res, 200, { ok: true, slug, ...result }); return;
   }
 
   // ── POST /api/local-pipelines/stop ─────────────────────────────

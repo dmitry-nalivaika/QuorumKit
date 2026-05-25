@@ -88,6 +88,9 @@ beforeAll(async () => {
         QUORUMKIT_PORT:              String(port),
         QUORUMKIT_PROJECT_DIR:       fakeRepoDir,
         QUORUMKIT_TEST_PIPELINE_SH:  stubPipelineSh,
+        // Explicitly unset: the test worktrees must not be filtered by a
+        // QUORUMKIT_PIPELINES_DIR value that may be set in the developer's shell.
+        QUORUMKIT_PIPELINES_DIR:     '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
@@ -126,12 +129,14 @@ describe('GET /api/local-pipelines', () => {
     expect(nums).toContain(99);
   });
 
-  it('each entry has issueNumber, branch, path fields', async () => {
+  it('each entry has issueNumber, branch, path, mode, runningAgent fields', async () => {
     const { body } = await httpGet(port, '/api/local-pipelines');
     for (const entry of body) {
       expect(typeof entry.issueNumber).toBe('number');
       expect(typeof entry.branch).toBe('string');
       expect(typeof entry.path).toBe('string');
+      expect(['isolated', 'shared']).toContain(entry.mode);
+      expect(typeof entry.runningAgent).toBe('boolean');
     }
   });
 
@@ -154,14 +159,19 @@ describe('POST /api/local-pipelines/start', () => {
     expect(status).toBe(400);
   });
 
-  it('returns 400 when slug is missing', async () => {
-    const { status } = await httpPost(port, '/api/local-pipelines/start', { issueNumber: 10 });
+  it('returns 400 when slug contains invalid characters (when provided)', async () => {
+    const { status } = await httpPost(port, '/api/local-pipelines/start', { issueNumber: 10, slug: 'BAD SLUG!' });
     expect(status).toBe(400);
   });
 
-  it('returns 400 when slug contains invalid characters', async () => {
-    const { status } = await httpPost(port, '/api/local-pipelines/start', { issueNumber: 10, slug: 'BAD SLUG!' });
-    expect(status).toBe(400);
+  it('returns 200 with slug auto-derived when slug is omitted (FR-176-003)', async () => {
+    // Stub pipeline.sh always returns 0 — slug derivation falls back to NNN-feature
+    // (no gh stub here, so the gh call fails and fallback slug is used)
+    const { status, body } = await httpPost(port, '/api/local-pipelines/start',
+      { issueNumber: 10, mode: 'isolated' });
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(typeof body.slug).toBe('string');
   });
 
   it('returns 200 and calls stub pipeline.sh on valid input', async () => {
@@ -169,6 +179,19 @@ describe('POST /api/local-pipelines/start', () => {
       { issueNumber: 10, slug: 'new-feature', mode: 'isolated' });
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
+  });
+
+  it('accepts mode:shared', async () => {
+    const { status, body } = await httpPost(port, '/api/local-pipelines/start',
+      { issueNumber: 12, slug: 'shared-feature', mode: 'shared' });
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+  });
+
+  it('rejects mode:fast (not a valid mode)', async () => {
+    const { status } = await httpPost(port, '/api/local-pipelines/start',
+      { issueNumber: 13, slug: 'bad-mode', mode: 'fast' });
+    expect(status).toBe(400);
   });
 
   it('defaults mode to isolated when not provided', async () => {
