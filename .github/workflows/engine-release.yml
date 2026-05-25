@@ -46,12 +46,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Import maintainer GPG public key
+        env:
+          GPG_PUBLIC_KEY: ${{ secrets.MAINTAINER_GPG_PUBLIC_KEY }}
+        run: echo "$GPG_PUBLIC_KEY" | gpg --import
+
       - name: Verify the pushed tag is signed
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Verifying signature on $TAG"
           # `git verify-tag` exits non-zero if the tag is unsigned or the
-          # signing key is not in the local keyring imported below.
+          # signing key is not in the local keyring imported above.
           git verify-tag "$TAG"
 
       - name: Setup Node 20 with npm registry
