@@ -61,8 +61,10 @@ for arg in "$@"; do
 done
 
 # ── Resolve paths ─────────────────────────────────────────────────────────────
+# init.sh lives at src/scripts/init.sh — two levels below the package root.
+# We must go up twice (src/scripts → src → package root).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-QUORUMKIT_PACKAGE_DIR="${QUORUMKIT_PACKAGE_DIR:-$(dirname "$SCRIPT_DIR")}"
+QUORUMKIT_PACKAGE_DIR="${QUORUMKIT_PACKAGE_DIR:-$(dirname "$(dirname "$SCRIPT_DIR")")}"
 PROJECT_DIR="${PWD}"
 
 echo ""
@@ -359,9 +361,19 @@ install_github_templates() {
     fi
   }
 
+  # agent-dev.yml is QuorumKit-internal only (dev runner for contributors).
+  # It must never be installed into consumer projects.
+  is_internal_workflow() {
+    case "$(basename "$1")" in
+      agent-dev.yml) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
+
   case "$ai_mode" in
     claude)
       for wf in "$GITHUB_TMPL/workflows/agent-"*.yml; do
+        is_internal_workflow "$wf" && continue
         copy_workflow "$wf"
       done
       ;;
@@ -373,6 +385,7 @@ install_github_templates() {
     both)
       for wf in "$GITHUB_TMPL/workflows/agent-"*.yml \
                 "$GITHUB_TMPL/workflows/copilot-agent-"*.yml; do
+        is_internal_workflow "$wf" && continue
         copy_workflow "$wf"
       done
       ;;

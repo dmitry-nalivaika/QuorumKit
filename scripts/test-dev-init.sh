@@ -26,13 +26,15 @@ h1()   { echo -e "\n${BOLD}$*${NC}"; }
 
 # ── Arguments ─────────────────────────────────────────────────────────────────
 AI_MODE="claude"
+DOMAIN=""
 for arg in "$@"; do
   case "$arg" in
-    --ai=claude)  AI_MODE="claude"  ;;
-    --ai=copilot) AI_MODE="copilot" ;;
-    --ai=both)    AI_MODE="both"    ;;
+    --ai=claude)         AI_MODE="claude"      ;;
+    --ai=copilot)        AI_MODE="copilot"     ;;
+    --ai=both)           AI_MODE="both"        ;;
+    --domain=industrial) DOMAIN="industrial"   ;;
     *)
-      echo "Usage: $0 [--ai=claude|copilot|both]"
+      echo "Usage: $0 [--ai=claude|copilot|both] [--domain=industrial]"
       exit 1
       ;;
   esac
@@ -46,11 +48,12 @@ BACKUP_DIR="$(bash "$SCRIPT_DIR/cleanup.sh")"
 ok "Artifacts backed up to: $BACKUP_DIR"
 
 # ── Step 2: Run dev-setup.sh ──────────────────────────────────────────────────
-h1 "Step 2: Running scripts/dev-setup.sh --ai=$AI_MODE"
-bash "$SCRIPT_DIR/dev-setup.sh" "--ai=$AI_MODE"
+DOMAIN_ARG="${DOMAIN:+--domain=$DOMAIN}"
+h1 "Step 2: Running scripts/dev-setup.sh --ai=$AI_MODE${DOMAIN:+ --domain=$DOMAIN}"
+bash "$SCRIPT_DIR/dev-setup.sh" "--ai=$AI_MODE" ${DOMAIN_ARG:+"$DOMAIN_ARG"}
 
 # ── Step 3: Verify ────────────────────────────────────────────────────────────
-h1 "Step 3: Verifying installation (mode: $AI_MODE)"
+h1 "Step 3: Verifying installation (mode: $AI_MODE${DOMAIN:+, domain: $DOMAIN})"
 
 check_dir()  {
   local path="$1" min="${2:-1}"
@@ -87,16 +90,26 @@ check_speckit() {
 
 # ── Claude mode checks ────────────────────────────────────────────────────────
 if [[ "$AI_MODE" == "claude" || "$AI_MODE" == "both" ]]; then
-  check_dir  ".claude/agents"  11
-  check_dir  ".claude/skills"  16
+  if [[ "$DOMAIN" == "industrial" ]]; then
+    check_dir  ".claude/agents"  15
+    check_dir  ".claude/skills"  20
+  else
+    check_dir  ".claude/agents"  11
+    check_dir  ".claude/skills"  16
+  fi
   check_file "CLAUDE.md"
 fi
 
 # ── Copilot mode checks ───────────────────────────────────────────────────────
 if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   check_file ".github/copilot-instructions.md"
-  check_dir  ".github/instructions"  11
-  check_dir  ".github/prompts"        8
+  if [[ "$DOMAIN" == "industrial" ]]; then
+    check_dir  ".github/instructions"  15
+    check_dir  ".github/prompts"        8
+  else
+    check_dir  ".github/instructions"  11
+    check_dir  ".github/prompts"        8
+  fi
 fi
 
 # ── Shared checks (all modes) ─────────────────────────────────────────────────
@@ -119,11 +132,21 @@ if [[ "$AI_MODE" == "claude" || "$AI_MODE" == "both" ]]; then
   for wf in agent-architect agent-docs agent-qa agent-release agent-reviewer agent-security agent-tech-debt agent-triage; do
     check_file ".github/workflows/${wf}.yml"
   done
+  if [[ "$DOMAIN" == "industrial" ]]; then
+    for wf in agent-ot-integration agent-digital-twin agent-compliance agent-incident; do
+      check_file ".github/workflows/${wf}.yml"
+    done
+  fi
 fi
 if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   for wf in copilot-agent-architect copilot-agent-ba copilot-agent-docs copilot-agent-qa copilot-agent-release copilot-agent-reviewer copilot-agent-security copilot-agent-tech-debt copilot-agent-triage; do
     check_file ".github/workflows/${wf}.yml"
   done
+  if [[ "$DOMAIN" == "industrial" ]]; then
+    for wf in copilot-agent-ot-integration copilot-agent-digital-twin copilot-agent-compliance copilot-agent-incident; do
+      check_file ".github/workflows/${wf}.yml"
+    done
+  fi
 fi
 
 # ── src/pipelines/ must already exist (QuorumKit self-hosting: pipelines ship ──
@@ -139,7 +162,15 @@ check_speckit
 
 # ── Git status must be clean (all generated files gitignored) ─────────────────
 h1 "Step 4: Verifying git status is clean"
-DIRTY=$(git status --short 2>/dev/null || true)
+# Check only for NEW untracked files that are not gitignored.
+# We don't check for deletions/modifications of tracked files because:
+#   • cleanup.sh intentionally removes tracked copilot-specific files (agents,
+#     instructions, prompts) that a claude-only install does not restore.
+#   • init.sh may legitimately rewrite committed files such as
+#     .specify/init-options.json and .github/copilot-instructions.md.
+# The meaningful signal is: did the install create new committed files that
+# should have been gitignored instead?
+DIRTY=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 if [ -z "$DIRTY" ]; then
   ok "git status is clean — all generated files are gitignored"
 else
@@ -151,8 +182,8 @@ fi
 echo ""
 echo -e "${BOLD}Backup:${NC} $BACKUP_DIR"
 if [ "$FAILURES" -eq 0 ]; then
-  echo -e "${GREEN}${BOLD}All checks passed (mode: $AI_MODE)${NC}"
+  echo -e "${GREEN}${BOLD}All checks passed (mode: $AI_MODE${DOMAIN:+, domain: $DOMAIN})${NC}"
 else
-  echo -e "${RED}${BOLD}$FAILURES check(s) failed (mode: $AI_MODE)${NC}"
+  echo -e "${RED}${BOLD}$FAILURES check(s) failed (mode: $AI_MODE${DOMAIN:+, domain: $DOMAIN})${NC}"
   exit 1
 fi
