@@ -1,7 +1,6 @@
-# apm-allow-divergence: This workflow uses the iterative dev-agent-runner.cjs loop
-# (Copilot runtime). The distributed template in src/ intentionally retains the
-# v1 inline script for downstream compatibility. These two files are allowed to
-# differ — do NOT "sync" them to each other.
+# apm-allow-divergence: This workflow and src/.github/workflows/copilot-agent-dev.yml
+# are kept in sync. Both use the iterative dev-agent-runner.cjs loop (Copilot runtime).
+# Do NOT replace either file with a one-shot inline script.
 name: Developer Agent (Copilot)
 
 on:
