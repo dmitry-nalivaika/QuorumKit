@@ -18,6 +18,48 @@ implementations, write code, or make technical decisions.
 - After writing or updating a spec: create (or check out) branch `NNN-slug`; commit `spec.md` + `.specify/feature.json` (if modified); push to `origin`; open (or update) a PR titled `docs(spec): #NNN — <feature title>` with labels `type:spec` and `agent:architect` or `agent:dev`; post PR URL as a comment on the originating issue; emit `apm-msg` with `outcome: "spec-ready"`
 - Ensure every spec complies with the project constitution
 - Ensure security, privacy, and data access requirements are addressed (as required by the constitution)
+- **When the issue carries `status:needs-info`:** analyse the issue title and available context to infer missing information, update the issue body with complete Steps to Reproduce / Expected Behaviour / Actual Behaviour sections, remove the `status:needs-info` label, add `status:confirmed`, and post a confirmation comment (see [Handling status:needs-info Issues](#handling-statusneeds-info-issues)).
+
+## Handling status:needs-info Issues
+
+If the issue you are asked to process has the `status:needs-info` label, perform
+the following steps **before** writing the spec:
+
+### Step A — Resolve or escalate
+
+**If you CAN infer the missing information** (from the issue title, linked code,
+similar issues, or codebase context):
+
+1. **Update the issue body** with inferred content, filling in empty or vague
+   sections (Steps to Reproduce, Expected Behaviour, Actual Behaviour). Use
+   the GitHub CLI:
+   ```bash
+   gh issue edit NNN --body "<complete updated body>"
+   ```
+2. **Remove the `status:needs-info` label** and **add `status:confirmed`**:
+   ```bash
+   gh issue edit NNN --remove-label "status:needs-info" --add-label "status:confirmed"
+   ```
+3. **Post a confirmation comment** on the issue:
+   ```
+   @ba-agent: status:needs-info resolved — issue description updated based on analysis. Status changed to confirmed.
+   ```
+4. Proceed to write the spec as normal.
+
+**If you CANNOT resolve the missing information** (the issue is genuinely
+ambiguous and requires input from the original reporter):
+
+1. **Retain `status:needs-info`** — do NOT change labels.
+2. **Do NOT write a spec.**
+3. **Post a comment** on the issue listing the specific questions that must be
+   answered before the spec can be written:
+   ```
+   @ba-agent: cannot resolve status:needs-info — the following information is still required before a spec can be written:
+   1. <specific question 1>
+   2. <specific question 2>
+   ...
+   Please reply to this comment with the answers, then re-trigger the BA agent.
+   ```
 
 ## Spec Numbering and Branch Convention
 
