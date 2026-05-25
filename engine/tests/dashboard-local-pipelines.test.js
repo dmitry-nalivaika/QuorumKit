@@ -48,7 +48,10 @@ async function httpPost(port, path, body) {
 // ─── Build a minimal git repo that looks like a QuorumKit project ─────────────
 function makeFakeGitRepo(branches = []) {
   const dir = mkdtempSync(join(tmpdir(), 'qk-pipeline-ui-test-'));
-  execSync('git init -q && git commit --allow-empty -m init -q', { cwd: dir, shell: '/bin/bash' });
+  execSync(
+    'git init -q && git -c user.email=test@example.com -c user.name=Test commit --allow-empty -m init -q',
+    { cwd: dir, shell: '/bin/bash' },
+  );
   for (const { num, slug } of branches) {
     const branch = `${num}-${slug}`;
     const wt     = join(dir, `wt-${branch}`);    execSync(`git branch "${branch}" HEAD`, { cwd: dir });

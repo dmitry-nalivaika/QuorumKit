@@ -145,3 +145,87 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 3. `specs/NNN-feature/plan.md` — how to build it (create if absent)
 4. `specs/NNN-feature/tasks.md` — what to implement (create if absent)
 5. `.specify/feature.json` — active feature directory
+
+---
+
+## Agent Footprint
+
+All invocations MUST post structured GitHub comments on the **Issue** (FR-001, FR-012).
+A Branch Guard invocation is required before any branch or worktree operation (FR-010 to FR-014).
+
+### `agent-start` comment
+
+```markdown
+<!-- agent-footprint: start -->
+**Agent started:** `developer-agent`
+- **Event type:** `agent-start`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+```
+
+No `apm-msg` block is included in `agent-start` comments.
+
+### `agent-complete` comment
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `developer-agent`
+- **Event type:** `agent-complete`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Summary:** <one-line outcome summary>
+- **Next recommended action:** <e.g. "QA Agent review requested">
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "implement",
+  "agent": "developer-agent",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary ≤ 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+### `agent-fail` comment
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `developer-agent`
+- **Event type:** `agent-fail`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** Re-run the workflow; if problem persists, check Actions log.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "implement",
+  "agent": "developer-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary ≤ 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+Silent termination (no comment posted) is prohibited under any code path (FR-004).
