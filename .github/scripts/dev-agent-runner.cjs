@@ -10,8 +10,8 @@
  *
  * Reads the same manifests used by manually-invoked agents, so behaviour is
  * identical regardless of trigger source:
- *   • .apm/agents/developer-agent.md
- *   • .apm/skills/dev-agent/SKILL.md
+ *   • .github/agents/developer-agent.md
+ *   • .github/instructions/dev-agent.instructions.md
  *   • .specify/memory/constitution.md
  *
  * Tool surface (passed to the LLM as agentic tools):
@@ -29,7 +29,7 @@
  *   RUN_ID              — orchestrator run id (apm-msg context)
  *   STEP                — pipeline step name (default 'dev')
  *   ITERATION           — pipeline iteration (default '1')
- *   RUNTIME_NAME        — the named runtime entry from .apm/runtimes.yml
+ *   RUNTIME_NAME        — the named runtime entry from src/runtimes.yml
  *   MAX_ITERATIONS      — agentic loop cap (default 20)
  * ─────────────────────────────────────────────────────────────────────────────
  */
@@ -110,8 +110,8 @@ async function ghApi(pathname, { method = 'GET', body = null } = {}) {
 
 // ─── Manifest loading (single source of truth) ──────────────────────────────
 const manifests = {
-  agent:        readSafe('.apm/agents/developer-agent.md'),
-  skill:        readSafe('.apm/skills/dev-agent/SKILL.md'),
+  agent:        readSafe('.github/agents/developer-agent.md'),
+  skill:        readSafe('.github/instructions/dev-agent.instructions.md'),
   constitution: readSafe('.specify/memory/constitution.md'),
 };
 

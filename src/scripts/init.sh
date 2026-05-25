@@ -211,6 +211,30 @@ install_copilot() {
     done
   fi
 
+  # Agent prompt files (.github/prompts/) — mode: agent frontmatter ensures
+  # VS Code opens the agent in Agent mode (not Ask mode) when the prompt is selected.
+  local prompts_src="$QUORUMKIT_PACKAGE_DIR/src/.github/prompts"
+  UNIVERSAL_PROMPTS=(
+    "ba-product-agent" "developer-agent" "qa-test-agent"
+    "reviewer-agent"   "architect-agent"  "devops-agent"
+    "security-agent"   "triage-agent"
+  )
+  if [ -d "$prompts_src" ]; then
+    mkdir -p .github/prompts
+    for slug in "${UNIVERSAL_PROMPTS[@]}"; do
+      src_file="$prompts_src/${slug}.prompt.md"
+      dst_file=".github/prompts/${slug}.prompt.md"
+      if [ -f "$src_file" ]; then
+        if [ ! -f "$dst_file" ]; then
+          cp "$src_file" "$dst_file"
+          ok "Prompt: ${slug}.prompt.md"
+        else
+          warn "Prompt ${slug}.prompt.md already exists — skipping"
+        fi
+      fi
+    done
+  fi
+
   # copilot-instructions.md (workspace-level Copilot context)
   h1 "2. .github/copilot-instructions.md"
   if [ ! -f .github/copilot-instructions.md ]; then
