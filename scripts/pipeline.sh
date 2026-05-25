@@ -151,6 +151,32 @@ cmd_start() {
   branch_slug="$(resolve_branch_slug "$issue_number")"
   log "Resolved branch slug: ${branch_slug}"
 
+  # ── Bug B guard: refuse if slug resolves to a protected branch ──────────────
+  local slug_lower
+  slug_lower="$(echo "$branch_slug" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$slug_lower" == "main" || "$slug_lower" == "master" || "$slug_lower" == "develop" || "$slug_lower" == "trunk" ]]; then
+    err "ERROR: Refusing to create a pipeline on protected branch '${branch_slug}'."
+    exit 1
+  fi
+
+  # ── Bug A guard: refuse if a pipeline for this issue already exists ──────────
+  local padded_check
+  padded_check="$(printf '%03d' "$issue_number")"
+  # Check for an existing isolated worktree
+  local existing_worktree
+  existing_worktree="$(git worktree list 2>/dev/null | tail -n +2 | grep "\[${padded_check}-\|/${padded_check}-" | head -1 || true)"
+  if [[ -n "$existing_worktree" ]]; then
+    err "Pipeline already exists for issue #${issue_number} — use 'pipeline.sh join ${issue_number}' or 'pipeline.sh stop ${issue_number}' first."
+    exit 1
+  fi
+  # Check for an existing shared pipeline on this exact branch
+  local current_branch
+  current_branch="$(git branch --show-current 2>/dev/null || echo "")"
+  if [[ "$current_branch" == "$branch_slug" ]]; then
+    err "Pipeline already exists for issue #${issue_number} — use 'pipeline.sh join ${issue_number}' or 'pipeline.sh stop ${issue_number}' first."
+    exit 1
+  fi
+
   # Check for existing shared pipeline conflict (FR-022)
   if [[ "$mode" == "shared" ]]; then
     local existing_shared
@@ -181,6 +207,16 @@ cmd_start() {
   if [[ "$mode" == "isolated" ]]; then
     local wt_path
     wt_path="$(default_worktree_path "$branch_slug")"
+
+    # ── Bug B guard: worktree path must not equal the repo root ─────────────
+    local repo_root_real
+    repo_root_real="$(cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" && pwd)"
+    local wt_real
+    wt_real="$(realpath "$wt_path" 2>/dev/null || echo "$wt_path")"
+    if [[ "$wt_real" == "$repo_root_real" ]]; then
+      err "ERROR: Resolved worktree path equals the repository root — cannot create pipeline at root."
+      exit 1
+    fi
 
     # Ensure branch exists on origin (branch-guard may checkout the branch in main;
     # we go back to main afterward so git worktree add can proceed — FR-014)
