@@ -48,9 +48,9 @@
 - [x] Passes `GITHUB_TOKEN`, `DASHBOARD_WEBHOOK_URL` to script
 
 ## T-11 — Pipeline templates (FR-012)
-- [x] Create `templates/.apm/pipelines/feature-pipeline.yml`
-- [x] Create `templates/.apm/pipelines/bug-fix-pipeline.yml`
-- [x] Create `templates/.apm/pipelines/release-pipeline.yml` (with `approval: required` before release)
+- [x] Create `templates/src/pipelines/feature-pipeline.yml`
+- [x] Create `templates/src/pipelines/bug-fix-pipeline.yml`
+- [x] Create `templates/src/pipelines/release-pipeline.yml` (with `approval: required` before release)
 
 ## T-12 — Dashboard webhook endpoint (FR-007)
 - [x] Write `tests/orchestrator/dashboard-webhook.test.js` (red — integration test against server)

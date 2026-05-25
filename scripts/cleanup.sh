@@ -36,8 +36,12 @@ _bak .claude/agents
 _bak .claude/skills
 _bak CLAUDE.md
 
-# ── Orchestrator pipelines ────────────────────────────────────────────────────
-_bak .apm
+# ── Orchestrator pipelines + runtime/identity configs ────────────────────────
+# NOTE: src/pipelines/, src/runtimes.yml, and src/agent-identities.yml are
+# committed source-of-truth files in the QuorumKit repo — not generated
+# artifacts. Do NOT clean them here. For consumer projects they are generated
+# by init.sh, but consumers use test-external-install.sh (a separate temp dir),
+# not this cleanup script.
 
 # ── Speckit / project constitution ───────────────────────────────────────────
 _bak .specify

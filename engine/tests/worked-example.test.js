@@ -1,7 +1,7 @@
 /**
  * Phase 7 — worked-example tests.
  *
- * Loads the shipped `.apm/pipelines/feature-pipeline-v2.yml` and exercises:
+ * Loads the shipped `src/pipelines/feature-pipeline-v2.yml` and exercises:
  *   1. happy path: ba → architect (skipped via condition) → dev → qa → reviewer → release(approval)
  *   2. loop-budget exceeded when QA repeatedly bounces dev past the per-edge cap
  *   3. three-runtime fixture (copilot + claude + a per-step override) all dispatch correctly

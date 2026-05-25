@@ -43,7 +43,7 @@ to the repository, so that pipeline behaviour is version-controlled, reviewable 
 and portable across projects.
 
 Acceptance Scenarios:
-- Given a valid pipeline YAML file exists at `.apm/pipelines/<name>.yml`  
+- Given a valid pipeline YAML file exists at `src/pipelines/<name>.yml`  
   When the Orchestrator starts  
   Then it loads all pipeline files from that directory and activates their rules
 - Given a pipeline YAML file contains a syntax error or fails schema validation  
@@ -101,14 +101,14 @@ without writing pipeline YAML from scratch.
 
 Acceptance Scenarios:
 - Given `init.sh` has been run on a project  
-  When the developer lists `.apm/pipelines/`  
+  When the developer lists `src/pipelines/`  
   Then at least three template pipelines exist: `feature-pipeline.yml`, `bug-fix-pipeline.yml`, and `release-pipeline.yml`
 - Given the `feature-pipeline.yml` template is active  
   When a new feature-type Issue is opened  
   Then triage → ba → architect (if ADR needed) → dev → qa → reviewer → release is the default chain
 - Given a template pipeline is present  
   When a developer edits it and commits the change  
-  Then the customised version takes effect without requiring any changes outside `.apm/pipelines/`
+  Then the customised version takes effect without requiring any changes outside `src/pipelines/`
 
 ### US-6: Dual-AI Runtime Compatibility
 
@@ -119,7 +119,7 @@ behaviour is consistent across both runtimes as required by the Constitution.
 Acceptance Scenarios:
 - Given the project is configured with `aiTool: claude`  
   When the Orchestrator invokes an agent  
-  Then it uses the Claude Code invocation command from `.apm/agents/`
+  Then it uses the Claude Code invocation command from `.github/agents/`
 - Given the project is configured with `aiTool: copilot`  
   When the Orchestrator invokes an agent  
   Then it triggers the corresponding `copilot-agent-*.yml` GitHub Actions workflow
@@ -148,7 +148,7 @@ Acceptance Scenarios:
     "updatedAt": "<ISO8601>"
   }
   ```
-- **FR-003**: Pipeline rules MUST be expressed as declarative YAML files (not imperative scripts) located at `.apm/pipelines/*.yml`.
+- **FR-003**: Pipeline rules MUST be expressed as declarative YAML files (not imperative scripts) located at `src/pipelines/*.yml`.
 - **FR-004**: The Orchestrator MUST validate all pipeline YAML files against a published schema on load and reject malformed files with actionable error messages.
 - **FR-005**: The Orchestrator MUST retry failed GitHub API calls up to 3 times with exponential back-off before marking a pipeline run as failed.
 - **FR-006**: Every pipeline state transition MUST produce a human-readable audit entry posted as a GitHub Issue or PR comment on the triggering entity.
@@ -158,7 +158,7 @@ Acceptance Scenarios:
 - **FR-010**: Approval gate `/approve` commands MUST be accepted only from users with at least `write` permission on the repository. The Orchestrator MUST verify this by calling `GET /repos/{owner}/{repo}/collaborators/{username}/permission` using a GitHub App token or PAT with `read:org` scope (in addition to the base scopes listed in the Security section). The response field `permission` MUST be one of `write`, `admin`, or `maintain` for the approval to be accepted. If the API call fails or returns an insufficient permission level, the approval MUST be rejected and a comment posted explaining the rejection.
 - **FR-011**: The Orchestrator MUST support both Claude Code and GitHub Copilot agent invocation paths, controlled by the `aiTool` setting in `.apm-project.json`. If `.apm-project.json` is absent or the `aiTool` field is missing, the Orchestrator MUST default to `copilot`. If `aiTool` is set to an unrecognised value, the pipeline run MUST be marked `failed` with a comment explaining the invalid configuration. Both runtimes may be installed simultaneously; on any given event, only the runtime matching the configured `aiTool` fires — they do not run in parallel.
 - **FR-012**: `init.sh` MUST install exactly three default pipeline templates: `feature-pipeline.yml`, `bug-fix-pipeline.yml`, and `release-pipeline.yml`. `release-pipeline.yml` MUST include an `approval: required` gate before the release step by default.
-- **FR-013**: Pipeline templates MUST be overridable by editing the installed `.apm/pipelines/*.yml` files with no changes required outside that directory.
+- **FR-013**: Pipeline templates MUST be overridable by editing the installed `src/pipelines/*.yml` files with no changes required outside that directory.
 - **FR-014**: The Orchestrator MUST log every unmatched event with reason `no-rule-match` and take no further action on that event.
 - **FR-015**: On restart, the Orchestrator MUST reconstruct in-progress pipeline state from GitHub Issue/PR state without relying on local memory.
 - **FR-016**: The Orchestrator routing logic MUST be covered by automated tests that validate each routing rule without requiring live GitHub API calls (test doubles permitted).
@@ -168,7 +168,7 @@ Acceptance Scenarios:
 ## Success Criteria
 
 - [ ] A new GitHub Issue with label `type:feature` automatically triggers triage → ba pipeline chain end-to-end with no manual slash-command
-- [ ] A malformed `.apm/pipelines/*.yml` file causes a validation error at load time; other pipelines continue operating
+- [ ] A malformed `src/pipelines/*.yml` file causes a validation error at load time; other pipelines continue operating
 - [ ] An `approval: required` gate pauses a pipeline run; `/approve` from an authorised user resumes it; timeout marks it `timed-out`
 - [ ] Every pipeline state transition produces a GitHub Issue comment visible to a non-technical stakeholder
 - [ ] The dashboard reflects pipeline run status changes within 5 seconds
@@ -181,7 +181,7 @@ Acceptance Scenarios:
 
 ## Key Entities
 
-- **Pipeline**: A named, versioned YAML definition describing the sequence of agents to invoke and the conditions that trigger each step. Identified by its filename under `.apm/pipelines/`.
+- **Pipeline**: A named, versioned YAML definition describing the sequence of agents to invoke and the conditions that trigger each step. Identified by its filename under `src/pipelines/`.
 - **Pipeline Run**: A single execution instance of a Pipeline, tied to a triggering GitHub Issue or PR. Has a unique run ID, a current status (`pending`, `running`, `awaiting-approval`, `timed-out`, `failed`, `completed`), and a sequential list of step results.
 - **Pipeline Step**: One agent invocation within a Pipeline Run. Records the agent name, start time, end time, outcome, and any output summary.
 - **Pipeline Rule**: A conditional expression within a Pipeline definition that maps a trigger event (type + label/state predicates) to the first step of a Pipeline.
@@ -219,7 +219,7 @@ Acceptance Scenarios:
 
 ## Assumptions
 
-- **A1**: Pipelines are defined in YAML files in `.apm/pipelines/` (not via a UI) — consistent with Constitution §VII (simplicity, existing GitHub primitives) and the triage recommendation. *Reporter confirmation not required.*
+- **A1**: Pipelines are defined in YAML files in `src/pipelines/` (not via a UI) — consistent with Constitution §VII (simplicity, existing GitHub primitives) and the triage recommendation. *Reporter confirmation not required.*
 - **A2**: Human-in-the-loop approval uses GitHub Issue/PR comments (`/approve`) checked against repository write permission — GitHub Environment approvals are not used, as they require GitHub Actions execution context and add external dependency. *Reporter confirmation not required.*
 - **A3**: The Orchestrator works with **both** Claude Code and GitHub Copilot simultaneously in the sense that both runtime workflows are installed, but only the one matching the `aiTool` config fires per event. The default is `copilot` when `.apm-project.json` is absent. Simultaneous parallel firing of both runtimes on the same event is not supported — Constitution §IV (Dual-AI Compatibility) requires equivalent behaviour, not concurrent execution. *Reporter confirmation not required.*
 - **A4**: Three out-of-the-box pipeline templates are provided: `feature-pipeline.yml`, `bug-fix-pipeline.yml`, `release-pipeline.yml`. No additional templates are required for initial release; further templates are a future enhancement. `release-pipeline.yml` includes an `approval: required` gate before the release step by default — confirmed by reporter.

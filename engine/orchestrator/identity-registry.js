@@ -18,7 +18,7 @@ const schema = JSON.parse(await readFile(schemaUrl, 'utf8'));
 const ajv = new Ajv({ allErrors: true });
 const validateSchema = ajv.compile(schema);
 
-export const IDENTITIES_PATH = '.apm/agent-identities.yml';
+export const IDENTITIES_PATH = 'src/agent-identities.yml';
 
 /**
  * Build a login → agent map from a parsed identities object.

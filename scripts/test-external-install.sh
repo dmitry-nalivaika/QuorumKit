@@ -131,10 +131,10 @@ run_mode_test() {
 
   # ── Verify: Pipeline templates (installed for external consumers) ─────────
   h1 "Pipeline templates"
-  check_dir  ".apm/pipelines"   3
-  check_file ".apm/pipelines/feature-pipeline.yml"
-  check_file ".apm/pipelines/bug-fix-pipeline.yml"
-  check_file ".apm/pipelines/release-pipeline.yml"
+  check_dir  "src/pipelines"   3
+  check_file "src/pipelines/feature-pipeline.yml"
+  check_file "src/pipelines/bug-fix-pipeline.yml"
+  check_file "src/pipelines/release-pipeline.yml"
 
   # ── Verify: Guide copies at root ─────────────────────────────────────────
   h1 "Root-level guide docs"

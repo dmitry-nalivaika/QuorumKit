@@ -8,7 +8,7 @@ responsibility boundary, and a deterministic output. Agents are the primary
 consumers of all APIs, file formats, and workflows. Human-only workflows are
 permitted only where agent execution is technically impossible. Every new agent or
 skill must be self-contained, independently testable, and documented with its own
-role definition file under `.apm/agents/` or `.apm/skills/`.
+role definition file under `.github/agents/` or `.github/skills/`.
 
 ### II. NNN Traceability (NON-NEGOTIABLE)
 Every unit of work is anchored to a GitHub Issue number, zero-padded to 3 digits
@@ -28,7 +28,7 @@ review time.
 All agent definitions, skills, workflows, and templates must work correctly with
 **both** Claude Code and GitHub Copilot. Copilot variants live in
 `.github/instructions/` and `.github/workflows/copilot-agent-*.yml`; Claude
-variants live in `.apm/agents/`, `.apm/skills/`, and `.claude/`. Behaviour must
+variants live in `.github/agents/`, `.github/skills/`, and `.claude/`. Behaviour must
 be functionally equivalent across both runtimes. Copilot-only or Claude-only
 shortcuts that create divergence are prohibited without an approved ADR.
 

@@ -27,7 +27,7 @@ GitHub Event
     │
     ▼
 scripts/orchestrator/index.js        ← main entry point
-    ├── pipeline-loader.js           ← load + validate .apm/pipelines/*.yml
+    ├── pipeline-loader.js           ← load + validate src/pipelines/*.yml
     ├── router.js                    ← match event → pipeline rule
     ├── state-manager.js             ← read/write state in GitHub comments
     ├── agent-invoker.js             ← dispatch to claude / copilot runtime
@@ -36,7 +36,7 @@ scripts/orchestrator/index.js        ← main entry point
 
 dashboard/server.js                  ← add POST /webhook/pipeline-event endpoint
 
-templates/.apm/pipelines/           ← 3 default pipeline YAML templates
+templates/src/pipelines/           ← 3 default pipeline YAML templates
 scripts/init.sh                      ← install pipeline templates
 tests/orchestrator/                  ← unit tests (vitest)
 ```
@@ -52,7 +52,7 @@ tests/orchestrator/                  ← unit tests (vitest)
 - All methods accept owner/repo/token — no global state
 
 ### `pipeline-loader.js`
-- Reads all `*.yml` files from `.apm/pipelines/`
+- Reads all `*.yml` files from `src/pipelines/`
 - Validates each against `schemas/pipeline.schema.json` using `ajv`
 - Returns `{ valid: Pipeline[], errors: ValidationError[] }` — invalid files are skipped, not fatal
 
@@ -87,7 +87,7 @@ tests/orchestrator/                  ← unit tests (vitest)
 ## Pipeline YAML Schema
 
 ```yaml
-# .apm/pipelines/feature-pipeline.yml
+# src/pipelines/feature-pipeline.yml
 name: feature-pipeline
 version: "1"
 trigger:
@@ -141,7 +141,7 @@ scripts/
     schemas/
       pipeline.schema.json
 templates/
-  .apm/
+  src/
     pipelines/
       feature-pipeline.yml
       bug-fix-pipeline.yml
@@ -166,5 +166,5 @@ tests/
 
 ## Init.sh Changes
 
-Add a `install_pipelines()` function that copies `templates/.apm/pipelines/*.yml`
-to `.apm/pipelines/` in the target project. Called from all three AI mode cases.
+Add a `install_pipelines()` function that copies `templates/src/pipelines/*.yml`
+to `src/pipelines/` in the target project. Called from all three AI mode cases.

@@ -126,11 +126,12 @@ if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   done
 fi
 
-# ── .apm/ must NOT exist (self-hosting: --skip-pipelines is passed) ───────────
-if [ -d ".apm" ]; then
-  fail ".apm/ exists — --skip-pipelines not working"
+# ── src/pipelines/ must already exist (QuorumKit self-hosting: pipelines ship ──
+# ── in src/pipelines/ and are read from there directly by the orchestrator) ────
+if [ -d "src/pipelines" ]; then
+  ok "src/pipelines/ present (correct — self-hosting uses src/pipelines/ directly)"
 else
-  ok ".apm/ absent (correct — self-hosting uses src/pipelines/)"
+  fail "src/pipelines/ missing — self-hosting requires this directory"
 fi
 
 # ── .specify/ (non-fatal: depends on specify-cli being installed) ─────────────

@@ -754,9 +754,22 @@ async function main() {
     } catch { /* use default */ }
   }
 
-  const pipelinesDir = existsSync(path.join(process.cwd(), '.apm', 'pipelines'))
-    ? path.join(process.cwd(), '.apm', 'pipelines')          // consumer project install
-    : path.join(process.cwd(), 'src', 'pipelines');           // self-hosting fallback
+  const pipelinesDir = path.join(process.cwd(), 'src', 'pipelines');
+  if (!existsSync(pipelinesDir)) {
+    const legacyDir = path.join(process.cwd(), '.apm', 'pipelines');
+    if (existsSync(legacyDir)) {
+      console.error(
+        '[orchestrator] ERROR: Found legacy .apm/pipelines/ but src/pipelines/ does not exist. ' +
+        'Run the migration steps in docs/MIGRATION.md (section "Upgrading from .apm/ layout to src/ layout") ' +
+        'to move your pipeline configs to src/pipelines/.'
+      );
+    } else {
+      console.error(
+        '[orchestrator] ERROR: Pipeline directory src/pipelines/ not found. ' +
+        'Run init.sh to initialise the project, or create src/pipelines/ manually.'
+      );
+    }
+  }
   const { valid: pipelines, errors } = await loadPipelines(pipelinesDir);
   for (const err of errors) {
     console.error(`[orchestrator] Pipeline validation error: ${err.file} — ${err.message}`);

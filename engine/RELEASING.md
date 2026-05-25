@@ -125,7 +125,7 @@ If a release ships a regression:
    git push --force origin v3
    ```
 4. Open an incident issue with the `incident` label so the Incident Agent
-   timestamps the postmortem (per `.apm/agents/incident-agent.md`).
+   timestamps the postmortem (per `.github/agents/incident-agent.md`).
 5. Cut a fixed `vX.Y.(Z+1)` per §2 once the regression is patched.
 
 `npm unpublish` is **forbidden** — it breaks reproducibility for any

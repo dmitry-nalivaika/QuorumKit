@@ -397,4 +397,4 @@ ADR and the server-side implementation of FR-176-002 and FR-176-004 before merge
 
 5. **[RESOLVED]** Pipeline list endpoint URL — will use `GET /api/local-worktrees`
    to avoid collision with existing `GET /api/pipelines` (which lists
-   `.apm/pipelines/` YAML definitions).
+   `src/pipelines/` YAML definitions).

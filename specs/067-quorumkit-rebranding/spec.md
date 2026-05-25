@@ -44,9 +44,9 @@ Acceptance Scenarios:
 - Given the `apm.yml` configuration file is renamed to `quorumkit.yml`
   When `installer/init.sh` runs on an existing project
   Then it detects the old `apm.yml`, prints a migration notice, and exits non-zero until the file is renamed
-- Given the `.apm/` directory is NOT renamed in this release (see Out of Scope)
+- Given the `src/` directory is NOT renamed in this release (see Out of Scope)
   When a consumer project runs `init.sh --upgrade`
-  Then no `.apm/` path changes occur and existing pipelines, agents, and runtimes continue to work without modification
+  Then no `src/` path changes occur and existing pipelines, agents, and runtimes continue to work without modification
 
 ### US-3: Maintainer releases the engine to NPM under the QuorumKit name
 As the **project maintainer**, I want the CI/CD publish workflow to release the
@@ -92,7 +92,7 @@ Acceptance Scenarios:
 - **FR-011**: `docs/architecture/` ADRs and `specs/` files MUST have their `uses:` path references updated; prose references to "APM" as the product name MUST be updated; historical spec NNN numbers and ADR numbers MUST NOT be changed.
 - **FR-012**: A `MIGRATION.md` file MUST be created at the repository root documenting every renamed file, every changed package name, and every updated `uses:` path, with before/after examples for consumer project upgrade.
 - **FR-013**: The internal wire-format tokens (`apm-msg`, `apm-state`, `apm-pipeline-state`, `<!-- apm-state -->`) MUST NOT be changed in this release (see Out of Scope).
-- **FR-014**: The `.apm/` configuration directory path MUST NOT be changed in this release (see Out of Scope).
+- **FR-014**: The `src/` configuration directory path MUST NOT be changed in this release (see Out of Scope).
 - **FR-015**: After all renames, `installer/quality-check.sh` and `installer/verify-mirror.sh` MUST pass with zero errors.
 
 ---
@@ -101,7 +101,7 @@ Acceptance Scenarios:
 
 - [ ] GitHub repository is accessible at `github.com/dmitry-nalivaika/quorumkit`
 - [ ] `npm pack` on `engine/package.json` produces an artefact named `quorumkit-engine-*.tgz` with `"name": "quorumkit-engine"`
-- [ ] `grep -r "apm-engine\|agentic-dev-stack\|\"APM\"\|displayName.*APM" . --include="*.json" --include="*.yml" --include="*.md"` (excluding `CHANGELOG.md` historical entries and `node_modules`) returns zero matches outside of `.apm/` internal protocol tokens
+- [ ] `grep -r "apm-engine\|agentic-dev-stack\|\"APM\"\|displayName.*APM" . --include="*.json" --include="*.yml" --include="*.md"` (excluding `CHANGELOG.md` historical entries and `node_modules`) returns zero matches outside of `src/` internal protocol tokens
 - [ ] `installer/quality-check.sh` exits 0
 - [ ] `installer/verify-mirror.sh` exits 0
 - [ ] `MIGRATION.md` exists at repository root with complete before/after reference table
@@ -125,7 +125,7 @@ Acceptance Scenarios:
 
 ## Out of Scope
 
-- **`.apm/` directory rename** — renaming `.apm/` to `.quorumkit/` is a major breaking change for all consumer projects. This is deferred to a future spec with a full migration strategy and a MAJOR version bump.
+- **`src/` directory rename** — renaming `src/` to a dedicated tool-specific path is a major breaking change for all consumer projects. This is deferred to a future spec with a full migration strategy and a MAJOR version bump.
 - **Wire-format token rename** (`apm-msg`, `apm-state`, `apm-pipeline-state`) — changing embedded HTML comment tokens would silently break all existing consumer issue timelines and state recovery. Deferred to a dedicated protocol-migration spec with an ADR.
 - **VS Code Marketplace publisher account rename** — the `publisher` field change in `package.json` requires a new marketplace publisher account or transfer. Scope is limited to updating the `package.json` fields; marketplace re-publishing logistics are handled by the release agent.
 - **GitHub Pages / website domain changes** — out of scope.
@@ -144,7 +144,7 @@ N/A — this is a rename/branding operation with no changes to authentication, a
 
 - The GitHub repository rename (`agentic-dev-stack` → `quorumkit`) is performed by the maintainer via GitHub Settings before any new `uses:` path references are merged.
 - Historical CHANGELOG entries intentionally retain old names for auditability — this is not a defect.
-- The `.apm/` directory remains in place for all consumer projects; no migration of pipeline YAML, agent definitions, or runtime configs is required.
+- The `src/` directory remains in place for all consumer projects; no migration of pipeline YAML, agent definitions, or runtime configs is required.
 - Wire-format backward compatibility is preserved: existing GitHub Issues with embedded `<!-- apm-state -->` and `<!-- apm-msg -->` blocks continue to be parsed correctly.
 - `engine/package.json` changing from `"private": true` to `"private": false` is gated on this spec being complete and the v3 release spec (Issue #61) being approved.
 

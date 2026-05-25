@@ -318,7 +318,7 @@ install_speckit() {
 # PIPELINE TEMPLATES (FR-012)
 # =============================================================================
 install_pipelines() {
-  h1 "Installing Orchestrator pipelines (.apm/pipelines/)"
+  h1 "Installing Orchestrator pipelines (src/pipelines/)"
   # ADR-006 §3 / FR-005: pipelines are NOT mirrored. The package's `src/pipelines/`
   # is the single source of truth and is copied directly to the consumer.
   local pipelines_src="$QUORUMKIT_PACKAGE_DIR/src/pipelines"
@@ -327,12 +327,12 @@ install_pipelines() {
     return
   fi
 
-  mkdir -p .apm/pipelines
+  mkdir -p src/pipelines
 
   for tpl in "$pipelines_src"/*.yml; do
     tpl_name="$(basename "$tpl")"
-    if [ ! -f ".apm/pipelines/$tpl_name" ]; then
-      cp "$tpl" ".apm/pipelines/$tpl_name"
+    if [ ! -f "src/pipelines/$tpl_name" ]; then
+      cp "$tpl" "src/pipelines/$tpl_name"
       ok "Pipeline template: $tpl_name"
     else
       warn "Pipeline template $tpl_name already exists — skipping (edit to customise)"

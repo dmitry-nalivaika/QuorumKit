@@ -17,25 +17,25 @@ Constitution §IV (NON-NEGOTIABLE) requires every agent definition, skill,
 workflow, and template to work with **both** Claude Code and GitHub Copilot,
 with file homes:
 
-- Claude variants: `.apm/agents/`, `.apm/skills/`, `.claude/`
+- Claude variants: `.github/agents/`, `.github/skills/`, `.claude/`
 - Copilot variants: `.github/instructions/`, `.github/workflows/`
 
 Spec #44 introduces three new orchestrator-meaningful artifacts whose location
 is asserted but not justified against §IV:
 
-1. Pipeline files (`.apm/pipelines/*.yml`, FR-002)
-2. Runtime registry (`.apm/runtimes.yml`, FR-007)
+1. Pipeline files (`src/pipelines/*.yml`, FR-002)
+2. Runtime registry (`src/runtimes.yml`, FR-007)
 3. Regulation document (`docs/AGENT_PROTOCOL.md`, FR-014)
 
 Without an explicit decision, three failure modes are possible:
 
-- **Drift**: a maintainer edits `.apm/pipelines/foo.yml` but forgets the Copilot
+- **Drift**: a maintainer edits `src/pipelines/foo.yml` but forgets the Copilot
   mirror; runtimes silently diverge.
 - **Duplication tax**: every change requires editing two files; over time the
   trees fall out of sync (we already see this risk in `templates/github/`).
 - **Wrong owner**: it is unclear which tree the *orchestrator code* reads at
   runtime, so a Copilot-only project might be running orchestrator logic that
-  consults a non-existent `.apm/` path.
+  consults a non-existent `src/` path.
 
 ---
 
@@ -45,30 +45,30 @@ For all orchestrator-meaningful configuration (pipelines, runtime registry,
 regulation document, agent identity registry), the project adopts a
 **Single-Source-of-Truth + Mirror-at-Init** pattern:
 
-1. **`.apm/` is the canonical source of truth** for:
-   - `.apm/pipelines/*.yml`
-   - `.apm/runtimes.yml`
-   - `.apm/agent-identities.yml`
+1. **`src/` is the canonical source of truth** for:
+   - `src/pipelines/*.yml`
+   - `src/runtimes.yml`
+   - `src/agent-identities.yml`
    - The regulation document (`docs/AGENT_PROTOCOL.md` is in `docs/` because it
      is human documentation, not a runtime config; it is a sibling SoT).
 
-2. **The orchestrator code reads only from `.apm/`** at runtime, regardless of
+2. **The orchestrator code reads only from `src/`** at runtime, regardless of
    which AI runtime is selected. This is enforced in `pipeline-loader.js` by
    hard-coding the search root.
 
 3. **Copilot-tree mirroring is generated**, not authored. `scripts/init.sh`
    (and a new `scripts/sync-copilot-tree.sh` invokable in CI) mirrors the
    needed subset into `.github/` derivatives:
-   - `.apm/pipelines/*.yml` → not mirrored (orchestrator reads `.apm/` directly
+   - `src/pipelines/*.yml` → not mirrored (orchestrator reads `src/` directly
      in both runtimes; only the dispatched workflows differ, and those already
      live under `.github/workflows/`).
-   - Agent prompts (already mirrored): `.apm/agents/*.md` →
+   - Agent prompts (already mirrored): `.github/agents/*.md` →
      `.github/instructions/*-agent.instructions.md`.
    - The runtime registry is **not** mirrored; it is read by the orchestrator
-     only (which always runs on GitHub Actions and can read `.apm/` directly).
+     only (which always runs on GitHub Actions and can read `src/` directly).
 
 4. **CI gate**: a `verify-mirror.sh` check runs on every PR that modifies
-   `.apm/agents/`, fails the build if the corresponding
+   `.github/agents/`, fails the build if the corresponding
    `.github/instructions/` mirror is stale, and prints the exact diff. This
    makes the §IV invariant machine-checkable.
 
@@ -79,7 +79,7 @@ regulation document, agent identity registry), the project adopts a
 
 ### Why one tree as SoT (not two equal trees)
 
-Two equal trees with bidirectional sync invariably drift. The `.apm/` tree was
+Two equal trees with bidirectional sync invariably drift. The `src/` tree was
 chosen as canonical because:
 - It is the home of the foundational artifacts (constitution, agent role
   definitions). The Copilot tree is already a mirror in practice.
@@ -95,13 +95,13 @@ chosen as canonical because:
 - Editors edit one file, not two.
 - Constitution §IV is upheld with a single, testable invariant rather than
   reviewer vigilance.
-- Spec #44's reference to `.apm/pipelines/`, `.apm/runtimes.yml`, and
+- Spec #44's reference to `src/pipelines/`, `src/runtimes.yml`, and
   `docs/AGENT_PROTOCOL.md` is now grounded in an explicit dual-runtime contract.
 
 **Negative / Trade-offs**
 - Maintainers cannot directly edit files under `.github/instructions/`; doing
   so will be reverted by the next mirror run. Mitigation: a header comment
-  `<!-- GENERATED FROM .apm/agents/<file>.md — DO NOT EDIT -->` is injected by
+  `<!-- GENERATED FROM .github/agents/<file>.md — DO NOT EDIT -->` is injected by
   the mirror script.
 - A new CI check is added. Mitigation: it is a single shell script, no new
   dependencies (Constitution §VII compliant).
@@ -119,9 +119,9 @@ chosen as canonical because:
 | Option | Pro | Con | Rejected Because |
 |---|---|---|---|
 | Two equal trees, manually maintained | Each runtime "owns" its files | Drift is inevitable; §IV becomes aspirational | Violates §IV's non-negotiability |
-| Symlinks from `.github/` → `.apm/` | Zero duplication | Symlinks unsupported on Windows; breaks GH Actions checkout in some contexts | Cross-platform fragility |
+| Symlinks from `.github/` → `src/` | Zero duplication | Symlinks unsupported on Windows; breaks GH Actions checkout in some contexts | Cross-platform fragility |
 | Single tree with runtime-aware path resolution at read time | Truly zero duplication | Both Claude Code and Copilot tooling expect their canonical paths; breaking either's UX is a §IV violation | Fights the tooling instead of the file system |
-| `.apm/` SoT + `init.sh` mirror + CI verify (chosen) | Single edit point; mechanically enforced | Generated files in repo (small cost) | Accepted |
+| `src/` SoT + `init.sh` mirror + CI verify (chosen) | Single edit point; mechanically enforced | Generated files in repo (small cost) | Accepted |
 
 ---
 

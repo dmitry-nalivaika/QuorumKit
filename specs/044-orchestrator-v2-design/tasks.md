@@ -61,7 +61,7 @@ Legend — `[FR-NN]` ties the task to a Functional Requirement;
 ## Phase 3 — Runtime registry + adapters
 
 - [x] **T3.1** `schemas/runtimes.schema.json` + Ajv tests. [FR-007]
-- [x] **T3.2** `runtime-registry.js` — load `.apm/runtimes.yml`, validate
+- [x] **T3.2** `runtime-registry.js` — load `src/runtimes.yml`, validate
   against schema, enforce **kind allowlist** (`claude`, `copilot` only;
   reserved kinds → `RUNTIME_KIND_NOT_ENABLED`). Tests for each rejection. [FR-007, ADR-005]
 - [x] **T3.3** `runtime-registry.js` — runtime-resolution precedence:
@@ -125,7 +125,7 @@ Legend — `[FR-NN]` ties the task to a Functional Requirement;
 ## Phase 6 — CI gates + concurrency + workflow self-failure feedback
 
 - [x] **T6.1** `scripts/verify-mirror.sh` (new or extend) — fails on stale
-  `.github/instructions/<agent>.instructions.md` vs `.apm/agents/<agent>.md`. [ADR-006]
+  `.github/instructions/<agent>.instructions.md` vs `.github/agents/<agent>.md`. [ADR-006]
 - [x] **T6.2** `quality.yml` — add four jobs (`pipeline-validator`,
   `verify-mirror`, `orchestrator-tests`, `regulation-lint`). [FR-029, ADR-007 §5]
 - [x] **T6.3** `quality-check.sh` gate **#14** — every shipped agent workflow
@@ -139,8 +139,8 @@ Legend — `[FR-NN]` ties the task to a Functional Requirement;
 
 ## Phase 7 — Cutover + worked example + handoff
 
-- [x] **T7.1** Ship `.apm/runtimes.yml`, `.apm/agent-identities.yml`,
-  `.apm/pipelines/feature-pipeline-v2.yml` (the BA→DEV→QA→…→RELEASE worked
+- [x] **T7.1** Ship `src/runtimes.yml`, `src/agent-identities.yml`,
+  `src/pipelines/feature-pipeline-v2.yml` (the BA→DEV→QA→…→RELEASE worked
   loop) as zero-config defaults per Constitution §V. [FR-007, FR-014]
 - [x] **T7.2** End-to-end fixture test executing the worked example loop:
   `BA → DEV → QA → DEV → QA → DEV → BA → DEV → QA → REVIEWER → RELEASE`
@@ -174,7 +174,7 @@ Legend — `[FR-NN]` ties the task to a Functional Requirement;
 
 - All tasks ticked.
 - `cd scripts/orchestrator && npm test` — green, coverage ≥ targets in `plan.md`.
-- `node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines/` — exit 0.
+- `node scripts/orchestrator/pipeline-validator-cli.js src/pipelines/` — exit 0.
 - `node scripts/orchestrator/regulation-lint.js` — exit 0.
 - `bash scripts/verify-mirror.sh` — exit 0.
 - `bash scripts/quality-check.sh` — exit 0.

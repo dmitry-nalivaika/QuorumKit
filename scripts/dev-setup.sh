@@ -38,7 +38,7 @@ echo ""
 
 # Run init.sh with this repo as both the package source and the install target.
 # --skip-pipelines: pipelines already live in src/pipelines/ (the source of
-#   truth), so no copy to .apm/pipelines/ is needed for self-hosting.
+#   truth), so no copy to src/pipelines/ is needed for self-hosting.
 QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
   bash "$REPO_ROOT/src/scripts/init.sh" "$AI_ARG" --skip-pipelines --skip-guides "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
 

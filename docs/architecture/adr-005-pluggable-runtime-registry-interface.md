@@ -40,7 +40,7 @@ validator until a per-kind ADR is merged.
 
 ### Interface contract (frozen)
 
-A runtime entry in `.apm/runtimes.yml`:
+A runtime entry in `src/runtimes.yml`:
 
 ```yaml
 <runtime-name>:
@@ -69,7 +69,7 @@ in the **kind allowlist**.
 | `ollama` | **Reserved** | not shipped | future ADR required |
 | `custom` | **Reserved** | not shipped | future ADR required |
 
-Reserved kinds: the validator MUST reject `.apm/runtimes.yml` files that use
+Reserved kinds: the validator MUST reject `src/runtimes.yml` files that use
 them with the error `RUNTIME_KIND_NOT_ENABLED: <kind> is reserved; enable
 requires a per-kind ADR. See docs/architecture/`. The string is reserved (i.e. a
 user cannot register their own `kind: ollama` adapter to bypass the gate)
@@ -129,4 +129,4 @@ because the kind name is the public identifier for that integration.
 - Constitution §VII (Simplicity / no new dependencies without an ADR)
 - Constitution §IV (Dual-AI Compatibility — generalised to N runtimes)
 - ADR-003 (existing Copilot runtime via GitHub Models)
-- `.apm/agents/architect-agent.md` — "When an ADR is Required"
+- `.github/agents/architect-agent.md` — "When an ADR is Required"
