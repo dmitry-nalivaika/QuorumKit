@@ -22,6 +22,12 @@
  *  • /api/pipeline/trigger    → POST manually trigger a pipeline run
  *  • /api/pipeline/approve    → POST approve a waiting pipeline run
  *
+ *  • /api/local-pipelines        → GET list local feature worktrees
+ *  • /api/local-pipelines/start  → POST start a pipeline (calls pipeline.sh)
+ *  • /api/local-pipelines/stop   → POST stop a pipeline (calls pipeline.sh)
+ *  • /api/local-pipelines/:n/join→ GET return worktree path for issue N
+ *  • /api/timeline/:n            → GET fetch + parse GitHub issue comment timeline
+ *
  * Usage:
  *   node server.js [--port 3131]
  */
@@ -210,23 +216,24 @@ function defaultConfig() {
 
 function loadConfig() {
   const defaults = defaultConfig();
+  let cfg;
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      // Merge: saved wins, but auto-detected values fill in any empty strings
-      // (e.g. if a previous version saved localPath:'' or repoUrl:'').
       const merged = { ...defaults, ...saved };
       for (const k of ['localPath', 'repoUrl', 'branch']) {
         if (!merged[k] && defaults[k]) merged[k] = defaults[k];
       }
-      // Re-derive the display name when missing or stale-empty.
       if (!merged.projectName) {
         merged.projectName = deriveProjectName(merged.repoUrl, merged.localPath);
       }
-      return merged;
+      cfg = merged;
     }
   } catch { /* ignore */ }
-  return defaults;
+  if (!cfg) cfg = defaults;
+  // QUORUMKIT_PROJECT_DIR always wins — useful for tests and CLI invocations.
+  if (process.env.QUORUMKIT_PROJECT_DIR) cfg.localPath = process.env.QUORUMKIT_PROJECT_DIR;
+  return cfg;
 }
 
 function saveConfig(cfg) {
@@ -401,6 +408,295 @@ function readBody(req) {
       try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); }
     });
   });
+}
+
+// ─── Pipeline-sh path resolution ─────────────────────────────────────────────
+// QUORUMKIT_TEST_PIPELINE_SH lets tests inject a stub; otherwise we resolve
+// the script relative to the project root detected by autoDetectProject().
+function resolvePipelineSh(localPath) {
+  if (process.env.QUORUMKIT_TEST_PIPELINE_SH) return process.env.QUORUMKIT_TEST_PIPELINE_SH;
+  // Try <project>/scripts/pipeline.sh first, then package-relative location.
+  const candidates = [
+    localPath && path.join(localPath, 'scripts', 'pipeline.sh'),
+    path.resolve(DASHBOARD_DIR, '..', '..', 'scripts', 'pipeline.sh'),
+  ].filter(Boolean);
+  for (const c of candidates) {
+    try { fs.accessSync(c, fs.constants.X_OK); return c; } catch { /* try next */ }
+  }
+  return candidates[0] || 'scripts/pipeline.sh'; // best-effort fallback
+}
+
+/** Run pipeline.sh with given args; resolves with { stdout, stderr }. */
+function runPipelineSh(localPath, args) {
+  return new Promise((resolve, reject) => {
+    const script = resolvePipelineSh(localPath);
+    // SEC: args come from validated server-side values only (integers + slug)
+    const proc = require('child_process').spawn(
+      'bash', [script, ...args],
+      { cwd: localPath || process.cwd(), env: spawnEnv(), stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let stdout = '', stderr = '';
+    proc.stdout.on('data', d => { stdout += d; });
+    proc.stderr.on('data', d => { stderr += d; });
+    proc.on('close', code => {
+      if (code === 0) resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+      else reject(Object.assign(new Error(stderr.trim() || `pipeline.sh exited ${code}`), { code }));
+    });
+    proc.on('error', reject);
+  });
+}
+
+// ─── Local pipeline list (git worktree list --porcelain) ─────────────────────
+/**
+ * Returns all worktrees whose branch matches the NNN-slug pattern.
+ * @param {string} localPath  — project root (where .git lives)
+ * @returns {Promise<Array<{issueNumber:number, branch:string, path:string, head:string}>>}
+ */
+/**
+ * Returns all worktrees whose branch matches the NNN-slug pattern.
+ * Extended response includes createdAt (from git log), mode (from path vs
+ * QUORUMKIT_PIPELINES_DIR), and runningAgent (true if a managed process is
+ * currently running with cwd inside the worktree path).
+ *
+ * FR-176-001, FR-176-007, FR-176-015
+ */
+function listLocalPipelines(localPath) {
+  return new Promise((resolve, reject) => {
+    if (!localPath) { resolve([]); return; }
+    const pipelinesDir = process.env.QUORUMKIT_PIPELINES_DIR || '';
+    const proc = require('child_process').spawn(
+      'git', ['worktree', 'list', '--porcelain'],
+      { cwd: localPath, env: spawnEnv(), stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let out = '';
+    proc.stdout.on('data', d => { out += d; });
+    proc.on('close', () => {
+      const pipelines = [];
+      const blocks = out.trim().split(/\n\n+/);
+      for (const block of blocks) {
+        const lines  = block.trim().split('\n');
+        const wt     = lines.find(l => l.startsWith('worktree '))?.slice('worktree '.length).trim();
+        const head   = lines.find(l => l.startsWith('HEAD '))?.slice('HEAD '.length).trim();
+        const branch = lines.find(l => l.startsWith('branch '))
+                             ?.slice('branch '.length).replace('refs/heads/', '').trim();
+        if (!branch || !/^\d+-[a-z0-9][a-z0-9-]*$/.test(branch)) continue;
+
+        // FR-176-015: filter to QUORUMKIT_PIPELINES_DIR when set
+        if (pipelinesDir && wt && !wt.startsWith(pipelinesDir)) continue;
+
+        const num = parseInt(branch.split('-')[0], 10);
+
+        // Derive creation date from the worktree HEAD commit timestamp
+        let createdAt = null;
+        if (wt && head) {
+          try {
+            const cp   = require('child_process');
+            const res  = cp.spawnSync('git', ['log', '-1', '--format=%cI', head],
+              { cwd: wt, env: spawnEnv(), encoding: 'utf8', timeout: 2000 });
+            if (res.status === 0 && res.stdout) createdAt = res.stdout.trim();
+          } catch { /* non-fatal */ }
+        }
+
+        // Derive mode: 'shared' if worktree is under the main repo (same git dir),
+        // 'isolated' if it lives in a separate directory (the typical parallel case).
+        const mode = (wt && localPath && wt.startsWith(localPath)) ? 'shared' : 'isolated';
+
+        // runningAgent: true if any tracked agent process has cwd inside this worktree
+        const runningAgent = wt
+          ? [...(global._agentProcesses || new Map()).values()]
+              .some(p => p.cwd && p.cwd.startsWith(wt))
+          : false;
+
+        pipelines.push({ issueNumber: num, branch, path: wt || '', head: head || '',
+                         createdAt, mode, runningAgent });
+      }
+      resolve(pipelines);
+    });
+    proc.on('error', reject);
+  });
+}
+
+/**
+ * Derive a branch slug from a GitHub Issue title.
+ * Lowercases, strips non-alphanumeric, truncates to 40 chars.
+ * FR-176-003
+ */
+async function deriveSlugFromIssue(issueNumber, cfg) {
+  const repoUrl   = cfg.repoUrl || process.env.QUORUMKIT_REPO_URL || '';
+  const repoMatch = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+  if (!repoMatch) return `${issueNumber}-feature`;
+  const owner = repoMatch[1];
+  const repo  = repoMatch[2].replace(/\.git$/, '');
+  try {
+    const ghBin = process.env.QUORUMKIT_TEST_GH_BIN || resolveBin('gh');
+    const res   = require('child_process').spawnSync(
+      ghBin, ['api', `repos/${owner}/${repo}/issues/${issueNumber}`, '--jq', '.title'],
+      { env: spawnEnv(), encoding: 'utf8', timeout: 8000 }
+    );
+    if (res.status === 0 && res.stdout) {
+      const title = res.stdout.trim();
+      const slug  = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'feature';
+      return slug;
+    }
+  } catch { /* fall through */ }
+  return `${issueNumber}-feature`;
+}
+
+// ─── Timeline fetch + parse (FR-177) ─────────────────────────────────────────
+/** In-memory timeline cache: issueNumber → { data, fetchedAt } */
+const _timelineCache = new Map();
+const TIMELINE_CACHE_TTL = 25_000; // ms
+
+/**
+ * Parse a single GitHub comment body into a structured event (or null).
+ * Handles:
+ *   1. agent-footprint markers (<!-- agent-footprint: start|complete|fail -->)
+ *   2. ```apm-msg JSON blocks
+ */
+function parseCommentToEvent(comment) {
+  const body = comment.body || '';
+
+  // ── 1. apm-msg block (highest priority — check before footprint marker) ──────
+  const apmMatch = body.match(/```apm-msg\s*([\s\S]*?)```/);
+  if (apmMatch) {
+    try {
+      const parsed = JSON.parse(apmMatch[1].trim());
+      const safeBody = body.replace(/<[^>]+>/g, '').slice(0, 2000);
+      return {
+        source:    'apm-msg',
+        eventType: parsed.event_type || parsed.outcome || 'unknown',
+        agent:     parsed.agent || 'unknown',
+        outcome:   parsed.outcome,
+        summary:   parsed.summary || '',
+        timestamp: parsed.timestamp || comment.created_at,
+        runId:     parsed.runId,
+        step:      parsed.step,
+        iteration: parsed.iteration,
+        pipelineId: parsed.pipeline_id,
+        commentId: comment.id,
+        body:      safeBody,
+      };
+    } catch { /* malformed JSON — fall through */ }
+  }
+
+  // ── 2. agent-footprint marker ──────────────────────────────────────────────
+  const footprintMatch = body.match(/<!--\s*agent-footprint:\s*(start|complete|fail)\s*-->/i);
+  if (footprintMatch) {
+    const eventType = footprintMatch[1].toLowerCase();
+    // Extract agent name from "**Agent ...:** `agent-name`" pattern
+    const agentMatch = body.match(/\*\*Agent [^:]+:\*\*\s*`([^`]+)`/i);
+    const agent = agentMatch?.[1] || 'unknown';
+    // Extract summary if present
+    const summaryMatch = body.match(/\*\*Summary:\*\*\s*(.+)/);
+    const summary = summaryMatch?.[1]?.trim() || '';
+    // Sanitise body (strip HTML)
+    const safeBody = body.replace(/<[^>]+>/g, '').slice(0, 2000);
+    return {
+      source:    'footprint',
+      eventType,
+      agent,
+      summary,
+      timestamp: comment.created_at,
+      commentId: comment.id,
+      body:      safeBody,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Derive overall pipeline status from a list of events.
+ * Last apm-msg outcome wins; 'awaiting-approval' if any approval gate found.
+ */
+function derivePipelineStatus(events) {
+  // Check for approval gate comments first
+  const statusFromEvents = [...events].reverse();
+  for (const e of statusFromEvents) {
+    if (e.source === 'apm-msg') {
+      if (e.outcome === 'success' || e.outcome === 'spec-ready') return 'success';
+      if (e.outcome === 'fail' || e.outcome === 'runtime-error') return 'failed';
+      if (e.outcome === 'awaiting-approval') return 'awaiting-approval';
+      if (e.eventType === 'complete') return 'success';
+      if (e.eventType === 'fail') return 'failed';
+    }
+  }
+  // If there are footprint start events but no complete → running
+  const hasStart    = events.some(e => e.eventType === 'start');
+  const hasComplete = events.some(e => ['complete', 'success'].includes(e.eventType));
+  if (hasStart && !hasComplete) return 'running';
+  if (hasComplete) return 'success';
+  return 'unknown';
+}
+
+/**
+ * Fetch and parse the timeline for a GitHub issue.
+ * Uses `gh api` CLI (already authenticated) and the in-memory cache.
+ */
+async function fetchTimeline(issueNumber, cfg) {
+  const now = Date.now();
+  const cached = _timelineCache.get(issueNumber);
+  if (cached && (now - cached.fetchedAt) < TIMELINE_CACHE_TTL) {
+    return cached.data;
+  }
+
+  // Derive owner/repo from configured repoUrl or env var
+  const repoUrl = cfg.repoUrl || process.env.QUORUMKIT_REPO_URL || '';
+  const repoMatch = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+  if (!repoMatch) {
+    throw new Error('Repository URL not configured — open Settings and set the GitHub repo URL');
+  }
+  const owner = repoMatch[1];
+  const repo  = repoMatch[2].replace(/\.git$/, '');
+
+  // SEC: issueNumber validated as positive integer by caller; owner/repo derived
+  // from config, not user input — no injection risk.
+  const apiPath = `repos/${owner}/${repo}/issues/${issueNumber}/comments`;
+  const rawJson = await new Promise((resolve, reject) => {
+    // QUORUMKIT_TEST_GH_BIN lets tests inject a stub binary (same pattern as
+    // QUORUMKIT_TEST_PIPELINE_SH) to avoid hitting the real GitHub API.
+    const ghBin = process.env.QUORUMKIT_TEST_GH_BIN || resolveBin('gh');
+    const proc  = require('child_process').spawn(
+      ghBin, ['api', apiPath, '--paginate'],
+      { env: spawnEnv(), stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let out = '', err = '';
+    proc.stdout.on('data', d => { out += d; });
+    proc.stderr.on('data', d => { err += d; });
+    proc.on('close', code => {
+      if (code === 0) resolve(out);
+      else reject(new Error(`gh api failed (${code}): ${err.trim().slice(0, 200)}`));
+    });
+    proc.on('error', reject);
+  });
+
+  let comments;
+  try { comments = JSON.parse(rawJson); }
+  catch { throw new Error('Failed to parse GitHub API response'); }
+
+  if (!Array.isArray(comments)) comments = [];
+
+  const events = comments
+    .map(c => parseCommentToEvent(c))
+    .filter(Boolean);
+
+  const data = {
+    events,
+    status: derivePipelineStatus(events),
+    meta: {
+      issueNumber,
+      totalComments:    comments.length,
+      structuredEvents: events.length,
+      fetchedAt:        new Date().toISOString(),
+    },
+  };
+
+  _timelineCache.set(issueNumber, { data, fetchedAt: now });
+  return data;
 }
 
 // ─── HTTP routes ─────────────────────────────────────────────────────────────
@@ -639,6 +935,81 @@ async function handleRequest(req, res) {
     const agentId = url.pathname.split('/').pop();
     const info    = running.get(agentId);
     json(res, 200, { log: info ? info.log : [] }); return;
+  }
+
+  // ── GET /api/local-pipelines ────────────────────────────────────
+  if (method === 'GET' && url.pathname === '/api/local-pipelines') {
+    const cfg  = loadConfig();
+    const list = await listLocalPipelines(cfg.localPath).catch(() => []);
+    json(res, 200, list); return;
+  }
+
+  // ── POST /api/local-pipelines/start ────────────────────────────
+  if (method === 'POST' && url.pathname === '/api/local-pipelines/start') {
+    const body = await readBody(req);
+    let { issueNumber, slug, mode = 'isolated' } = body;
+    if (!issueNumber || !Number.isInteger(Number(issueNumber)) || Number(issueNumber) <= 0) {
+      json(res, 400, { error: 'issueNumber must be a positive integer' }); return;
+    }
+    if (slug && !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+      json(res, 400, { error: 'slug must match ^[a-z0-9][a-z0-9-]*$' }); return;
+    }
+    if (!['isolated', 'shared'].includes(mode)) {
+      json(res, 400, { error: 'mode must be isolated or shared' }); return;
+    }
+    const cfg = loadConfig();
+    // FR-176-003: auto-derive slug from GitHub Issue title when not supplied
+    if (!slug) slug = await deriveSlugFromIssue(Number(issueNumber), cfg);
+    const result = await runPipelineSh(cfg.localPath, ['start', String(Number(issueNumber)),
+      `${Number(issueNumber)}-${slug}`, `--mode=${mode}`]);
+    broadcast('pipelineListChanged', {});
+    json(res, 200, { ok: true, slug, ...result }); return;
+  }
+
+  // ── POST /api/local-pipelines/stop ─────────────────────────────
+  if (method === 'POST' && url.pathname === '/api/local-pipelines/stop') {
+    const body = await readBody(req);
+    const { issueNumber } = body;
+    if (!issueNumber || !Number.isInteger(Number(issueNumber)) || Number(issueNumber) <= 0) {
+      json(res, 400, { error: 'issueNumber must be a positive integer' }); return;
+    }
+    const cfg = loadConfig();
+    const result = await runPipelineSh(cfg.localPath,
+      ['stop', String(Number(issueNumber)), '--no-switch']);
+    broadcast('pipelineListChanged', {});
+    json(res, 200, { ok: true, ...result }); return;
+  }
+
+  // ── GET /api/local-pipelines/:n/join ───────────────────────────
+  if (method === 'GET' && /^\/api\/local-pipelines\/[^/]+\/join$/.test(url.pathname)) {
+    const segment = url.pathname.replace(/^\/api\/local-pipelines\//, '').replace(/\/join$/, '');
+    const n = Number(segment);
+    if (!Number.isInteger(n) || n <= 0) {
+      json(res, 400, { error: 'issueNumber must be a positive integer' }); return;
+    }
+    const cfg  = loadConfig();
+    const list = await listLocalPipelines(cfg.localPath).catch(() => []);
+    const found = list.find(p => p.issueNumber === n);
+    if (!found) { json(res, 404, { error: `No local pipeline for issue #${n}` }); return; }
+    json(res, 200, { branch: found.branch, path: found.path }); return;
+  }
+
+  // ── GET /api/timeline/:issueNumber ─────────────────────────────
+  // Catches both valid numeric IDs and invalid slugs so we can return 400.
+  if (method === 'GET' && url.pathname.startsWith('/api/timeline/')) {
+    const segment = url.pathname.slice('/api/timeline/'.length);
+    const n = Number(segment);
+    if (!Number.isInteger(n) || n <= 0) {
+      json(res, 400, { error: 'issueNumber must be a positive integer' }); return;
+    }
+    const cfg = loadConfig();
+    try {
+      const result = await fetchTimeline(n, cfg);
+      json(res, 200, result);
+    } catch (err) {
+      json(res, 502, { error: err.message });
+    }
+    return;
   }
 
   res.writeHead(404); res.end('Not found');

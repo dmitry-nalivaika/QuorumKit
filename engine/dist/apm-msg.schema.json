@@ -2,10 +2,10 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://apm.dev/schemas/apm-msg.schema.json",
   "title": "QuorumKit Agent Message (apm-msg)",
-  "description": "Single machine-readable message emitted by an agent at the end of a step (FR-011, FR-012).",
+  "description": "Single machine-readable message emitted by an agent at the end of a step (FR-011, FR-012). v2 extension fields (event_type, pipeline_id, issue, pr, branch, timestamp) are optional for backward-compatibility — see docs/AGENT_PROTOCOL.md §2.0.",
   "type": "object",
   "required": ["version", "runId", "step", "agent", "iteration", "outcome", "summary"],
-  "additionalProperties": false,
+  "additionalProperties": true,
   "properties": {
     "version": {
       "type": "string",
@@ -43,9 +43,10 @@
         "needs-human",
         "runtime-error",
         "protocol-violation",
-        "orchestrator-failure"
+        "orchestrator-failure",
+        "spec-ready"
       ],
-      "description": "Declared outcome enum. Source of truth: docs/AGENT_PROTOCOL.md."
+      "description": "Declared outcome enum. Source of truth: docs/AGENT_PROTOCOL.md. 'start' is NOT a valid value — apm-msg blocks are emitted only at step completion or failure."
     },
     "summary": {
       "type": "string",
@@ -57,6 +58,31 @@
       "type": "object",
       "description": "Optional per-outcome payload. Schema is per-outcome; see regulation document.",
       "additionalProperties": true
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["complete", "fail"],
+      "description": "v2 extension — discriminates agent-complete vs agent-fail lifecycle events. 'start' is NOT a valid value. Optional for backward-compatibility."
+    },
+    "pipeline_id": {
+      "type": ["string", "null"],
+      "description": "v2 extension — NNN zero-padded issue number; null for cloud/CI runs. Optional for backward-compatibility."
+    },
+    "issue": {
+      "type": ["string", "null"],
+      "description": "v2 extension — GitHub Issue number string (e.g. '42') or URL; null if not applicable. Optional for backward-compatibility."
+    },
+    "pr": {
+      "type": ["string", "null"],
+      "description": "v2 extension — GitHub PR number string or URL; null when no PR is open. Optional for backward-compatibility."
+    },
+    "branch": {
+      "type": "string",
+      "description": "v2 extension — Git branch name at the time of emission. Optional for backward-compatibility."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "v2 extension — UTC timestamp of emission in ISO-8601 format (YYYY-MM-DDTHH:MM:SSZ). Optional for backward-compatibility."
     }
   }
 }
