@@ -15,7 +15,7 @@
  *   • .specify/memory/constitution.md
  *
  * Tool surface (passed to the LLM as agentic tools):
- *   read_file, list_directory, write_file, run_command,
+ *   read_file, list_directory, write_file, replace_in_file, run_command,
  *   git_commit, open_pull_request, post_issue_comment, signal_outcome
  *
  * Required env:
@@ -52,16 +52,22 @@ const RUNTIME_NAME   = process.env.RUNTIME_NAME || '';
 const MAX_ITERATIONS = Number(process.env.MAX_ITERATIONS || 20);
 
 if (!ISSUE_NUMBER || !OWNER || !REPO || !process.env.GITHUB_TOKEN) {
-  console.error('FATAL: required env vars missing (GITHUB_TOKEN, GITHUB_REPOSITORY, ISSUE_NUMBER).');
-  process.exit(2);
+  if (require.main === module) {
+    console.error('FATAL: required env vars missing (GITHUB_TOKEN, GITHUB_REPOSITORY, ISSUE_NUMBER).');
+    process.exit(2);
+  }
 }
 if (!['copilot', 'claude'].includes(RUNTIME_KIND)) {
-  console.error(`FATAL: unsupported RUNTIME_KIND "${RUNTIME_KIND}" (allowed: copilot, claude).`);
-  process.exit(2);
+  if (require.main === module) {
+    console.error(`FATAL: unsupported RUNTIME_KIND "${RUNTIME_KIND}" (allowed: copilot, claude).`);
+    process.exit(2);
+  }
 }
 if (RUNTIME_KIND === 'claude' && !process.env.ANTHROPIC_API_KEY) {
-  console.error('FATAL: RUNTIME_KIND=claude requires ANTHROPIC_API_KEY.');
-  process.exit(2);
+  if (require.main === module) {
+    console.error('FATAL: RUNTIME_KIND=claude requires ANTHROPIC_API_KEY.');
+    process.exit(2);
+  }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -129,8 +135,33 @@ const toolDefs = [
   },
   {
     name: 'write_file',
-    description: 'Write or overwrite a file in the repository (sandboxed to repo root).',
-    schema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] },
+    description: 'Write or create a file in the repository (sandboxed to repo root). ' +
+      'For EDITS to existing files use replace_in_file instead. ' +
+      'Pass force=true only when intentionally replacing the entire file.',
+    schema: {
+      type: 'object',
+      properties: {
+        path:    { type: 'string' },
+        content: { type: 'string' },
+        force:   { type: 'boolean', description: 'Bypass size-shrink guard for intentional full rewrites.' },
+      },
+      required: ['path', 'content'],
+    },
+  },
+  {
+    name: 'replace_in_file',
+    description: 'Make a targeted edit to an existing file by replacing exactly one occurrence of old_str with new_str. ' +
+      'Include 3–5 lines of context around the change so old_str uniquely matches. ' +
+      'Fails if old_str is not found or matches more than once.',
+    schema: {
+      type: 'object',
+      properties: {
+        path:    { type: 'string' },
+        old_str: { type: 'string', description: 'Exact text to replace — must match exactly once.' },
+        new_str: { type: 'string', description: 'Replacement text.' },
+      },
+      required: ['path', 'old_str', 'new_str'],
+    },
   },
   {
     name: 'run_command',
@@ -197,9 +228,38 @@ async function executeTool(name, input) {
       if (!resolved.startsWith(repoRoot + path.sep) && resolved !== repoRoot) {
         return `ERROR: path outside repo root rejected: ${input.path}`;
       }
+      // Size-shrink guard: refuse if new content is < 50% of existing file
+      if (!input.force && fs.existsSync(resolved)) {
+        const existingSize = fs.statSync(resolved).size;
+        const newSize = Buffer.byteLength(input.content, 'utf8');
+        if (existingSize > 0 && newSize < existingSize * 0.5) {
+          return `ERROR: write_file would shrink ${input.path} from ${existingSize} bytes to ${newSize} bytes (>50% reduction); use replace_in_file for edits or pass force=true to truncate intentionally.`;
+        }
+      }
       fs.mkdirSync(path.dirname(resolved), { recursive: true });
       fs.writeFileSync(resolved, input.content, 'utf8');
       return `Wrote ${input.path} (${input.content.length} bytes)`;
+    }
+    case 'replace_in_file': {
+      const resolved = path.resolve(input.path);
+      if (!resolved.startsWith(repoRoot + path.sep) && resolved !== repoRoot) {
+        return `ERROR: path outside repo root rejected: ${input.path}`;
+      }
+      if (!fs.existsSync(resolved)) {
+        return `ERROR: replace_in_file: file not found: ${input.path}`;
+      }
+      const original = fs.readFileSync(resolved, 'utf8');
+      const occurrences = original.split(input.old_str).length - 1;
+      if (occurrences === 0) {
+        return `ERROR: old_str not found in ${input.path}`;
+      }
+      if (occurrences > 1) {
+        return `ERROR: ambiguous match — old_str appears ${occurrences} times in ${input.path}; include more context`;
+      }
+      // Use function form to prevent $& / $1 / $' replacement-pattern interpretation
+      const updated = original.replace(input.old_str, () => input.new_str);
+      fs.writeFileSync(resolved, updated, 'utf8');
+      return `Replaced 1 occurrence in ${input.path}`;
     }
     case 'run_command': {
       const blocked = /(rm\s+-rf\s+\/|drop\s+table|format\s+c:|mkfs|:\s*\(\)\s*\{)/i;
@@ -344,6 +404,14 @@ function buildSystemPrompt() {
     `acceptance criteria?" For trivial fixes (e.g. updating a constant, fixing a`,
     `typo, bumping a version string) the answer is usually a single line edit.`,
     ``,
+    `## File editing rules`,
+    `- **ALWAYS use \`replace_in_file\` to edit existing files.** Supply 3–5 lines of`,
+    `  surrounding context in \`old_str\` so it matches exactly once.`,
+    `- **NEVER use \`write_file\` to make a small change to a large file.** You will`,
+    `  hallucinate the content you did not change, causing destructive truncation.`,
+    `- Reserve \`write_file\` for creating brand-new files only (no prior content).`,
+    `  For legitimate full rewrites, pass \`force: true\` to override the safety guard.`,
+    ``,
     `## Tests`,
     `Follow TDD when the change requires new logic. **Skip writing a new test** when:`,
     `  - the fix is a single-line constant/version/literal update, AND`,
@@ -483,32 +551,37 @@ async function runClaude({ system, user }) {
 }
 
 // ─── Entry point ────────────────────────────────────────────────────────────
-(async () => {
-  // Configure git identity for any commits the runner makes.
-  exec('git config user.name  "github-actions[bot]"');
-  exec('git config user.email "github-actions[bot]@users.noreply.github.com"');
+if (require.main === module) {
+  (async () => {
+    // Configure git identity for any commits the runner makes.
+    exec('git config user.name  "github-actions[bot]"');
+    exec('git config user.email "github-actions[bot]@users.noreply.github.com"');
 
-  const system = buildSystemPrompt();
-  const user   = await buildUserMessage();
+    const system = buildSystemPrompt();
+    const user   = await buildUserMessage();
 
-  console.log(`[runner] runtime=${RUNTIME_KIND} runtime_name=${RUNTIME_NAME} issue=#${ISSUE_NUMBER} step=${STEP}`);
+    console.log(`[runner] runtime=${RUNTIME_KIND} runtime_name=${RUNTIME_NAME} issue=#${ISSUE_NUMBER} step=${STEP}`);
 
-  if (RUNTIME_KIND === 'copilot') await runCopilot({ system, user });
-  else                            await runClaude({  system, user });
+    if (RUNTIME_KIND === 'copilot') await runCopilot({ system, user });
+    else                            await runClaude({  system, user });
 
-  // If the agent never signalled an outcome, post a fail-safe one so the
-  // orchestrator doesn't hang.
-  if (finalOutcome === null) {
-    console.warn('[runner] agent did not signal an outcome; defaulting to needs-human');
-    await executeTool('signal_outcome', {
-      outcome: 'needs-human',
-      summary: 'Agent finished without signalling an outcome (max iterations reached or LLM ended turn early).',
-    });
-  }
+    // If the agent never signalled an outcome, post a fail-safe one so the
+    // orchestrator doesn't hang.
+    if (finalOutcome === null) {
+      console.warn('[runner] agent did not signal an outcome; defaulting to needs-human');
+      await executeTool('signal_outcome', {
+        outcome: 'needs-human',
+        summary: 'Agent finished without signalling an outcome (max iterations reached or LLM ended turn early).',
+      });
+    }
 
-  console.log(`[runner] final outcome: ${finalOutcome}`);
-  process.exitCode = finalOutcome === 'success' ? 0 : 1;
-})().catch(err => {
-  console.error('[runner] FATAL:', err && err.stack || err);
-  process.exit(1);
-});
+    console.log(`[runner] final outcome: ${finalOutcome}`);
+    process.exitCode = finalOutcome === 'success' ? 0 : 1;
+  })().catch(err => {
+    console.error('[runner] FATAL:', err && err.stack || err);
+    process.exit(1);
+  });
+} else {
+  // Exported for unit testing
+  module.exports = { executeTool, toolDefs };
+}
