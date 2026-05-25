@@ -46,7 +46,10 @@ const os         = require('os');
 const args = process.argv.slice(2);
 const PORT = parseInt(args[args.indexOf('--port') + 1] || process.env.QUORUMKIT_PORT || '3131', 10);
 const DASHBOARD_DIR = __dirname;
-const CONFIG_FILE   = path.join(DASHBOARD_DIR, '.apm-project.json');
+// QUORUMKIT_CONFIG_FILE lets tests point to a temp path so test runs never
+// contaminate the developer's real .apm-project.json config.
+const CONFIG_FILE   = process.env.QUORUMKIT_CONFIG_FILE
+  || path.join(DASHBOARD_DIR, '.apm-project.json');
 
 // ─── Shell PATH enrichment ────────────────────────────────────────────────────
 // When Node is launched by a script (not a login shell), $PATH is minimal.
@@ -348,11 +351,13 @@ function buildAgentCmd(agentId, cfg, agentName) {
   }
   const skillFile = resolveFile(
     path.join('.github', 'instructions', `${skill}-agent.instructions.md`),
-    path.join(DASHBOARD_DIR, '..', 'src', '.github', 'instructions', `${skill}-agent.instructions.md`)
+    // Fallback: package's own src/ copies (engine/dashboard → ../../src)
+    path.join(DASHBOARD_DIR, '..', '..', 'src', '.github', 'instructions', `${skill}-agent.instructions.md`)
   );
   const agentFile = resolveFile(
     path.join('.github', 'agents', agentFileName),
-    path.join(DASHBOARD_DIR, '..', 'src', 'agents', agentFileName)
+    // Fallback: package's own src/ copies (engine/dashboard → ../../src)
+    path.join(DASHBOARD_DIR, '..', '..', 'src', 'agents', agentFileName)
   );
 
   const qWork   = workDir.replace(/"/g, '\\"');
