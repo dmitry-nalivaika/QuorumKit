@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.1.0] — 2026-05-25 (Issue #175)
+
 ### Added — Issue #175: Comprehensive Agent Consistency
 
 - **Agent Footprint protocol** (FR-001–009): all 15 agent definition files in `src/agents/` now include an `## Agent Footprint` section specifying the exact GitHub comments each agent posts at start and completion.
