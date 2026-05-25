@@ -15,10 +15,11 @@
 const fs   = require('fs');
 const path = require('path');
 
-const ROOT        = path.resolve(__dirname, '..');
-const AGENTS_DIR  = path.join(ROOT, '..', '.github', 'agents');
-const APM_YML     = path.join(ROOT, '..', 'quorumkit.yml');
-const DASHBOARD   = path.join(__dirname, 'index.html');
+const ROOT         = path.resolve(__dirname, '..');
+const AGENTS_DIR   = path.join(ROOT, '..', '.github', 'agents');
+const APM_YML      = path.join(ROOT, '..', 'quorumkit.yml');
+const PACKAGE_JSON = path.join(ROOT, 'package.json');
+const DASHBOARD    = path.join(__dirname, 'index.html');
 
 // ─── Canonical short IDs (used as desk/DOM element IDs and bootQuips keys) ──
 // Must match the keys in AGENT_META, bootQuips, and the original AGENTS array.
@@ -230,8 +231,10 @@ function main() {
   console.log('📊 QuorumKit Dashboard Generator');
   console.log(`   Scanning ${AGENTS_DIR}`);
 
-  const { version, workflowCount, universal, domain } = parseApmYml();
-  console.log(`   QuorumKit version: ${version} | workflows: ${workflowCount}`);
+  const { workflowCount, universal, domain } = parseApmYml();
+  // FR-001: read canonical version from engine/package.json (single source of truth)
+  const version = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')).version;
+  console.log(`   QuorumKit version: ${version} (from package.json) | workflows: ${workflowCount}`);
 
   const agents = [];
 
@@ -289,10 +292,18 @@ function main() {
   }
 
   const newBlock = `${SENTINEL_START}\nconst QUORUMKIT_VERSION = "${version}";\n\nconst AGENTS = ${agentsJson};\n\n`;
-  html = html.slice(0, startIdx) + newBlock + html.slice(endIdx);
+  const newHtml = html.slice(0, startIdx) + newBlock + html.slice(endIdx);
 
-  // Write back
-  fs.writeFileSync(DASHBOARD, html, 'utf8');
+  // FR-003: idempotency — skip write if content is unchanged
+  const original = fs.readFileSync(DASHBOARD, 'utf8');
+  if (newHtml === original) {
+    console.log(`\n   ✅ dashboard/index.html already up to date (no changes written)`);
+    console.log(`   QUORUMKIT_VERSION = ${version}`);
+    console.log(`   AGENTS count = ${agents.length}`);
+    return;
+  }
+
+  fs.writeFileSync(DASHBOARD, newHtml, 'utf8');
   console.log(`\n   ✅ dashboard/index.html updated`);
   console.log(`   QUORUMKIT_VERSION = ${version}`);
   console.log(`   AGENTS count = ${agents.length}`);
