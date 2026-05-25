@@ -1,3 +1,6 @@
+# apm-allow-divergence: This workflow and src/.github/workflows/copilot-agent-dev.yml
+# are kept in sync. Both use the iterative dev-agent-runner.cjs loop (Copilot runtime).
+# Do NOT replace either file with a one-shot inline script.
 name: Developer Agent (Copilot)
 
 on:
@@ -6,6 +9,18 @@ on:
       issue_number:
         description: 'Issue or PR number triggering this agent'
         required: true
+      run_id:
+        description: 'Orchestrator run ID (traceability)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'dev'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
 
 permissions:
   contents: write
@@ -19,76 +34,28 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
-      - name: Run Developer Agent via GitHub Models
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install runner dependencies
+        run: |
+          if [ -f .github/scripts/package.json ]; then
+            npm install --prefix .github/scripts
+          fi
+
+      - name: Run Developer Agent (iterative runner)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
-
-            const agentInstructions = readSafe('.github/agents/developer-agent.md') || readSafe('.apm/agents/developer-agent.md');
-            const constitution      = readSafe('.specify/memory/constitution.md');
-
-            const issueNumber = Number('${{ github.event.inputs.issue_number }}');
-
-            let issueTitle = '';
-            let issueBody  = '';
-            try {
-              const issue = await github.rest.issues.get({
-                owner: context.repo.owner,
-                repo:  context.repo.repo,
-                issue_number: issueNumber,
-              });
-              issueTitle = issue.data.title ?? '';
-              issueBody  = issue.data.body  ?? '';
-            } catch (e) {
-              core.warning(`Could not fetch issue #${issueNumber}: ${e.message}`);
-            }
-
-            const systemContent = [
-              constitution      && `## Project Constitution\n${constitution}`,
-              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
-            ].filter(Boolean).join('\n\n---\n\n')
-              || 'You are a helpful GitHub developer agent.';
-
-            const userContent =
-              `You are acting as the Developer Agent for issue #${issueNumber}.\n` +
-              `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
-              `Review the spec, plan the implementation, and post a summary of the next steps as a comment.`;
-
-            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [
-                  { role: 'system', content: systemContent },
-                  { role: 'user',   content: userContent },
-                ],
-                max_tokens: 2048,
-              }),
-            });
-
-            if (!res.ok) {
-              const txt = await res.text();
-              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
-              return;
-            }
-
-            const data  = await res.json();
-            const reply = data.choices?.[0]?.message?.content?.trim()
-              ?? '⚠️ Developer agent produced no output.';
-
-            await github.rest.issues.createComment({
-              owner:        context.repo.owner,
-              repo:         context.repo.repo,
-              issue_number: issueNumber,
-              body:         reply,
-            });
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUNTIME_KIND: copilot
+          RUNTIME_NAME: copilot-default
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          RUN_ID: ${{ github.event.inputs.run_id }}
+          STEP: ${{ github.event.inputs.step }}
+          ITERATION: ${{ github.event.inputs.iteration }}
+        run: node .github/scripts/dev-agent-runner.cjs
