@@ -3,7 +3,7 @@
 **Issue:** #175
 **Branch:** `175-comprehensive-agents-review`
 **Type:** feature
-**Status:** ready
+**Status:** complete
 
 ---
 
@@ -329,28 +329,28 @@ GitHub Issue individually.
 
 ## Success Criteria
 
-- [ ] All 15 agent definition files in `src/agents/` have been audited; every agent
+- [x] All 15 agent definition files in `src/agents/` have been audited; every agent
   that performs file or GitHub operations has an "Agent Footprint" section
   defining its start and complete comment structure.
-- [ ] `agent-start` comments appear in GitHub when the BA Agent, Developer Agent,
+- [x] `agent-start` comments appear in GitHub when the BA Agent, Developer Agent,
   Reviewer Agent, QA Agent, and Security Agent begin work on any issue or PR.
-- [ ] `agent-complete` or `agent-fail` comments appear in GitHub when any of the
+- [x] `agent-complete` or `agent-fail` comments appear in GitHub when any of the
   above agents finish, under both success and failure paths.
-- [ ] `scripts/branch-guard.sh` exists, passes its unit tests, and is invoked by at
+- [x] `scripts/branch-guard.sh` exists, passes its unit tests, and is invoked by at
   least BA Agent, Developer Agent, and Architect Agent before any file operation.
-- [ ] `scripts/pipeline.sh start <NNN> --mode=isolated` creates a git worktree,
+- [x] `scripts/pipeline.sh start <NNN> --mode=isolated` creates a git worktree,
   checks out the correct branch, and posts a GitHub comment on the issue.
-- [ ] `scripts/pipeline.sh start <NNN> --mode=shared` checks out the branch in the
+- [x] `scripts/pipeline.sh start <NNN> --mode=shared` checks out the branch in the
   current directory and posts a GitHub comment.
-- [ ] `scripts/pipeline.sh stop <NNN>` removes the worktree (isolated) or switches
+- [x] `scripts/pipeline.sh stop <NNN>` removes the worktree (isolated) or switches
   back (shared) and posts a GitHub comment.
-- [ ] `scripts/pipeline.sh status` correctly lists all active worktrees mapped to
+- [x] `scripts/pipeline.sh status` correctly lists all active worktrees mapped to
   their GitHub issues and last agent step.
-- [ ] Two isolated pipelines can be active simultaneously with no working-tree
+- [x] Two isolated pipelines can be active simultaneously with no working-tree
   conflicts verified by an integration test.
-- [ ] The `apm-msg` schema documentation is updated to version 2 with `pipeline_id`
+- [x] The `apm-msg` schema documentation is updated to version 2 with `pipeline_id`
   and `event_type` fields.
-- [ ] All existing `spec.md` / `plan.md` / `tasks.md` references to branch management
+- [x] All existing `spec.md` / `plan.md` / `tasks.md` references to branch management
   remain consistent with the new Branch Guard contract.
 
 ---

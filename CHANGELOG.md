@@ -9,7 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no entries)
+### Added — Issue #175: Comprehensive Agent Consistency
+
+- **Agent Footprint protocol** (FR-001–009): all 15 agent definition files in `src/agents/` now include an `## Agent Footprint` section specifying the exact GitHub comments each agent posts at start and completion.
+- **`apm-msg` v2 schema** (FR-008, FR-024): `engine/orchestrator/schemas/apm-msg.schema.json` extended with optional fields `event_type`, `pipeline_id`, `issue`, `pr`, `branch`, `timestamp`; `additionalProperties` relaxed to `true`. `docs/AGENT_PROTOCOL.md` Section 2 updated with v2 field reference table.
+- **`scripts/branch-guard.sh`** (FR-010–014): reusable idempotent shell script that validates and creates the correct feature branch before any agent file operation. Includes full unit test suite at `engine/tests/branch-guard.test.sh`.
+- **`scripts/pipeline.sh`** (FR-015–022): local pipeline lifecycle manager with subcommands `start`, `join`, `stop`, and `status`. Supports `--mode=isolated` (git worktrees) and `--mode=shared`. Respects `QUORUMKIT_PIPELINES_DIR`. Includes full unit test suite at `engine/tests/pipeline.test.sh`.
+- **Orchestrator `pipeline_id` / `worktree_path` context** (FR-023): `engine/orchestrator/index.js` now forwards optional `pipeline_id` and `worktree_path` fields from the event context through to agent invocations. Tested in `engine/tests/index-pipeline.test.js`.
+- **Dashboard — Local Pipeline UI** (FR-176): `engine/dashboard/` extended with live worktree list (`GET /api/local-pipelines`), pipeline lifecycle routes (`POST /start`, `POST /stop`, `GET /:n/join`), slug auto-derivation from GitHub Issue title, WebSocket `pipelineListChanged` push, and a full Pipelines tab in the SPA with Start/Stop/Join modals.
+- **Dashboard — Timeline UI** (FR-177): `GET /api/timeline/:n` endpoint parses `apm-msg` and `agent-footprint` comments into a structured event stream. SPA Timeline tab renders per-agent events with type/timestamp/summary, click-to-expand body, "↗ View on GitHub" link, 30 s auto-refresh (append-only, visibility-aware), agent filter, and status badge.
+- **ADR-176** (`docs/architecture/adr-176-dashboard-pipeline-lifecycle-write-path.md`): architecture decision record gating all dashboard write-path endpoints.
 
 ---
 
