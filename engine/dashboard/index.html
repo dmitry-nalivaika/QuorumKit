@@ -451,6 +451,31 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .modal-ft .cancel-btn:hover { border-color: var(--text3); color: var(--text); }
 #cfg-status { font-size: 12px; color: var(--green); font-family: var(--mono); }
 
+/* ─── Invoke confirm modal ────────────────────────────────────────────────── */
+#invoke-backdrop {
+  position: fixed; inset: 0; z-index: 600;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+#invoke-backdrop.vis { opacity: 1; pointer-events: auto; }
+#invoke-modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); width: 380px; max-width: 95vw;
+  box-shadow: 0 24px 80px rgba(0,0,0,.7);
+  display: flex; flex-direction: column;
+  transform: translateY(12px); transition: transform 0.2s;
+}
+#invoke-backdrop.vis #invoke-modal { transform: translateY(0); }
+#invoke-modal-close {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text3);
+  width: 28px; height: 28px; border-radius: 6px; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+#invoke-modal-close:hover { border-color: var(--red); color: var(--red); }
+#invoke-confirm-btn { background: var(--blue) !important; }
+
 /* ─── Real invoke controls on detail panel ────────────────────────────────── */
 .d-action-row { display: flex; gap: 8px; margin-top: 20px; }
 .d-invoke      { flex: 1; padding: 11px; border: none; border-radius: var(--r-sm); font-size: 13px; font-weight: 700; cursor: pointer; background: var(--dc, var(--blue)); color: #000; transition: opacity 0.15s; }
@@ -658,6 +683,31 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
       <div class="asec half">
         <div class="ahd">🏭 About</div>
         <div style="font-size:12px;color:var(--text3);line-height:1.7">A fully autonomous SDLC loop — 15 AI agents, lights-out execution from Triage to Monitor. Industrial/OT is a domain extension pack. Works with Claude Code + GitHub Copilot.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Invoke Confirm Modal ────────────────────────────────────────────── -->
+<div id="invoke-backdrop">
+  <div id="invoke-modal">
+    <div class="modal-hd">
+      <h2 id="invoke-modal-title">▶ Invoke Agent</h2>
+      <button id="invoke-modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="mfield">
+        <label>GITHUB ISSUE NUMBER <span style="font-weight:400;color:var(--textMute)">(optional)</span></label>
+        <input id="invoke-issue-input" type="text" placeholder="e.g. 42" autocomplete="off"
+               pattern="[0-9]*" inputmode="numeric" />
+        <div class="hint">The agent will receive this as pipeline context (<code style="font-family:var(--mono);color:var(--cyan)">pipeline_id</code>). Leave blank to invoke without feature context.</div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <span id="invoke-modal-status"></span>
+      <div style="display:flex;gap:8px">
+        <button class="cancel-btn" id="invoke-modal-cancel">Cancel</button>
+        <button class="save-btn" id="invoke-confirm-btn">▶ Invoke</button>
       </div>
     </div>
   </div>
@@ -1362,14 +1412,30 @@ function switchTab(id) {
 }
 
 // ─── Invocation ───────────────────────────────────────────────────────────────
+let _pendingInvoke = null;
+
+function showInvokeModal(id, agent) {
+  _pendingInvoke = { id, agent };
+  document.getElementById('invoke-modal-title').textContent = `▶ Invoke ${agent.name}`;
+  document.getElementById('invoke-issue-input').value = '';
+  document.getElementById('invoke-modal-status').textContent = '';
+  document.getElementById('invoke-backdrop').classList.add('vis');
+  setTimeout(() => document.getElementById('invoke-issue-input').focus(), 80);
+}
+
+function hideInvokeModal() {
+  document.getElementById('invoke-backdrop').classList.remove('vis');
+  _pendingInvoke = null;
+}
+
 function invokeAgent(id) {
   const a = AGENTS.find(x => x.id===id);
   if (!a) return;
   switchTab('console');
 
-  // If server is connected and project path is set → use real invocation
+  // If server is connected → show invoke modal to capture optional issue number
   if (isServerMode()) {
-    invokeAgentReal(id, a.name);
+    showInvokeModal(id, a);
     return;
   }
 
@@ -1791,11 +1857,13 @@ function wsSend(type, payload) {
 }
 
 // ─── Real invoke via server ───────────────────────────────────────────────────
-async function invokeAgentReal(id, agentName) {
+async function invokeAgentReal(id, agentName, pipelineId) {
+  const reqBody = { agentId: id, agentName, mode: 'background' };
+  if (pipelineId) reqBody.pipeline_id = String(pipelineId);
   const res = await fetch(`${SERVER}/api/invoke`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentId: id, agentName, mode: 'background' })
+    body: JSON.stringify(reqBody)
   }).catch(() => null);
   if (!res) {
     clog('error', 'Cannot reach orchestrator server — is it running? (bash dashboard/start.sh)');
@@ -2093,6 +2161,26 @@ function init() {
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
   document.getElementById('modal-save').addEventListener('click', saveSettings);
   document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target===document.getElementById('modal-backdrop')) closeModal(); });
+
+  // Invoke confirm modal
+  document.getElementById('invoke-modal-close').addEventListener('click', hideInvokeModal);
+  document.getElementById('invoke-modal-cancel').addEventListener('click', hideInvokeModal);
+  document.getElementById('invoke-backdrop').addEventListener('click', e => { if (e.target===document.getElementById('invoke-backdrop')) hideInvokeModal(); });
+  document.getElementById('invoke-issue-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('invoke-confirm-btn').click();
+    if (e.key === 'Escape') hideInvokeModal();
+  });
+  document.getElementById('invoke-confirm-btn').addEventListener('click', () => {
+    if (!_pendingInvoke) return;
+    const raw = document.getElementById('invoke-issue-input').value.trim();
+    if (raw && !/^\d+$/.test(raw)) {
+      document.getElementById('invoke-modal-status').textContent = '⚠ Must be a number';
+      return;
+    }
+    const { id, agent } = _pendingInvoke;
+    hideInvokeModal();
+    invokeAgentReal(id, agent.name, raw || null);
+  });
   document.getElementById('cfg-tool').addEventListener('change', toggleCustomRow);
 
   // Search + filter
