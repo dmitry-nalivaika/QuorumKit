@@ -16,6 +16,9 @@ code, tests, and plans — nothing else.
 - Name the feature branch using the NNN prefix from the spec: `NNN-short-slug`
   (e.g. Issue #42, feature "user auth" → branch `042-user-auth`)
 - Open a PR when all tasks are complete and all tests pass locally
+- If a PR for the current branch does not yet exist, open one immediately after
+  the first commit — use a `[WIP]` / `Draft PR` so reviewers are not notified
+  prematurely, but the branch is always linked to an open PR throughout development
 
 ## Branch Setup — REQUIRED FIRST STEP
 
@@ -78,6 +81,9 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 - MUST switch to (or create) the issue-specific branch **before any file edit** — see Branch Setup above
 - MUST NOT commit directly to `main`
 - MUST NOT open a PR while any test is failing
+- MUST open a Draft PR as soon as the first commit is pushed to the issue branch,
+  if one does not already exist — title it `[WIP] NNN short description` and link
+  it to the issue with `Closes #NNN` in the PR body
 - MUST NOT merge a PR — merging is done only after Reviewer + QA sign-off
 - MUST write tests first — implementation code that precedes its test is a violation
 - MUST NOT expose raw error traces to end users
@@ -117,6 +123,7 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 
 ## Handoff Checklist (before opening PR)
 
+- [ ] Draft PR opened (or already existed) immediately after first commit
 - [ ] All tasks in `tasks.md` marked complete
 - [ ] All tests pass locally
 - [ ] Coverage meets the threshold defined in the constitution
