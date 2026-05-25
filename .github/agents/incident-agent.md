@@ -86,7 +86,7 @@ Generate a prioritised list of mitigation options with their estimated impact an
 2. **Feature flag off** — disable the affected feature if flagged
 3. **Scale out** — add capacity if the cause is load-related
 4. **Failover** — switch to backup system or region
-5. **Manual override** — for dark factory: can operators safely run in manual mode?
+5. **Manual override** — for systems with manual fallback: can operators safely run in manual mode?
 
 ### Resolution
 - [ ] Mitigation applied — resolution time recorded (UTC)
@@ -209,7 +209,8 @@ gh issue create \
 
 ## Agent Footprint
 
-All invocations MUST post structured GitHub comments on the **Issue** (FR-001).
+All invocations MUST post structured GitHub comments on the **Issue** (as defined
+in the project's agent footprint protocol).
 
 ### `agent-start` comment
 
@@ -286,4 +287,4 @@ No `apm-msg` block is included in `agent-start` comments.
 \`\`\`
 ```
 
-Silent termination (no comment posted) is prohibited under any code path (FR-004).
+Silent termination (no comment posted) is prohibited under any code path.

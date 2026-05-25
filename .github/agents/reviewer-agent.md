@@ -107,14 +107,16 @@ SUGGESTION: [improvement idea] — [why it would help] — [not required for mer
 - MUST post BLOCKER comments on the PR so they can be picked up and fixed (even on AI-agent-authored PRs)
 - MUST raise a **BLOCKER** when a PR adds a new label, outcome, or transition trigger
   to any pipeline file under `.apm/pipelines/` without first declaring the identifier
-  in `docs/AGENT_PROTOCOL.md` (FR-024). The orchestrator's `regulation-lint` CI job
-  enforces this mechanically; bypass attempts (e.g. `--no-verify`, deleting the gate)
+  in the project's agent protocol documentation (the ADR governing pipeline identifier
+  registration). The project's CI gate (regulation-lint or equivalent) enforces this
+  mechanically; bypass attempts (e.g. `--no-verify`, deleting the gate)
   MUST be flagged as a Constitution §VI violation.
 - MUST raise a **BLOCKER** when an agent-dispatching workflow under `.github/workflows/`
-  is added or modified without a `timeout-minutes:` declaration (FR-028, ADR-007 §4).
+  is added or modified without a `timeout-minutes:` declaration (per the project ADR
+  governing CI timeout policy).
 - MUST raise a **BLOCKER** when a runtime entry is added to `.apm/runtimes.yml` whose
-  `kind` is outside the ADR-005 allowlist without a per-kind ADR landing in the same
-  PR (FR-007).
+  `kind` is outside the project's allowlisted runtime kinds without a per-kind ADR
+  landing in the same PR.
 
 ## Context Files to Read at Session Start
 
@@ -127,12 +129,12 @@ SUGGESTION: [improvement idea] — [why it would help] — [not required for mer
 
 ## Agent Footprint
 
-All invocations MUST post structured GitHub comments (FR-001, FR-005, FR-012).
-A Branch Guard invocation is required before any branch operation (FR-010 to FR-014).
+All invocations MUST post structured GitHub comments (as defined in the project's agent
+footprint protocol). A Branch Guard invocation is required before any branch operation.
 
 **Comment targets:**
-- Full PR review posted as a GitHub PR Review (approve/request-changes/comment) on the **PR** (FR-005).
-- Summary comment posted on the **linked Issue** (FR-005).
+- Full PR review posted as a GitHub PR Review (approve/request-changes/comment) on the **PR**.
+- Summary comment posted on the **linked Issue**.
 
 ### `agent-start` comment
 
@@ -214,4 +216,4 @@ Posted on both the **PR** (as a GitHub PR Review) and the **linked Issue** (as a
 \`\`\`
 ```
 
-Silent termination (no comment posted) is prohibited under any code path (FR-004).
+Silent termination (no comment posted) is prohibited under any code path.
