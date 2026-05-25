@@ -151,6 +151,30 @@ cmd_start() {
   branch_slug="$(resolve_branch_slug "$issue_number")"
   log "Resolved branch slug: ${branch_slug}"
 
+  # ── Bug B guard: refuse if slug resolves to a protected branch (main/master) ──
+  if [[ "$branch_slug" == "main" || "$branch_slug" == "master" ]]; then
+    err "Pipeline refused: resolved branch slug '${branch_slug}' is a protected branch. Refusing to create a pipeline against main/master."
+    exit 1
+  fi
+
+  # ── Bug A guard: refuse if a pipeline for this issue already exists ──────────
+  local padded_check
+  padded_check="$(printf '%03d' "$issue_number")"
+  # Check for an existing isolated worktree
+  local existing_worktree
+  existing_worktree="$(git worktree list 2>/dev/null | tail -n +2 | grep "\[${padded_check}-\|/${padded_check}-" | head -1 || true)"
+  if [[ -n "$existing_worktree" ]]; then
+    err "Pipeline already exists for issue #${issue_number} — use 'pipeline.sh join ${issue_number}' or 'pipeline.sh stop ${issue_number}' first."
+    exit 1
+  fi
+  # Check for an existing shared pipeline on this exact branch
+  local current_branch
+  current_branch="$(git branch --show-current 2>/dev/null || echo "")"
+  if [[ "$current_branch" == "$branch_slug" ]]; then
+    err "Pipeline already exists for issue #${issue_number} — use 'pipeline.sh join ${issue_number}' or 'pipeline.sh stop ${issue_number}' first."
+    exit 1
+  fi
+
   # Check for existing shared pipeline conflict (FR-022)
   if [[ "$mode" == "shared" ]]; then
     local existing_shared
@@ -181,6 +205,16 @@ cmd_start() {
   if [[ "$mode" == "isolated" ]]; then
     local wt_path
     wt_path="$(default_worktree_path "$branch_slug")"
+
+    # ── Bug B guard: worktree path must not equal the repo root ─────────────
+    local repo_root_real
+    repo_root_real="$(cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" && pwd)"
+    local wt_real
+    wt_real="$(realpath "$wt_path" 2>/dev/null || echo "$wt_path")"
+    if [[ "$wt_real" == "$repo_root_real" ]]; then
+      err "Pipeline refused: worktree path '${wt_path}' resolves to the repository root. Refusing to create a worktree at the repo root."
+      exit 1
+    fi
 
     # Ensure branch exists on origin (branch-guard may checkout the branch in main;
     # we go back to main afterward so git worktree add can proceed — FR-014)

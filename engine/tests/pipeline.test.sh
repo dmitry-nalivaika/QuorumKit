@@ -440,6 +440,87 @@ fi
   cleanup_test_env
 )
 
+# T-223-01: Bug A — duplicate isolated pipeline is rejected
+(
+  make_test_env
+  cd "$WORK_DIR"
+  export QUORUMKIT_TEST_BRANCH_GUARD="$STUB_DIR/branch-guard-stub.sh"
+
+  git checkout -b "042-test-feature" -q && git checkout main -q
+  git push origin "042-test-feature" -q
+
+  # Start the pipeline once (isolated)
+  bash "$PIPELINE_SCRIPT" start 42 --mode=isolated >/dev/null 2>&1 || true
+
+  # Try to start the same pipeline a second time
+  output=$(bash "$PIPELINE_SCRIPT" start 42 --mode=isolated 2>&1)
+  rc=$?
+
+  if [[ $rc -ne 0 ]] && echo "$output" | grep -qi "already exists\|join\|stop"; then
+    pass "Bug A: duplicate isolated pipeline start exits non-zero with clear message"
+  else
+    fail "Bug A: second start should fail with 'already exists' message. rc=$rc output=$output"
+  fi
+  cleanup_test_env
+)
+
+# T-223-02: Bug A — duplicate shared pipeline is rejected
+(
+  make_test_env
+  cd "$WORK_DIR"
+  export QUORUMKIT_TEST_BRANCH_GUARD="$STUB_DIR/branch-guard-stub.sh"
+
+  git checkout -b "042-test-feature" -q && git checkout main -q
+  git push origin "042-test-feature" -q
+
+  # Start the pipeline once (shared) — puts us on the feature branch
+  bash "$PIPELINE_SCRIPT" start 42 --mode=shared >/dev/null 2>&1 || true
+
+  # Try to start the same pipeline a second time (shared)
+  output=$(bash "$PIPELINE_SCRIPT" start 42 --mode=shared 2>&1)
+  rc=$?
+
+  if [[ $rc -ne 0 ]] && echo "$output" | grep -qi "already exists\|join\|stop"; then
+    pass "Bug A: duplicate shared pipeline start exits non-zero with clear message"
+  else
+    fail "Bug A: second shared start should fail with 'already exists' message. rc=$rc output=$output"
+  fi
+  cleanup_test_env
+)
+
+# T-223-03: Bug B — pipeline refused when slug resolves to main
+(
+  make_test_env
+  cd "$WORK_DIR"
+  export QUORUMKIT_TEST_BRANCH_GUARD="$STUB_DIR/branch-guard-stub.sh"
+
+  # Patch pipeline.sh to return 'main' from resolve_branch_slug for issue 0.
+  PATCHED="$STUB_DIR/pipeline-patched.sh"
+  # Insert early return of 'main' for issue 0 at the start of resolve_branch_slug
+  python3 - "$PIPELINE_SCRIPT" "$PATCHED" << 'PYEOF'
+import sys
+src = open(sys.argv[1]).read()
+# Insert at the top of resolve_branch_slug function body
+patched = src.replace(
+    'resolve_branch_slug() {\n  local nnn="$1"',
+    'resolve_branch_slug() {\n  local nnn="$1"\n  if [[ "$nnn" == "0" ]]; then echo "main"; return; fi',
+    1,
+)
+open(sys.argv[2], 'w').write(patched)
+PYEOF
+  chmod +x "$PATCHED"
+
+  output=$(bash "$PATCHED" start 0 2>&1)
+  rc=$?
+
+  if [[ $rc -ne 0 ]] && echo "$output" | grep -qi "protected\|refused\|main"; then
+    pass "Bug B: pipeline refused when branch slug resolves to 'main'"
+  else
+    fail "Bug B: expected refusal for main slug. rc=$rc output=$output"
+  fi
+  cleanup_test_env
+)
+
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
 PASS=$(grep -c "^PASS " "$RESULTS_FILE" 2>/dev/null) || true
