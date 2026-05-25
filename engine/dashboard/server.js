@@ -871,11 +871,14 @@ async function handleRequest(req, res) {
     const body = await readBody(req);
     const { agentId, agentName, mode = 'background' } = body;
     if (!agentId) { json(res, 400, { error: 'agentId required' }); return; }
+    // FR-001: extract pipeline_id; accept only digit strings to prevent path-traversal.
+    const pipelineId = (typeof body.pipeline_id === 'string' && /^\d+$/.test(body.pipeline_id))
+      ? body.pipeline_id : null;
 
     const cfg = loadConfig();
     let result;
     try {
-      result = await invokeAgent(agentId, agentName || agentId, cfg, mode);
+      result = await invokeAgent(agentId, agentName || agentId, cfg, mode, pipelineId);
     } catch (err) {
       if (err.code === 'UNKNOWN_AGENT_ID') { json(res, 400, { error: err.message }); return; }
       throw err;
@@ -888,6 +891,9 @@ async function handleRequest(req, res) {
     const body = await readBody(req);
     const { agentId, agentName } = body;
     if (!agentId) { json(res, 400, { error: 'agentId required' }); return; }
+    // FR-005: extract pipeline_id for worktree resolution
+    const termPipelineId = (typeof body.pipeline_id === 'string' && /^\d+$/.test(body.pipeline_id))
+      ? body.pipeline_id : null;
 
     const cfg = loadConfig();
     let cmd;
@@ -900,15 +906,18 @@ async function handleRequest(req, res) {
 
     // Copilot mode: write context file + open VS Code (no terminal needed)
     if (cmd && typeof cmd === 'object' && cmd.__copilot) {
-      const termPipelineId = (typeof body.pipeline_id === 'string' && /^\d+$/.test(body.pipeline_id))
-        ? body.pipeline_id : null;
+      // FR-004: resolve worktree path and override workDir in sentinel
+      const { worktreePath: copilotWorktree } = await resolveWorktreePath(termPipelineId, cfg, agentId);
+      const copilotCmd = { ...cmd, workDir: copilotWorktree };
       broadcast('log', { agentId, level: 'info', msg: `Opening VS Code for ${agentName}…` });
       broadcast('agentStatus', { agentId, status: 'running' });
-      await handleCopilotInvoke(agentId, agentName || agentId, cmd, termPipelineId);
+      await handleCopilotInvoke(agentId, agentName || agentId, copilotCmd, termPipelineId);
       json(res, 200, { ok: true, mode: 'copilot' }); return;
     }
 
-    const termCmd = buildTerminalCmd(cfg.terminalApp, cfg.localPath || os.homedir(), cmd, `QuorumKit — ${agentName}`);
+    // FR-005: resolve worktree path for non-Copilot terminal launch
+    const { worktreePath: termCwd } = await resolveWorktreePath(termPipelineId, cfg, agentId);
+    const termCmd = buildTerminalCmd(cfg.terminalApp, termCwd, cmd, `QuorumKit — ${agentName}`);
     exec(termCmd, { env: spawnEnv() }, (err) => {
       if (err) {
         broadcast('log', { agentId, level: 'error', msg: `Failed to open terminal: ${err.message}` });
@@ -1335,6 +1344,28 @@ async function handleCopilotInvoke(agentId, agentName, sentinel, pipelineId = nu
 }
 
 // ─── Agent invocation ─────────────────────────────────────────────────────────
+/**
+ * FR-002, FR-008: Resolve the worktree filesystem path for a given pipeline_id.
+ * Returns the worktree path when found, or cfg.localPath as fallback.
+ * Broadcasts a warning log when falling back.
+ *
+ * @returns {Promise<{worktreePath:string, found:boolean}>}
+ */
+async function resolveWorktreePath(pipelineId, cfg, agentId) {
+  if (!pipelineId) return { worktreePath: cfg.localPath, found: false };
+  try {
+    const pipelines = await listLocalPipelines(cfg.localPath).catch(() => []);
+    const pipeline  = pipelines.find(p => String(p.issueNumber) === String(pipelineId));
+    if (pipeline && pipeline.path) {
+      return { worktreePath: pipeline.path, found: true };
+    }
+  } catch { /* fall through */ }
+  // FR-008: fallback with warning — no silent failure
+  broadcast('log', { agentId, level: 'warn',
+    msg: `⚠️  No local worktree found for issue #${pipelineId} — falling back to project root` });
+  return { worktreePath: cfg.localPath, found: false };
+}
+
 async function invokeAgent(agentId, agentName, cfg, mode, pipelineId = null) {
   // If already running, return current status
   if (running.has(agentId)) {
@@ -1346,12 +1377,17 @@ async function invokeAgent(agentId, agentName, cfg, mode, pipelineId = null) {
     return { ok: false, error: 'No project path configured' };
   }
 
+  // FR-002: resolve the worktree path early so both Copilot and shell paths use it
+  const { worktreePath } = await resolveWorktreePath(pipelineId, cfg, agentId);
+
   const cmd = buildAgentCmd(agentId, cfg, agentName);
 
   // ── Copilot: no background process — open VS Code + write context file ──
   if (cmd && typeof cmd === 'object' && cmd.__copilot) {
+    // FR-004: override workDir in the sentinel so VS Code opens the worktree
+    const copilotCmd = { ...cmd, workDir: worktreePath };
     broadcast('agentStatus', { agentId, status: 'running' });
-    await handleCopilotInvoke(agentId, agentName, cmd, pipelineId);
+    await handleCopilotInvoke(agentId, agentName, copilotCmd, pipelineId);
     return { ok: true, agentId, mode: 'copilot' };
   }
 
@@ -1363,14 +1399,14 @@ async function invokeAgent(agentId, agentName, cfg, mode, pipelineId = null) {
   kanbanAdd('wip', { id: wipCardId, agentId, agent: agentName,
     title: `${agentName}: running${pipelineLabel}` });
 
-  // Build env — inject pipeline_id so Claude and shell agents can read it
+  // FR-003: inject pipeline_id so Claude and shell agents can read it
   const procEnv = pipelineId
     ? { ...spawnEnv(), QUORUMKIT_PIPELINE_ID: pipelineId }
     : spawnEnv();
 
-  // Spawn in the project directory with the enriched PATH
+  // FR-002: spawn in the resolved worktree directory (falls back to cfg.localPath)
   const proc = spawn('bash', ['-lc', cmd], {
-    cwd: cfg.localPath,
+    cwd: worktreePath,
     env: procEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -1384,6 +1420,11 @@ async function invokeAgent(agentId, agentName, cfg, mode, pipelineId = null) {
     log: [],
   };
   running.set(agentId, info);
+
+  // FR-009: populate global._agentProcesses so listLocalPipelines can show
+  // the running-agent indicator for the correct worktree row.
+  if (!global._agentProcesses) global._agentProcesses = new Map();
+  global._agentProcesses.set(agentId, { cwd: worktreePath });
 
   function onLine(data, level) {
     const lines = data.toString().split('\n').filter(Boolean);
@@ -1403,6 +1444,8 @@ async function invokeAgent(agentId, agentName, cfg, mode, pipelineId = null) {
     kanbanMove({ id: wipCardId }, status === 'done' ? 'done' : 'todo');
     broadcast('log', { agentId, level: status === 'done' ? 'success' : 'error',
       msg: status === 'done' ? `✅ ${agentName} finished (exit 0)` : `❌ ${agentName} exited with code ${code}` });
+    // FR-009: remove from process registry on exit
+    global._agentProcesses && global._agentProcesses.delete(agentId);
     // Remove from running map after a delay so the UI can read final status
     setTimeout(() => running.delete(agentId), 10_000);
   });

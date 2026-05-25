@@ -1,4 +1,7 @@
-const vscode = require('vscode');
+// vscode is available when running inside the VS Code extension host.
+// Graceful fallback lets the module load in unit tests without crashing.
+let vscode;
+try { vscode = require('vscode'); } catch { /* running outside VS Code host — tests inject API */ }
 const fs = require('fs');
 const path = require('path');
 
@@ -31,20 +34,36 @@ function readAgentMarker(rootPath) {
   } catch { return null; }
 }
 
-async function submitPrompt(prompt) {
+/**
+ * Core submit logic — accepts a `api` object that mirrors the vscode API.
+ * Pass `null` (or omit) to use the real VS Code extension host globals.
+ * Accepting an injected API makes the function unit-testable without the
+ * VS Code runtime.
+ *
+ * `opts.chatReadyDelay` — ms to wait after Copilot Chat is detected ready
+ *   (default 2000; set to 0 in tests to skip the production warm-up delay).
+ * `opts.agentModeMaxMs` — max ms to poll for Agent mode readiness (default 5000).
+ *
+ * FR-006: MUST NOT call workbench.action.chat.open as a fallback when no
+ *         agent-mode command succeeds — that resets the session to Ask mode.
+ * FR-007: MUST poll for Agent mode readiness instead of using a fixed delay.
+ */
+async function _submitPromptCore(prompt, api, { chatReadyDelay = 2000, agentModeMaxMs = 5000 } = {}) {
   // Strategy:
   //   1. Wait for Copilot Chat to register its commands AND the LM to wake up.
   //   2. Log every chat-related command available (helps diagnose mode IDs).
   //   3. Open the chat in Agent mode WITHOUT a query.
   //   4. Try every known "switch to agent mode" command — first that wins, wins.
-  //   5. Wait for the mode to actually apply.
+  //   5. FR-007: Poll for Agent mode readiness — do NOT use a fixed delay.
   //   6. Submit the query via a SEPARATE call (not bundled with chat.open),
   //      which avoids the race where the prompt is sent before the mode
   //      switch lands.
 
+  const vsc = api || vscode;
+
   async function tryCmd(id, ...args) {
     try {
-      await vscode.commands.executeCommand(id, ...args);
+      await vsc.commands.executeCommand(id, ...args);
       console.log(`[QuorumKit] cmd ok: ${id}`);
       return true;
     } catch (e) {
@@ -57,12 +76,12 @@ async function submitPrompt(prompt) {
   // more for the language model to come online.
   async function waitForChatReady() {
     for (let i = 0; i < 40; i++) {
-      const all = await vscode.commands.getCommands(true);
+      const all = await vsc.commands.getCommands(true);
       if (all.includes('workbench.action.chat.open')) {
         // Also wait for any github.copilot.* command (means Copilot Chat ext
         // has finished activating, not just the built-in chat shell).
         if (all.some(c => c.startsWith('github.copilot.'))) {
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, chatReadyDelay));
           return true;
         }
       }
@@ -71,11 +90,28 @@ async function submitPrompt(prompt) {
     return false;
   }
 
+  // FR-007: Poll until the Agent-mode chat input is focusable — up to maxMs.
+  // Using a command-availability signal is more reliable than a fixed delay.
+  async function waitForAgentModeReady(maxMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      try {
+        await vsc.commands.executeCommand('workbench.action.chat.focusInput');
+        console.log('[QuorumKit] agent mode ready (focusInput succeeded)');
+        return true;
+      } catch {
+        await new Promise(r => setTimeout(r, 150));
+      }
+    }
+    console.log('[QuorumKit] agent mode ready: timed out — proceeding anyway');
+    return false;
+  }
+
   const ready = await waitForChatReady();
   console.log(`[QuorumKit] chat ready: ${ready}`);
 
   // Diagnostic: dump all chat / copilot commands so we can see what's there.
-  const all = await vscode.commands.getCommands(true);
+  const all = await vsc.commands.getCommands(true);
   const interesting = all.filter(c =>
     /chat|copilot|agent/i.test(c) && !c.startsWith('_')
   ).sort();
@@ -103,21 +139,34 @@ async function submitPrompt(prompt) {
   }
   console.log(`[QuorumKit] agent mode switched: ${modeSwitched}`);
 
-  // If no Agent mode command exists at all, fall back to chat.open with mode.
+  // FR-006: If no Agent-mode command is available, fall back to clipboard +
+  // notification ONLY. We MUST NOT call workbench.action.chat.open here —
+  // that command resets the Copilot Chat session to Ask mode regardless of
+  // any mode argument.
   if (!modeSwitched) {
-    await tryCmd('workbench.action.chat.open', { mode: 'agent' });
+    console.log('[QuorumKit] no agent-mode command available — clipboard fallback');
+    try {
+      await vsc.env.clipboard.writeText(prompt);
+      vsc.window.showInformationMessage(
+        'QuorumKit: open Copilot Chat in Agent mode manually, then paste (⌘V) to submit your prompt.'
+      );
+    } catch (e) {
+      vsc.window.showErrorMessage(`QuorumKit Copilot Bridge: ${e.message || e}`);
+    }
+    return true;
   }
 
-  // Wait so the Agent-mode chat finishes opening and the input is focused.
-  await new Promise(r => setTimeout(r, 1200));
+  // FR-007: Poll until the Agent-mode chat is ready (max 5 s).
+  // A command-availability signal is used instead of a fixed delay.
+  await waitForAgentModeReady(agentModeMaxMs);
 
   // Step 2 — Submit the prompt INTO the already-open Agent chat.
   // We deliberately avoid `workbench.action.chat.open` here — that command
   // creates/reopens a chat session and silently reverts the mode.
   async function submitOnce() {
     // A) Most reliable cross-version path: focus chat input → paste → submit.
-    const savedClip = await vscode.env.clipboard.readText().catch(() => '');
-    await vscode.env.clipboard.writeText(prompt);
+    const savedClip = await vsc.env.clipboard.readText().catch(() => '');
+    await vsc.env.clipboard.writeText(prompt);
     const focused =
       await tryCmd('workbench.action.chat.focusInput') ||
       await tryCmd('workbench.action.chatEditor.focusInput') ||
@@ -127,7 +176,7 @@ async function submitPrompt(prompt) {
       await tryCmd('editor.action.clipboardPasteAction');
       await new Promise(r => setTimeout(r, 150));
       // Restore the user's clipboard before submitting.
-      try { await vscode.env.clipboard.writeText(savedClip); } catch { /* */ }
+      try { await vsc.env.clipboard.writeText(savedClip); } catch { /* */ }
       // Submit
       const submitted =
         await tryCmd('workbench.action.chat.submit') ||
@@ -135,7 +184,7 @@ async function submitPrompt(prompt) {
       if (submitted) return true;
     } else {
       // restore clipboard if we couldn't focus
-      try { await vscode.env.clipboard.writeText(savedClip); } catch { /* */ }
+      try { await vsc.env.clipboard.writeText(savedClip); } catch { /* */ }
     }
 
     // B) Fallback: pass the prompt as input value to acceptInput.
@@ -156,15 +205,19 @@ async function submitPrompt(prompt) {
 
   // Final fallback — clipboard + notification.
   try {
-    await vscode.env.clipboard.writeText(prompt);
-    vscode.window.showInformationMessage(
+    await vsc.env.clipboard.writeText(prompt);
+    vsc.window.showInformationMessage(
       'QuorumKit: prompt copied to clipboard — paste into Copilot Chat (⌘V, Enter).'
     );
     return true;
   } catch (e) {
-    vscode.window.showErrorMessage(`QuorumKit Copilot Bridge: ${e.message || e}`);
+    vsc.window.showErrorMessage(`QuorumKit Copilot Bridge: ${e.message || e}`);
     return false;
   }
+}
+
+async function submitPrompt(prompt) {
+  return _submitPromptCore(prompt, null, {});
 }
 
 async function tryInjectOnce() {
@@ -203,4 +256,4 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate };
+module.exports = { activate, deactivate, _submitPromptCore };
