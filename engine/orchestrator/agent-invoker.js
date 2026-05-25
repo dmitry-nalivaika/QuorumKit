@@ -28,9 +28,9 @@ import { ENABLED_KINDS } from './runtime-registry.js';
 const VALID_AI_TOOLS = new Set(['copilot', 'claude']);
 
 /**
- * v1 invocation surface (unchanged).
+ * v1 invocation surface (unchanged except optional pipeline context fields).
  */
-export async function invokeAgent(client, owner, repo, agentSlug, issueNumber, ref, aiTool) {
+export async function invokeAgent(client, owner, repo, agentSlug, issueNumber, ref, aiTool, pipelineContext = {}) {
   const runtime = aiTool ?? 'copilot';
 
   if (!VALID_AI_TOOLS.has(runtime)) {
@@ -49,9 +49,17 @@ export async function invokeAgent(client, owner, repo, agentSlug, issueNumber, r
 
   const dispatchRef = ref ?? 'main';
 
-  await client.triggerWorkflow(owner, repo, workflow, dispatchRef, {
-    issue_number: String(issueNumber),
-  });
+  // Build workflow inputs: start with the required issue_number, then
+  // optionally include pipeline_id and worktree_path when provided (FR-023).
+  const inputs = { issue_number: String(issueNumber) };
+  if (pipelineContext.pipeline_id != null) {
+    inputs.pipeline_id = String(pipelineContext.pipeline_id);
+  }
+  if (pipelineContext.worktree_path != null) {
+    inputs.worktree_path = String(pipelineContext.worktree_path);
+  }
+
+  await client.triggerWorkflow(owner, repo, workflow, dispatchRef, inputs);
 }
 
 /**
