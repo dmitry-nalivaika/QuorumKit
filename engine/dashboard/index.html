@@ -597,6 +597,8 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .tl-summary { font-size: 11px; color: var(--text2); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-body    { display: none; margin-top: 8px; font-size: 11px; color: var(--text3); white-space: pre-wrap; border-top: 1px solid var(--border); padding-top: 6px; max-height: 160px; overflow-y: auto; }
 .tl-body.on { display: block; }
+.tl-gh-link { display:inline-block;margin-top:6px;font-size:10px;color:var(--accent);text-decoration:none;opacity:.8; }
+.tl-gh-link:hover { opacity:1;text-decoration:underline; }
   </style>
 </head>
 <body>
@@ -2515,10 +2517,21 @@ function renderTimeline(data, isRefresh = false) {
     return;
   }
 
-  eventsEl.innerHTML = '';
+  // FR-177 BLOCKER 3: append-only on refresh — only add rows for new commentIds
+  // Collect commentIds already rendered (stored in data-cid attributes)
+  const renderedCids = new Set(
+    [...eventsEl.querySelectorAll('[data-cid]')].map(el => el.dataset.cid)
+  );
+  // On a full (non-refresh) load, clear the container first
+  if (!isRefresh) eventsEl.innerHTML = '';
+
   for (const ev of visible) {
+    // Skip already-rendered events on refresh
+    if (isRefresh && ev.commentId && renderedCids.has(String(ev.commentId))) continue;
+
     const row = document.createElement('div');
     row.className = `tl-event ${etypeClass(ev.eventType)}`;
+    if (ev.commentId) row.dataset.cid = String(ev.commentId);
 
     const hd = document.createElement('div');
     hd.className = 'tl-event-hd';
@@ -2551,6 +2564,17 @@ function renderTimeline(data, isRefresh = false) {
     row.appendChild(hd);
     if (ev.summary) row.appendChild(summary);
     row.appendChild(body);
+
+    // FR-177 BLOCKER 1: "View on GitHub" link (commentUrl from server)
+    if (ev.commentUrl) {
+      const link = document.createElement('a');
+      link.href = ev.commentUrl; // URL from server — trusted GitHub URL
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'tl-gh-link';
+      link.textContent = '↗ View on GitHub';
+      row.appendChild(link);
+    }
 
     // Click to expand body
     row.addEventListener('click', () => body.classList.toggle('on'));
@@ -2613,6 +2637,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })
   );
+
+  // FR-177 BLOCKER 2: pause polling when tab/window is hidden, resume when visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearInterval(_tlPollTimer);
+    } else if (_tlIssue) {
+      clearInterval(_tlPollTimer);
+      _tlPollTimer = setInterval(() => loadTimeline(true), 30_000);
+    }
+  });
 });
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
