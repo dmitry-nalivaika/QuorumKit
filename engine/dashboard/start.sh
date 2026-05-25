@@ -6,7 +6,11 @@ set -e
 # This becomes the default project path in the orchestrator UI so users
 # don't have to fill in Settings manually for every project they install
 # QuorumKit into.
-export QUORUMKIT_PROJECT_DIR="${QUORUMKIT_PROJECT_DIR:-$PWD}"
+# Resolve to the git root so that running start.sh from a sub-package
+# (e.g. engine/) doesn't produce a path that ends in the sub-directory name.
+_invocation_dir="${QUORUMKIT_PROJECT_DIR:-$PWD}"
+_git_root="$(git -C "$_invocation_dir" rev-parse --show-toplevel 2>/dev/null || echo "$_invocation_dir")"
+export QUORUMKIT_PROJECT_DIR="$_git_root"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
