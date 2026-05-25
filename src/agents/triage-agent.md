@@ -107,3 +107,88 @@ agent or team member. You keep the issue tracker organized and actionable.
 
 1. `.specify/memory/constitution.md` — project scope and principles
 2. Recent open issues for duplicate detection (use `gh issue list --state open`)
+
+---
+
+## Agent Footprint
+
+All invocations MUST post structured GitHub comments on the **Issue** being triaged (FR-001, FR-009).
+
+### `agent-start` comment
+
+```markdown
+<!-- agent-footprint: start -->
+**Agent started:** `triage-agent`
+- **Event type:** `agent-start`
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+```
+
+No `apm-msg` block is included in `agent-start` comments.
+
+### `agent-complete` comment
+
+The triage summary comment MUST include an `apm-msg` block appended at the end (FR-009).
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `triage-agent`
+- **Event type:** `agent-complete`
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Summary:** Triage complete — labels applied, next steps recorded.
+- **Next recommended action:** Assigned agent or maintainer review.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "triage",
+  "agent": "triage-agent",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary ≤ 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": null,
+  "issue": "<issue-number-string>",
+  "pr": null,
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+### `agent-fail` comment
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `triage-agent`
+- **Event type:** `agent-fail`
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** Re-run triage workflow; if problem persists, check Actions log.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "triage",
+  "agent": "triage-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary ≤ 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": null,
+  "issue": "<issue-number-string>",
+  "pr": null,
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+Silent termination (no comment posted) is prohibited under any code path (FR-004).

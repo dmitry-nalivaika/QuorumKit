@@ -204,3 +204,86 @@ gh issue create \
 2. The incident GitHub Issue (description, timeline comments)
 3. Recent deployment history (`.github/workflows/` run logs if accessible)
 4. `docs/post-mortems/` — previous post-mortems for pattern recognition
+
+---
+
+## Agent Footprint
+
+All invocations MUST post structured GitHub comments on the **Issue** (FR-001).
+
+### `agent-start` comment
+
+```markdown
+<!-- agent-footprint: start -->
+**Agent started:** `incident-agent`
+- **Event type:** `agent-start`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+```
+
+No `apm-msg` block is included in `agent-start` comments.
+
+### `agent-complete` comment
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `incident-agent`
+- **Event type:** `agent-complete`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Summary:** <one-line outcome summary>
+- **Next recommended action:** <e.g. "Next agent or maintainer review">
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "incident",
+  "agent": "incident-agent",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary ≤ 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+### `agent-fail` comment
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `incident-agent`
+- **Event type:** `agent-fail`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** Re-run the workflow; if problem persists, check Actions log.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "incident",
+  "agent": "incident-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary ≤ 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+Silent termination (no comment posted) is prohibited under any code path (FR-004).
