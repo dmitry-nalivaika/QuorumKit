@@ -521,6 +521,74 @@ PYEOF
   cleanup_test_env
 )
 
+# T-223-04: FR-003 — pipeline refused when slug resolves to develop or trunk (case-insensitive)
+(
+  for protected_slug in "develop" "Develop" "DEVELOP" "trunk" "Trunk" "TRUNK"; do
+    make_test_env
+    cd "$WORK_DIR"
+    export QUORUMKIT_TEST_BRANCH_GUARD="$STUB_DIR/branch-guard-stub.sh"
+
+    # Patch pipeline.sh to return the protected slug from resolve_branch_slug for issue 0
+    PATCHED="$STUB_DIR/pipeline-patched-${protected_slug}.sh"
+    python3 - "$PIPELINE_SCRIPT" "$PATCHED" "$protected_slug" << 'PYEOF'
+import sys
+src = open(sys.argv[1]).read()
+slug = sys.argv[3]
+patched = src.replace(
+    'resolve_branch_slug() {\n  local nnn="$1"',
+    f'resolve_branch_slug() {{\n  local nnn="$1"\n  if [[ "$nnn" == "0" ]]; then echo "{slug}"; return; fi',
+    1,
+)
+open(sys.argv[2], 'w').write(patched)
+PYEOF
+    chmod +x "$PATCHED"
+
+    output=$(bash "$PATCHED" start 0 2>&1)
+    rc=$?
+
+    if [[ $rc -ne 0 ]] && echo "$output" | grep -qi "protected\|refused\|ERROR"; then
+      pass "FR-003: pipeline refused for protected slug '${protected_slug}'"
+    else
+      fail "FR-003: expected refusal for protected slug '${protected_slug}'. rc=$rc output=$output"
+    fi
+    cleanup_test_env
+  done
+)
+
+# T-223-05: FR-004 — pipeline refused when worktree path resolves to repo root
+(
+  make_test_env
+  cd "$WORK_DIR"
+  export QUORUMKIT_TEST_BRANCH_GUARD="$STUB_DIR/branch-guard-stub.sh"
+
+  git checkout -b "042-test-feature" -q && git checkout main -q
+  git push origin "042-test-feature" -q
+
+  # Patch default_worktree_path to return the repo root (triggering the FR-004 guard)
+  PATCHED="$STUB_DIR/pipeline-patched-fr004.sh"
+  python3 - "$PIPELINE_SCRIPT" "$PATCHED" << 'PYEOF'
+import sys
+src = open(sys.argv[1]).read()
+patched = src.replace(
+    'default_worktree_path() {\n  local branch_slug="$1"',
+    'default_worktree_path() {\n  local branch_slug="$1"\n  echo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"; return 0',
+    1,
+)
+open(sys.argv[2], 'w').write(patched)
+PYEOF
+  chmod +x "$PATCHED"
+
+  output=$(bash "$PATCHED" start 42 --mode=isolated 2>&1)
+  rc=$?
+
+  if [[ $rc -ne 0 ]] && echo "$output" | grep -qi "root"; then
+    pass "FR-004: pipeline refused when worktree path equals repo root"
+  else
+    fail "FR-004: expected refusal when worktree equals repo root. rc=$rc output=$output"
+  fi
+  cleanup_test_env
+)
+
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
 PASS=$(grep -c "^PASS " "$RESULTS_FILE" 2>/dev/null) || true

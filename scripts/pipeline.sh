@@ -151,9 +151,11 @@ cmd_start() {
   branch_slug="$(resolve_branch_slug "$issue_number")"
   log "Resolved branch slug: ${branch_slug}"
 
-  # ── Bug B guard: refuse if slug resolves to a protected branch (main/master) ──
-  if [[ "$branch_slug" == "main" || "$branch_slug" == "master" ]]; then
-    err "Pipeline refused: resolved branch slug '${branch_slug}' is a protected branch. Refusing to create a pipeline against main/master."
+  # ── Bug B guard: refuse if slug resolves to a protected branch ──────────────
+  local slug_lower
+  slug_lower="$(echo "$branch_slug" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$slug_lower" == "main" || "$slug_lower" == "master" || "$slug_lower" == "develop" || "$slug_lower" == "trunk" ]]; then
+    err "ERROR: Refusing to create a pipeline on protected branch '${branch_slug}'."
     exit 1
   fi
 
@@ -212,7 +214,7 @@ cmd_start() {
     local wt_real
     wt_real="$(realpath "$wt_path" 2>/dev/null || echo "$wt_path")"
     if [[ "$wt_real" == "$repo_root_real" ]]; then
-      err "Pipeline refused: worktree path '${wt_path}' resolves to the repository root. Refusing to create a worktree at the repo root."
+      err "ERROR: Resolved worktree path equals the repository root — cannot create pipeline at root."
       exit 1
     fi
 
