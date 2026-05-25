@@ -83,6 +83,17 @@ jobs:
             exit 1
           fi
 
+      - name: Pre-publish diagnostics
+        run: |
+          echo "node=$(node --version) npm=$(npm --version)"
+          echo "--- .npmrc ---"
+          cat ~/.npmrc 2>/dev/null || echo "(no ~/.npmrc)"
+          cat .npmrc 2>/dev/null || echo "(no ./.npmrc)"
+          echo "--- OIDC env ---"
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]] && echo YES || echo NO)"
+          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]] && echo YES || echo NO)"
+          echo "NODE_AUTH_TOKEN set: $([[ -n "$NODE_AUTH_TOKEN" ]] && echo YES || echo NO)"
+
       - name: Publish to npm with OIDC provenance
         # SEC-HIGH-001: no NODE_AUTH_TOKEN — npm CLI 11+ (bundled with Node 22+)
         # automatically performs the OIDC Trusted Publisher flow:
