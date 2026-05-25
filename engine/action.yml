@@ -7,7 +7,7 @@
 #          dist/` is non-empty (engine-build-gate workflow).
 #
 # Inputs: none — the engine reads everything from the GitHub event payload
-#         and the consumer-side `.apm/` SoT directory (ADR-006 §3).
+#         and the consumer-side `src/` SoT directory (ADR-006 §3).
 # Permissions: declared per-call by the consumer workflow; this Action does
 #              NOT request any. The minimum-viable scope is `contents: read`
 #              + `issues: write` + `pull-requests: write` (engine/SECURITY.md).

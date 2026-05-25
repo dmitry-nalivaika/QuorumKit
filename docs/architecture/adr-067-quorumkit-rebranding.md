@@ -38,7 +38,7 @@ the ADR-required threshold:
    requires an explicit record and human approval gate.
 
 Internal wire-format tokens (`apm-msg`, `apm-state`, `apm-pipeline-state`) and the
-`.apm/` directory are **intentionally excluded** from this decision; they carry their
+`src/` directory are **intentionally excluded** from this decision; they carry their
 own future ADR requirement.
 
 ---
@@ -60,8 +60,8 @@ own future ADR requirement.
    mentions. This amendment is implemented in a **dedicated PR, separate from all
    other rename work**, and requires explicit human approval before merge.
 
-4. **Wire-format tokens and `.apm/` directory are frozen** in this release.
-   All references to `apm-msg`, `apm-state`, `apm-pipeline-state`, and `.apm/`
+4. **Wire-format tokens and `src/` directory are frozen** in this release.
+   All references to `apm-msg`, `apm-state`, `apm-pipeline-state`, and `src/`
    paths remain unchanged. A follow-up spec and ADR are required before these can
    be renamed.
 

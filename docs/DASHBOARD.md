@@ -163,10 +163,10 @@ cd ~/work/legacy-billing-service
 Then, **from your project root**, run the installer once:
 
 ```zsh
-bash ~/.quorumkit/scripts/init.sh                                # Claude Code (default)
-bash ~/.quorumkit/scripts/init.sh --ai=copilot                   # GitHub Copilot
-bash ~/.quorumkit/scripts/init.sh --ai=both                      # Both
-bash ~/.quorumkit/scripts/init.sh --ai=both --domain=industrial  # Both + industrial agents
+bash ~/src/scripts/init.sh                                # Claude Code (default)
+bash ~/src/scripts/init.sh --ai=copilot                   # GitHub Copilot
+bash ~/src/scripts/init.sh --ai=both                      # Both
+bash ~/src/scripts/init.sh --ai=both --domain=industrial  # Both + industrial agents
 ```
 
 What the script writes into your project (idempotent — re-running is safe and never overwrites your files):
@@ -209,7 +209,7 @@ From **your project directory**:
 
 ```zsh
 cd ~/work/legacy-billing-service
-bash ~/.quorumkit/engine/dashboard/start.sh
+bash ~/src/engine/dashboard/start.sh
 ```
 
 `start.sh` captures `$PWD` into `QUORUMKIT_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses it as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to fill in the **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
@@ -235,7 +235,7 @@ If you orchestrate several projects, a one-liner saves typing:
 
 ```zsh
 # In ~/.zshrc
-alias apm='bash ~/.quorumkit/engine/dashboard/start.sh'
+alias apm='bash ~/src/engine/dashboard/start.sh'
 ```
 
 Then from any project: `cd ~/work/foo && apm`.
@@ -245,7 +245,7 @@ Then from any project: `cd ~/work/foo && apm`.
 ```zsh
 QUORUMKIT_PORT=4000 apm
 # or
-bash ~/.quorumkit/engine/dashboard/start.sh --port 4000
+bash ~/src/engine/dashboard/start.sh --port 4000
 ```
 
 ### 5.4 — Override the auto-detected project
@@ -530,7 +530,7 @@ From the project root (one-time, idempotent — see §4 for details):
 
 ```zsh
 cd ~/projects/todo-api
-bash ~/.quorumkit/scripts/init.sh --ai=copilot
+bash ~/src/scripts/init.sh --ai=copilot
 # → writes .github/agents/, .github/instructions/, .github/workflows/, etc.
 git add . && git commit -m "chore: install quorumkit"
 ```
@@ -541,7 +541,7 @@ Use `--ai=claude` if you prefer Claude Code, or `--ai=both` for both.
 
 ```zsh
 cd ~/projects/todo-api
-bash ~/.quorumkit/engine/dashboard/start.sh
+bash ~/src/engine/dashboard/start.sh
 # → browser opens http://localhost:3131
 ```
 
@@ -916,7 +916,7 @@ If you see it:
 
 1. Confirm you launched `start.sh` from inside the project (not from `~/`):
    ```zsh
-   cd ~/projects/todo-api && bash ~/.quorumkit/engine/dashboard/start.sh
+   cd ~/projects/todo-api && bash ~/src/engine/dashboard/start.sh
    ```
 2. Or set `QUORUMKIT_PROJECT_DIR` explicitly: `QUORUMKIT_PROJECT_DIR=~/projects/todo-api apm`
 3. Or open **⚙ Settings** and fill in **Local Project Path**. The path must exist on disk.
@@ -983,7 +983,7 @@ The server logs the exit code and the stderr output to the console. Common cause
 |-------|-----|
 | `claude: command not found` | Install Claude Code, add to PATH |
 | Permission denied on project path | `chmod -R u+rw <localPath>` |
-| Skill file not found | Run `bash ~/.quorumkit/scripts/init.sh` from your project root to install agents |
+| Skill file not found | Run `bash ~/src/scripts/init.sh` from your project root to install agents |
 | Python/Node not found in PATH | Start server from a terminal with the full environment |
 
 ---

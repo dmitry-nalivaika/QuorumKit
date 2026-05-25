@@ -27,14 +27,14 @@ Two latent defects emerge from the conflation:
 
 ### Defect 1 — Mirror enforcement is incomplete (Principle V drift)
 
-ADR-006 enforces only `.apm/agents/ → templates/github/instructions/` parity
+ADR-006 enforces only `.github/agents/ → templates/github/instructions/` parity
 via `verify-mirror.sh`. Three additional mirror surfaces drift today:
 
-- **`templates/.apm/pipelines/`** exists, contradicts ADR-006 §3 ("pipelines are
-  not mirrored"), and has *already* drifted from `.apm/pipelines/`. Verified by
-  `diff`: `feature-pipeline.yml` is v2 in `.apm/`, v1 in `templates/`. A
+- **`templates/src/pipelines/`** exists, contradicts ADR-006 §3 ("pipelines are
+  not mirrored"), and has *already* drifted from `src/pipelines/`. Verified by
+  `diff`: `feature-pipeline.yml` is v2 in `src/`, v1 in `templates/`. A
   consumer running `init.sh` today receives a stale orchestrator config.
-- **`.github/agents/`** is a byte-identical duplicate of `.apm/agents/` in this
+- **`.github/agents/`** is a byte-identical duplicate of `.github/agents/` in this
   repo (`diff` returns empty) with no enforcement — pure tax.
 - **14 of 25 workflow files** are duplicated between `templates/github/workflows/`
   and `.github/workflows/` with no parity gate. Workflow changes can silently
@@ -70,7 +70,7 @@ for every drift surface.
 ### Part 1 — Three-zone repo topology
 
 ```
-.apm/                    ← Zone 1: SoT — agents, skills, pipelines, runtimes, identities
+src/                    ← Zone 1: SoT — agents, skills, pipelines, runtimes, identities
 docs/AGENT_PROTOCOL.md   ← regulation (sibling SoT, not mirrored)
 templates/
   seed/                  ← first-init seeds (CLAUDE.md, CONTRIBUTING.md,
@@ -104,7 +104,7 @@ engine/                  ← Zone 2: Engine source — published, not copied
 .apm-workspaces/         ← gitignored (transient orchestrator scratch)
 ```
 
-`templates/.apm/pipelines/` is **deleted**.
+`templates/src/pipelines/` is **deleted**.
 `.github/agents/` is **deleted from this repo only** — `init.sh` still creates
 it in *consumer* repos.
 
@@ -128,8 +128,8 @@ sibling repo. All distributed workflows call it instead of
     runtime: ${{ vars.APM_RUNTIME || 'copilot' }}
 ```
 
-The Action reads the consumer's local `.apm/pipelines/`, `.apm/runtimes.yml`,
-and `.apm/agent-identities.yml` at runtime. Engine source is **never copied**
+The Action reads the consumer's local `src/pipelines/`, `src/runtimes.yml`,
+and `src/agent-identities.yml` at runtime. Engine source is **never copied**
 into the consumer; only invoked.
 
 #### Channel B — npm package
@@ -144,7 +144,7 @@ Published as `@dmitry-nalivaika/apm-orchestrator` so:
 
 ```
 Consumer project after `installer/init.sh --ai=both`:
-  .apm/
+  src/
     agents/              ← copied (15 .md files)
     skills/              ← copied
     pipelines/           ← copied — NOW REACHABLE because Action reads them
@@ -167,13 +167,13 @@ bumping the Action ref tag; no re-`init.sh` required.
 
 | Check | Rule |
 |---|---|
-| **M1** *(existing)* | `.apm/agents/<x>.md` MUST have a counterpart in `templates/github/instructions/` |
-| **M2** *(existing)* | `.apm/runtimes.yml` and `.apm/agent-identities.yml` MUST exist and parse as YAML |
+| **M1** *(existing)* | `.github/agents/<x>.md` MUST have a counterpart in `templates/github/instructions/` |
+| **M2** *(existing)* | `src/runtimes.yml` and `src/agent-identities.yml` MUST exist and parse as YAML |
 | **M3** *(existing)* | `docs/AGENT_PROTOCOL.md` MUST exist |
-| **M4** *(NEW)* | `templates/.apm/pipelines/` MUST NOT exist (anti-mirror, ADR-006 §3) |
+| **M4** *(NEW)* | `templates/src/pipelines/` MUST NOT exist (anti-mirror, ADR-006 §3) |
 | **M5** *(NEW)* | Workflows present in **both** `.github/workflows/` and `templates/github/workflows/` MUST be byte-identical |
 | **M6** *(NEW)* | `.github/agents/` MUST NOT exist in the SoT repo |
-| **M7** *(NEW)* | Every `.apm/agents/<x>.md` MUST have a counterpart in `.claude/agents/` AND `.github/instructions/` (self-host Principle IV) |
+| **M7** *(NEW)* | Every `.github/agents/<x>.md` MUST have a counterpart in `.claude/agents/` AND `.github/instructions/` (self-host Principle IV) |
 | **M8** *(NEW)* | Distributed workflows MUST NOT contain `node scripts/orchestrator/`; engine is invoked via `uses:` |
 
 Each failure message MUST include the rule ID, offending file path, and
@@ -193,7 +193,7 @@ exact remediation command.
   orchestrator implementation, now with explicit versioned distribution.
 - **Principle IV (Dual-AI)**: the Action is runtime-agnostic; both Claude and
   Copilot consumers call the same Action; M7 enforces self-host parity.
-- **ADR-006 §3 honoured**: pipelines are not mirrored; they live in `.apm/`
+- **ADR-006 §3 honoured**: pipelines are not mirrored; they live in `src/`
   in both SoT and consumer repos, read by the Action at runtime.
 - **ADR-007 honoured**: substrate stays GitHub Actions; the Action wrapper is
   the natural expression of that contract.
@@ -251,7 +251,7 @@ exact remediation command.
 | **Vendor copy** of `engine/` into every consumer | Offline-capable; no external dep | Bloated; un-patchable; consumers commit `node_modules` or run `npm install`; security patching nightmare | Violates Principles V & VII |
 | **npm-only** (no Action wrapper) | Simpler release | Distributed workflows become verbose `run: npx ...` boilerplate × 25 files | Action wrapper is one extra file with massive UX win |
 | **Action-only** (no npm) | Single artefact | Dashboard + extension can't reuse engine code | Loses Channel B benefits (programmatic consumers) |
-| **Status quo + only fix `templates/.apm/pipelines/` drift** | Minimal effort | Leaves three of four BLOCKERs unaddressed; Principle IV violation persists; engine still undistributed | Insufficient — addresses symptom, not cause |
+| **Status quo + only fix `templates/src/pipelines/` drift** | Minimal effort | Leaves three of four BLOCKERs unaddressed; Principle IV violation persists; engine still undistributed | Insufficient — addresses symptom, not cause |
 | **Three-zone topology + Action + npm** *(this ADR)* | All Principles upheld; full power distributed; mechanical drift prevention | 2–3 days migration; breaks external bookmarks | **Selected** |
 
 ---
@@ -273,8 +273,8 @@ Ordered to keep `main` green at every step:
    `uses: dmitry-nalivaika/quorumkit/engine@v3`.
 10. Sync `.github/workflows/` byte-identically to `templates/github/workflows/`
     (the overlapping subset).
-11. Delete `templates/.apm/pipelines/`. Update `init.sh` to copy from
-    `.apm/pipelines/` directly.
+11. Delete `templates/src/pipelines/`. Update `init.sh` to copy from
+    `src/pipelines/` directly.
 12. Delete `.github/agents/` from this repo. `init.sh` still creates it in
     consumer repos.
 13. Populate `.claude/agents/` + `.claude/skills/` in this repo (run

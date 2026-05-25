@@ -2,12 +2,12 @@
 /**
  * regulation-lint.js
  * CI gate that the regulation document is the source of truth for every
- * label, outcome, and trigger referenced anywhere in `.apm/pipelines/` and
+ * label, outcome, and trigger referenced anywhere in `src/pipelines/` and
  * the orchestrator source code (FR-014, FR-024, ADR-006 §5).
  *
  * Strategy:
  *   1. Parse docs/AGENT_PROTOCOL.md → declared sets.
- *   2. Walk .apm/pipelines/*.yml; for each transition.outcome, trigger.event,
+ *   2. Walk src/pipelines/*.yml; for each transition.outcome, trigger.event,
  *      and trigger.labels[*] item, assert it is declared.
  *   3. Exit non-zero on any violation.
  *
@@ -22,7 +22,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { loadRegulation } from './regulation.js';
 
-const PIPELINES_DIR = existsSync('.apm/pipelines') ? '.apm/pipelines' : 'src/pipelines';
+const PIPELINES_DIR = 'src/pipelines';
 
 async function* yamlFiles(dir) {
   if (!existsSync(dir)) return;

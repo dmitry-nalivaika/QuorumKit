@@ -16,7 +16,7 @@
 | Input validation at boundaries | Pipeline DSL: `apiVersion` validation via safe YAML loader (FR-013). Workflow inputs: existing `actions/github-script` schema. |
 | Data access scoping | N/A — no auth required (open-source CLI tooling). Action `permissions:` defaults to `contents: read` (FR-014). |
 | Coverage threshold | Engine module retains its existing 182-test vitest suite. New shell gates are exercised by `scripts/tests/test-verify-mirror.sh` (13 negative-test fixtures, 100% rule coverage for M4–M9). |
-| Dual-AI compatibility | `.claude/agents/` and `.github/instructions/` are populated to parity with `.apm/agents/`; M7 enforces. |
+| Dual-AI compatibility | `.claude/agents/` and `.github/instructions/` are populated to parity with `.github/agents/`; M7 enforces. |
 | Observable, auditable automation | `verify-mirror.sh` failures name the rule ID + remediation per FR-020. Release workflow will publish provenance attestations (T-12). |
 
 ## Approach

@@ -3,7 +3,7 @@
 > Spec: `specs/044-orchestrator-v2-design/spec.md`
 > Branch: `044-orchestrator-v2-design`
 > ADRs honoured: ADR-004 (state comments), ADR-005 (runtime registry interface),
-> ADR-006 (`.apm/` SoT + mirror), ADR-007 (GitHub Actions substrate contract).
+> ADR-006 (`src/` SoT + mirror), ADR-007 (GitHub Actions substrate contract).
 
 ---
 
@@ -52,8 +52,8 @@ scripts/orchestrator/
 ├── approval-gate.js               # UNCHANGED behaviour (preserved for v1 + v2)
 ├── github-client.js               # ADD — updateComment(), repositoryDispatch(), event delivery hash
 ├── apm-msg-parser.js              # NEW — fenced-block extractor + schema validator + redaction
-├── identity-registry.js           # NEW — load .apm/agent-identities.yml; map login → agent slug
-├── runtime-registry.js            # NEW — load .apm/runtimes.yml; resolve precedence; validate kinds
+├── identity-registry.js           # NEW — load src/agent-identities.yml; map login → agent slug
+├── runtime-registry.js            # NEW — load src/runtimes.yml; resolve precedence; validate kinds
 ├── loop-budget.js                 # NEW — pure budget arithmetic and exhaustion detection
 ├── dedup-key.js                   # NEW — ADR-007 §1 per-trigger formulas
 ├── timeline-reconstructor.js      # NEW — rebuild RunTimeline from audit comments alone
@@ -69,9 +69,9 @@ scripts/orchestrator/
 
 tests/orchestrator/                # +1 file per new module + scenario tests for FR-023
 docs/AGENT_PROTOCOL.md             # NEW — single source for labels, outcomes, transitions
-.apm/runtimes.yml                  # NEW — ships with `claude` + `copilot` runtimes
-.apm/agent-identities.yml          # NEW — ships with default copilot/claude bot mappings
-.apm/pipelines/feature-pipeline-v2.yml  # NEW — worked example with loop edges
+src/runtimes.yml                  # NEW — ships with `claude` + `copilot` runtimes
+src/agent-identities.yml          # NEW — ships with default copilot/claude bot mappings
+src/pipelines/feature-pipeline-v2.yml  # NEW — worked example with loop edges
 scripts/verify-mirror.sh           # NEW (or extend existing) — ADR-006 CI gate
 .github/workflows/quality.yml      # REFAC — adds pipeline-validator, regulation-lint, verify-mirror jobs
 ```
@@ -180,12 +180,12 @@ Parser rules (`apm-msg-parser.js`):
 
 ### Source-of-truth + mirror (ADR-006)
 
-- `.apm/runtimes.yml`, `.apm/agent-identities.yml`, `.apm/pipelines/*.yml` are
+- `src/runtimes.yml`, `src/agent-identities.yml`, `src/pipelines/*.yml` are
   authoritative. Orchestrator reads them directly under both runtimes.
 - `docs/AGENT_PROTOCOL.md` is the authoritative regulation; not mirrored.
 - `scripts/verify-mirror.sh` (new) checks that
   `.github/instructions/<agent>.instructions.md` is in sync with
-  `.apm/agents/<agent>.md` and exits non-zero on drift; printed diff is the
+  `.github/agents/<agent>.md` and exits non-zero on drift; printed diff is the
   PR-comment material.
 
 ### Substrate-level CI (ADR-007 §5, FR-029)
@@ -194,7 +194,7 @@ Parser rules (`apm-msg-parser.js`):
 
 | Job | Command |
 |---|---|
-| `pipeline-validator` | `node scripts/orchestrator/pipeline-validator-cli.js .apm/pipelines/` |
+| `pipeline-validator` | `node scripts/orchestrator/pipeline-validator-cli.js src/pipelines/` |
 | `verify-mirror` | `bash scripts/verify-mirror.sh` |
 | `orchestrator-tests` | `cd scripts/orchestrator && npm test` |
 | `regulation-lint` | `node scripts/orchestrator/regulation-lint.js` |
@@ -239,7 +239,7 @@ end of every phase; failing tests inside a phase block progress.
 | Reserved-kind bypass via local fork | Acknowledged in ADR-005; upstream invariant is the validator + Reviewer BLOCKER on allowlist edits without ADR. |
 | Secret leakage via comment | `redaction.test.js` asserts that no log/comment helper ever serialises a value matching an env var listed by the runtime adapter. |
 | GitHub API context fields renamed | Dedup-key formulas covered by fixture-payload tests in `tests/orchestrator/fixtures/`. |
-| Mirror drift between `.apm/` and `.github/instructions/` | `verify-mirror.sh` is a required status check (ADR-006). |
+| Mirror drift between `src/` and `.github/instructions/` | `verify-mirror.sh` is a required status check (ADR-006). |
 
 ---
 
@@ -257,7 +257,7 @@ The PR opened at the end of Phase 7 will state:
 
 - All tasks in `tasks.md` complete.
 - `npm test` (under `scripts/orchestrator/`) green; coverage ≥ targets.
-- `pipeline-validator-cli` green against `.apm/pipelines/`.
+- `pipeline-validator-cli` green against `src/pipelines/`.
 - `regulation-lint` green.
 - `verify-mirror` green.
 - Worked-example issue link demonstrating the spec's Success Criteria.

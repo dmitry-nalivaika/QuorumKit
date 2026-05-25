@@ -41,7 +41,7 @@ async function gatherFiles(arg) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length === 0) args.push(path.join(process.cwd(), '.apm', 'pipelines'));
+  if (args.length === 0) args.push(path.join(process.cwd(), 'src', 'pipelines'));
 
   const root = process.cwd();
   const reg = await loadRegulation(root);

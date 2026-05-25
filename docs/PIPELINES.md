@@ -1,6 +1,6 @@
 # QuorumKit Pipelines (v2)
 
-> **TL;DR** — Drop a YAML file in `.apm/pipelines/`, label a GitHub issue, and the
+> **TL;DR** — Drop a YAML file in `src/pipelines/`, label a GitHub issue, and the
 > Orchestrator drives the right AI agents through your SDLC loop — including
 > rework cycles, runtime selection, approval gates, and timeouts.
 
@@ -53,9 +53,9 @@ No external database. The orchestrator is fully restartable.
 `scripts/init.sh` ships:
 
 - `.github/workflows/orchestrator.yml` — the Actions entry point
-- `.apm/pipelines/{feature,bug-fix,release}-pipeline.yml` — three v2 pipelines
-- `.apm/runtimes.yml` — runtime registry (claude + copilot enabled)
-- `.apm/agent-identities.yml` — login → agent slug map (FR-013)
+- `src/pipelines/{feature,bug-fix,release}-pipeline.yml` — three v2 pipelines
+- `src/runtimes.yml` — runtime registry (claude + copilot enabled)
+- `src/agent-identities.yml` — login → agent slug map (FR-013)
 
 ### 2. Trigger a pipeline
 
@@ -174,7 +174,7 @@ The QA suite found 2 regressions and a missing acceptance criterion.
 The orchestrator:
 
 1. Verifies the comment author maps to the active step's agent (FR-013, via
-   `.apm/agent-identities.yml`). Comments from unmapped logins are ignored.
+   `src/agent-identities.yml`). Comments from unmapped logins are ignored.
 2. Validates the JSON against `apm-msg.schema.json`. Malformed → `protocol-violation`.
 3. Resolves the transition for `(currentStep, outcome)`.
 4. Increments the per-edge counter if backward, evaluates loop budget.
@@ -186,7 +186,7 @@ Full schema and worked examples in [`AGENT_PROTOCOL.md`](AGENT_PROTOCOL.md).
 
 ## Runtime registry (FR-007/008, [ADR-005])
 
-`.apm/runtimes.yml` declares the named runtimes available to pipelines:
+`src/runtimes.yml` declares the named runtimes available to pipelines:
 
 ```yaml
 default_runtime: copilot-default
@@ -215,7 +215,7 @@ validator emits `RUNTIME_KIND_NOT_ENABLED` until each gets its own ADR.
 
 ## Adding your own pipeline
 
-1. Drop `.apm/pipelines/my-pipeline.yml` (v2 schema; copy any built-in as a
+1. Drop `src/pipelines/my-pipeline.yml` (v2 schema; copy any built-in as a
    starting point).
 2. Make sure every label in `trigger.labels`, every `outcome` in `transitions`,
    and every agent slug in `steps` is declared in `docs/AGENT_PROTOCOL.md` —
@@ -223,7 +223,7 @@ validator emits `RUNTIME_KIND_NOT_ENABLED` until each gets its own ADR.
 3. Run the validator locally:
 
    ```zsh
-   node engine/orchestrator/pipeline-validator-cli.js .apm/pipelines/my-pipeline.yml
+   node engine/orchestrator/pipeline-validator-cli.js src/pipelines/my-pipeline.yml
    node engine/orchestrator/regulation-lint.js
    ```
 
@@ -255,7 +255,7 @@ All four are wired into `.github/workflows/quality.yml`.
 | `loop-budget-exceeded` label applied | Backward edge crossed `max_iterations_per_edge` — humans must intervene |
 | Step stuck `awaiting-approval` | Post `/approve`; requires `write`+ permission |
 | Step stuck `awaiting-agent` past `timeout_minutes` | Next event arrival auto-synthesises a `timeout` outcome (FR-019) |
-| Agent comment ignored | Author login isn't in `.apm/agent-identities.yml` for that agent slug |
+| Agent comment ignored | Author login isn't in `src/agent-identities.yml` for that agent slug |
 | `dedup hit … skipping` in logs | Same GitHub delivery received twice — by design (FR-016, FR-026) |
 
 ---
@@ -265,7 +265,7 @@ All four are wired into `.github/workflows/quality.yml`.
 - `docs/AGENT_PROTOCOL.md` — labels, outcomes, transition triggers (regulation)
 - `docs/architecture/adr-004-orchestrator-state-comment-model-v2.md` — two-channel state
 - `docs/architecture/adr-005-pluggable-runtime-registry-interface.md` — runtime kinds
-- `docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md` — `.apm/` is canonical
+- `docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md` — `src/` is canonical
 - `docs/architecture/adr-007-orchestrator-github-actions-substrate-contract.md` — concurrency, dedup, timeouts
 - `specs/044-orchestrator-v2-design/spec.md` — full v2 functional spec
 

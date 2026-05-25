@@ -3,8 +3,8 @@
 This guide documents every breaking change introduced in Issue #67 and tells you
 exactly what to update in your consumer project.
 
-> **Wire-format tokens and `.apm/` directory are NOT renamed in this release.**
-> `apm-msg`, `apm-state`, `apm-pipeline-state`, and `.apm/` paths are unchanged.
+> **Wire-format tokens and `src/` directory are NOT renamed in this release.**
+> `apm-msg`, `apm-state`, `apm-pipeline-state`, and `src/` paths are unchanged.
 > Existing GitHub Issues with embedded `<!-- apm-state -->` blocks continue to work.
 
 ---
@@ -108,7 +108,7 @@ in a future release with a dedicated protocol-migration ADR:
 
 | Identifier | Reason frozen |
 |-----------|--------------|
-| `.apm/` directory | Renaming breaks all consumer `init.sh` installs; requires full migration strategy |
+| `src/` directory | Renaming breaks all consumer `init.sh` installs; requires full migration strategy |
 | `apm-msg` (HTML comment token) | Changing breaks existing GitHub Issue state recovery |
 | `apm-state` (HTML comment token) | Same — embedded in live Issue bodies |
 | `apm-pipeline-state` (HTML comment token) | Same |

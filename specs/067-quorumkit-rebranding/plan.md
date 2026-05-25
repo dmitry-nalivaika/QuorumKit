@@ -59,6 +59,6 @@ consistent (no broken references between steps).
 ## Hard Constraints Reminder
 
 - Wire-format tokens (`apm-msg`, `apm-state`, `apm-pipeline-state`) MUST NOT be changed (FR-013)
-- `.apm/` directory path MUST NOT be changed (FR-014)
+- `src/` directory path MUST NOT be changed (FR-014)
 - Historical CHANGELOG entries MUST remain unchanged (FR-006)
 - MUST NOT merge — PR opened for Reviewer + QA sign-off

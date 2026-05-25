@@ -146,8 +146,8 @@ NNN = Issue number, **zero-padded to 3 digits**.
 ```zsh
 # Step 1: Agents and skills
 mkdir -p .claude/agents .claude/skills
-cp -r /path/to/quorumkit/.apm/agents/* .claude/agents/
-for skill in /path/to/quorumkit/.apm/skills/*/; do
+cp -r /path/to/quorumkit/.github/agents/* .claude/agents/
+for skill in /path/to/quorumkit/.github/skills/*/; do
   skill_name="$(basename "$skill")"
   mkdir -p ".claude/skills/$skill_name"
   cp "$skill/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
@@ -177,7 +177,7 @@ git init && git add . && git commit -m "chore: initialize agentic dev stack"
 ```zsh
 # Step 1: Agent definitions
 mkdir -p .github/agents
-cp -r /path/to/quorumkit/.apm/agents/* .github/agents/
+cp -r /path/to/quorumkit/.github/agents/* .github/agents/
 
 # Step 2: Copilot context and instructions
 mkdir -p .github/instructions
@@ -358,7 +358,7 @@ After initialisation, customise agents for your project:
 | Claude | `.claude/agents/<agent-name>.md` |
 | Copilot | `.github/agents/<agent-name>.md` |
 
-> The source definitions in `.apm/agents/` are **platform-agnostic and shared**.
+> The source definitions in `.github/agents/` are **platform-agnostic and shared**.
 > Edits to `.claude/agents/` or `.github/agents/` are local to your project.
 
 Common customisations:
@@ -376,8 +376,8 @@ Common customisations:
 bash /path/to/quorumkit/installer/init.sh --ai=both
 
 # Or update a single agent
-cp /path/to/quorumkit/.apm/agents/security-agent.md .claude/agents/
-cp /path/to/quorumkit/.apm/agents/security-agent.md .github/agents/
+cp /path/to/quorumkit/.github/agents/security-agent.md .claude/agents/
+cp /path/to/quorumkit/.github/agents/security-agent.md .github/agents/
 ```
 
 ---
@@ -464,6 +464,6 @@ dependencies:
 apm install
 ```
 
-APM installs `.apm/agents/` → `.claude/agents/` and `.apm/skills/` → `.claude/skills/`
+APM installs `.github/agents/` → `.claude/agents/` and `.github/skills/` → `.claude/skills/`
 automatically. Run `installer/init.sh` separately for full setup (GitHub templates,
 speckit, Copilot files).

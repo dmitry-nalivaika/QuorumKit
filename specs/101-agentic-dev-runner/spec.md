@@ -43,8 +43,8 @@ wrappers that set `RUNTIME_KIND` and call the runner.
 
 | File | Purpose |
 |---|---|
-| `.apm/agents/developer-agent.md` | Role definition, responsibilities, hard constraints |
-| `.apm/skills/dev-agent/SKILL.md` | Activation guide, common invocations, TDD reminder |
+| `.github/agents/developer-agent.md` | Role definition, responsibilities, hard constraints |
+| `.github/skills/dev-agent/SKILL.md` | Activation guide, common invocations, TDD reminder |
 | `.specify/memory/constitution.md` | Project-wide non-negotiable rules |
 
 These same files are read by the dashboard's manual `/dev-agent` invocation
@@ -65,7 +65,7 @@ today, so the runner inherits identical guardrails.
 
 ## Pipeline change
 
-Pin the dev step's runtime explicitly in `.apm/pipelines/bug-fix-pipeline.yml`:
+Pin the dev step's runtime explicitly in `src/pipelines/bug-fix-pipeline.yml`:
 
 ```yaml
 steps:

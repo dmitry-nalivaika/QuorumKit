@@ -1,6 +1,6 @@
 /**
  * runtime-registry.js
- * Load and validate `.apm/runtimes.yml` (FR-007, FR-008, ADR-005).
+ * Load and validate `src/runtimes.yml` (FR-007, FR-008, ADR-005).
  *
  * Enforces the kind allowlist: only `claude` and `copilot` are enabled in v2.
  * Reserved kinds (`azure-openai`, `bedrock`, `ollama`, `custom`) are rejected
@@ -25,7 +25,7 @@ const validateSchema = ajv.compile(schema);
 
 export const ENABLED_KINDS = Object.freeze(['claude', 'copilot']);
 export const RESERVED_KINDS = Object.freeze(['azure-openai', 'bedrock', 'ollama', 'custom']);
-export const REGISTRY_PATH = '.apm/runtimes.yml';
+export const REGISTRY_PATH = 'src/runtimes.yml';
 
 /**
  * Validate a parsed registry object. Returns array of error objects (empty = ok).

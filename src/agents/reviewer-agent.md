@@ -106,7 +106,7 @@ SUGGESTION: [improvement idea] — [why it would help] — [not required for mer
 - MUST read the full spec before reviewing — partial reviews are not valid
 - MUST post BLOCKER comments on the PR so they can be picked up and fixed (even on AI-agent-authored PRs)
 - MUST raise a **BLOCKER** when a PR adds a new label, outcome, or transition trigger
-  to any pipeline file under `.apm/pipelines/` without first declaring the identifier
+  to any pipeline file under `src/pipelines/` without first declaring the identifier
   in the project's agent protocol documentation (the ADR governing pipeline identifier
   registration). The project's CI gate (regulation-lint or equivalent) enforces this
   mechanically; bypass attempts (e.g. `--no-verify`, deleting the gate)
@@ -114,7 +114,7 @@ SUGGESTION: [improvement idea] — [why it would help] — [not required for mer
 - MUST raise a **BLOCKER** when an agent-dispatching workflow under `.github/workflows/`
   is added or modified without a `timeout-minutes:` declaration (per the project ADR
   governing CI timeout policy).
-- MUST raise a **BLOCKER** when a runtime entry is added to `.apm/runtimes.yml` whose
+- MUST raise a **BLOCKER** when a runtime entry is added to `src/runtimes.yml` whose
   `kind` is outside the project's allowlisted runtime kinds without a per-kind ADR
   landing in the same PR.
 

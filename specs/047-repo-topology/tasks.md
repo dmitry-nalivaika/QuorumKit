@@ -13,10 +13,10 @@ remaining items required for v3.0.0.
 
 ### Topology (FR-001..FR-007)
 
-- ✅ **T-01** Delete `templates/.apm/pipelines/` and rewire `init.sh` to copy
-  pipelines from the SoT `.apm/pipelines/` (FR-005). Commit `45a9a97`.
+- ✅ **T-01** Delete `templates/src/pipelines/` and rewire `init.sh` to copy
+  pipelines from the SoT `src/pipelines/` (FR-005). Commit `45a9a97`.
 - ✅ **T-02** Delete `.github/agents/` from SoT. Self-host workflows now read
-  agent prompts from `.apm/agents/` via fallback (FR-006). Commit `326fe90`.
+  agent prompts from `.github/agents/` via fallback (FR-006). Commit `326fe90`.
 - ✅ **T-03** Populate `.claude/agents/` with the full agent set + complete
   `.github/instructions/` for self-host Principle IV parity (FR-018, US-4).
   Commit `c7f00c1`.
@@ -62,7 +62,7 @@ remaining items required for v3.0.0.
 
 ### Installer behaviour (FR-021..FR-025)
 
-- 🟡 **T-18** `init.sh` copies `.apm/pipelines/` directly from the SoT
+- 🟡 **T-18** `init.sh` copies `src/pipelines/` directly from the SoT
   package (FR-022). Done as part of T-01 (commit `45a9a97`).
 - 🟡 **T-19** `init.sh` still creates `.github/agents/` in consumer repos
   (FR-023). Existing logic in `scripts/init.sh` preserved.
@@ -76,7 +76,7 @@ remaining items required for v3.0.0.
 - ✅ **T-21** Add "Repo topology" section to `CONTRIBUTING.md` mapping every
   top-level folder to one of the three zones (FR-026).
 - ✅ **T-22** Update `BROWNFIELD_GUIDE.md` and `INIT.md` for new paths
-  (`installer/init.sh`, `engine/`, no `templates/.apm/pipelines/`) (FR-027).
+  (`installer/init.sh`, `engine/`, no `templates/src/pipelines/`) (FR-027).
 - ✅ **T-23** Author `engine/RELEASING.md` documenting both release channels,
   rollback procedure, signed tag verifying key (FR-028, SEC-MED-004).
 - ✅ **T-24** `CHANGELOG.md` v3.0.0 entry covering every breaking change and
@@ -91,7 +91,7 @@ remaining items required for v3.0.0.
 - ✅ All 9 mirror checks (M1–M9) pass on `main`. Negative-test fixtures
   exercise every new check (SC-002, SC-011).
 - ✅ Self-host Principle IV parity: `.claude/agents/` and
-  `.github/instructions/` cover every file in `.apm/agents/` (SC-004).
+  `.github/instructions/` cover every file in `.github/agents/` (SC-004).
 - ⬜ Fresh consumer repo can run a full feature pipeline using the published
   Action ref (SC-001) — gated on T-12.
 - ⬜ Engine bug fix released as v3.0.1 reaches a v3-pinned consumer with no

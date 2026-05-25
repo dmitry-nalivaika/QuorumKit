@@ -110,7 +110,7 @@ else
   fail "Missing docs/AGENT_PROTOCOL.md (FR-014, ADR-006 §5 — single regulation SoT)"
 fi
 
-# ─── M4: anti-mirror — templates/.apm/pipelines/ MUST NOT exist ──────────────
+# ─── M4: anti-mirror — templates/src/pipelines/ MUST NOT exist ──────────────
 h1 "M4. Pipelines are not mirrored (src/.github/pipelines/ must NOT exist)"
 
 if [ -e "src/.github/pipelines" ]; then
@@ -166,7 +166,7 @@ else
   ok "M6: .github/agents/ absent (will be created by dev-setup.sh / init.sh)"
 fi
 
-# ─── M7: self-host Principle IV parity (.apm/agents ↔ .claude/agents and .github/instructions) ──
+# ─── M7: self-host Principle IV parity (.github/agents ↔ .claude/agents and .github/instructions) ──
 h1 "M7. Self-host Principle IV parity (src/agents \u2194 .claude/agents AND .github/instructions)"
 
 if [ -d "src/agents" ] && [ -d ".claude/agents" ] && [ -d ".github/instructions" ]; then

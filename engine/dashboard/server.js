@@ -4,7 +4,7 @@
  *  • /api/invoke              → POST invoke an agent in a real shell
  *  • /api/terminal            → POST open a native terminal for an agent
  *  • /api/stop                → POST stop a running agent
- *  • /api/pipelines           → GET list pipelines from project .apm/pipelines/
+ *  • /api/pipelines           → GET list pipelines from project src/pipelines/
  *  • /api/pipeline/trigger    → POST create a manual pipeline run (broadcasts pipeline-event)
  *  • /api/pipeline/approve    → POST broadcast approval for a waiting run
  *  • /webhook/pipeline-event  → POST receive Orchestrator pipeline state (FR-007)ark Factory — Orchestrator Backend
@@ -18,7 +18,7 @@
  *  • /api/terminal→ POST open a native terminal for an agent
  *  • /api/stop    → POST stop a running agent
  *  • /webhook/pipeline-event  → POST receive Orchestrator pipeline state (FR-007)
- *  • /api/pipelines           → GET list pipelines from .apm/pipelines/
+ *  • /api/pipelines           → GET list pipelines from src/pipelines/
  *  • /api/pipeline/trigger    → POST manually trigger a pipeline run
  *  • /api/pipeline/approve    → POST approve a waiting pipeline run
  *
@@ -779,12 +779,12 @@ async function handleRequest(req, res) {
   }
 
   // ── GET /api/pipelines ────────────────────────────────────────────
-  // Returns a list of pipeline names loaded from the project's .apm/pipelines/ dir.
+  // Returns a list of pipeline names loaded from the project's src/pipelines/ dir.
   if (method === 'GET' && url.pathname === '/api/pipelines') {
     const cfg = loadConfig();
     const pipelines = [];
     if (cfg.localPath) {
-      const pipeDir = path.join(cfg.localPath, '.apm', 'pipelines');
+      const pipeDir = path.join(cfg.localPath, 'src', 'pipelines');
       try {
         const files = fs.readdirSync(pipeDir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
         for (const f of files) {
@@ -821,7 +821,7 @@ async function handleRequest(req, res) {
     const cfg = loadConfig();
     let steps = [];
     if (cfg.localPath) {
-      const pipeDir = path.join(cfg.localPath, '.apm', 'pipelines');
+      const pipeDir = path.join(cfg.localPath, 'src', 'pipelines');
       try {
         const files = fs.readdirSync(pipeDir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
         for (const f of files) {

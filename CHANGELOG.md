@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub repository renamed**: `agentic-dev-stack` → `quorumkit`. Consumer `uses:` paths must be updated to `uses: dmitry-nalivaika/quorumkit/engine@v3`.
 - **VS Code extension renamed**: `apm-copilot-bridge` → `quorumkit-copilot-bridge`; command prefix changed from `apm.` to `quorumkit.`.
 - **Wire-format tokens unchanged** — `apm-msg`, `apm-state`, `apm-pipeline-state` are intentionally NOT renamed (FR-013, FR-014).
-- **`.apm/` directory unchanged** — renaming deferred to a future major with full migration strategy.
+- **`src/` directory unchanged** — renaming deferred to a future major with full migration strategy.
 - **Engine moved.** `scripts/orchestrator/` → `engine/orchestrator/`,
   `tests/orchestrator/` → `engine/tests/`, `dashboard/` → `engine/dashboard/`.
   Consumer workflows that ran `node scripts/orchestrator/index.js` MUST
@@ -56,12 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   → `templates/seed/`. The installer copies them from the new location;
   external scripts that reference the old path must be updated.
 - **`apm.yml` `version: 2.1.0` → `3.0.0`** (T-25).
-- **`templates/.apm/pipelines/` removed.** Pipelines live only at
-  `.apm/pipelines/`; `installer/init.sh` copies them straight from the
+- **`templates/src/pipelines/` removed.** Pipelines live only at
+  `src/pipelines/`; `installer/init.sh` copies them straight from the
   SoT (FR-005, mirror gate M4).
 - **`.github/agents/` removed from this repo.** That directory is created
   in *consumer* repos by the installer; in the SoT, agent definitions
-  live only at `.apm/agents/` (FR-006, mirror gate M6).
+  live only at `.github/agents/` (FR-006, mirror gate M6).
 - **Pipelines may now declare `apiVersion: 'X.Y'`.** The engine refuses
   to load a pipeline whose `apiVersion` is newer than its own (FR-013).
   `ENGINE_API_VERSION` is `1.0` in this release.
@@ -145,13 +145,13 @@ bash /path/to/quorumkit-clone/installer/init.sh --upgrade --apply --engine-ref=v
 ### ✨ Features — Orchestrator v2 (#44)
 
 - **v2 dispatch** wired into `runOrchestrator`: declarative `entry` / `transitions` graph with backward edges (loops), replacing v1's linear `steps[]` chain.
-- **Runtime registry** (`.apm/runtimes.yml`, ADR-005): pluggable adapters; v2 ships with `claude` and `copilot` kinds enabled. `azure-openai`, `bedrock`, `ollama`, `custom` are reserved pending per-kind ADRs.
+- **Runtime registry** (`src/runtimes.yml`, ADR-005): pluggable adapters; v2 ships with `claude` and `copilot` kinds enabled. `azure-openai`, `bedrock`, `ollama`, `custom` are reserved pending per-kind ADRs.
 - **Two-channel state** (ADR-004): public append-only timeline comments + a single idempotent `<!-- apm-state -->` block per Issue/PR. Timeline reconstructor rebuilds run history on resume.
 - **`apm-msg` protocol**: agents emit `<!-- apm-msg v="1" outcome="…" -->…<!-- /apm-msg -->` blocks; outcomes drive transitions (FR-014).
 - **Loop budget** (FR-018): per-pipeline cap (`loop_budget`) prevents infinite ping-pongs; over-budget runs halt with a regulator comment.
 - **Per-step timeout** (FR-019): `timeout_minutes` enforced on every step; expiry triggers an `orchestrator-failure` fallback transition.
 - **Regulation lint** (`scripts/orchestrator/regulation-lint.js`): validates that every label / outcome / trigger referenced by pipelines is declared in `docs/AGENT_PROTOCOL.md`.
-- **`verify-mirror.sh`** + CI gate: enforces ADR-006 — `.apm/` is canonical, Copilot tree is mirrored and verified.
+- **`verify-mirror.sh`** + CI gate: enforces ADR-006 — `src/` is canonical, Copilot tree is mirrored and verified.
 - **Pipeline validator CLI** (`pipeline-validator-cli.js`): JSON Schema validation of v2 pipelines; failures fail PR CI.
 - **Dedup-key** module: stable hash for transition idempotency; safe replay on workflow restarts.
 
@@ -183,7 +183,7 @@ bash /path/to/quorumkit-clone/installer/init.sh --upgrade --apply --engine-ref=v
 ### ✨ Features
 
 - **Autonomous Agent Orchestration** (#2): Orchestrator GitHub Actions workflow that automatically sequences agents in response to repository events — no manual slash-commands required for routine SDLC work
-- **Declarative Pipeline Configuration** (#2): YAML pipeline files at `.apm/pipelines/*.yml` validated against JSON schema on load; malformed files are rejected gracefully while others remain active
+- **Declarative Pipeline Configuration** (#2): YAML pipeline files at `src/pipelines/*.yml` validated against JSON schema on load; malformed files are rejected gracefully while others remain active
 - **Human-in-the-Loop Approval Gates** (#2): `approval: required` gate on any pipeline step; pauses execution, posts comment, resumes on authorised `/approve`; times out after 72 hours by default
 - **Pipeline State Persistence** (#2): Full pipeline run state serialised as tagged HTML comment in GitHub Issues/PRs; Orchestrator reconstructs in-progress state after restart without local memory
 - **Dashboard Pipeline Webhook** (#2): `POST /webhook/pipeline-event` endpoint on `dashboard/server.js` + WebSocket broadcast within 5 seconds; skipped silently when `DASHBOARD_WEBHOOK_URL` is unset

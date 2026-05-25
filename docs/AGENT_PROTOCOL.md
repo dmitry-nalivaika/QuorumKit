@@ -320,7 +320,7 @@ recognised `apm-msg` block from a registered agent identity.
   the audit channel.
 - ADR-004 supersedes ADR-002 to introduce the live-status channel.
 - ADR-005 freezes the runtime kind allowlist.
-- ADR-006 declares `.apm/` as the source of truth for the configs that
+- ADR-006 declares `src/` as the source of truth for the configs that
   reference the labels and outcomes above.
 - ADR-007 §6 mandates that orchestrator-workflow failures themselves surface
   via an `outcome: orchestrator-failure` audit comment.

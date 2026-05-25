@@ -152,7 +152,7 @@ The Reviewer Agent will apply the [Agent Consistency Checklist](#agent-consisten
 Or run it manually in Claude Code:
 
 ```
-/reviewer-agent Review my changes to .apm/agents/ for consistency across all 15 agents
+/reviewer-agent Review my changes to .github/agents/ for consistency across all 15 agents
 ```
 
 ### 4. PR and review
@@ -183,7 +183,7 @@ For significant changes (new agent, restructured conventions):
 
 ## Agent Consistency Checklist
 
-Every PR that touches `.apm/agents/` **must** pass all of these checks.
+Every PR that touches `.github/agents/` **must** pass all of these checks.
 The Reviewer Agent applies these automatically; you can also run them manually.
 
 ### No-Duplication Rules

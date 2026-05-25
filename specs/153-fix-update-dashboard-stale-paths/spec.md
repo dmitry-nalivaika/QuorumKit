@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `update-dashboard.yml` workflow and `engine/dashboard/generate-dashboard.js` both reference `.apm/agents/` — a path that was removed when the project was rebranded to QuorumKit (Issue #067). Agent files now live at `.github/agents/`. The workflow silently never triggers on real changes and fails when dispatched manually. This spec updates both files to point to the correct post-rebranding paths.
+The `update-dashboard.yml` workflow and `engine/dashboard/generate-dashboard.js` both reference `.github/agents/` — a path that was removed when the project was rebranded to QuorumKit (Issue #067). Agent files now live at `.github/agents/`. The workflow silently never triggers on real changes and fails when dispatched manually. This spec updates both files to point to the correct post-rebranding paths.
 
 ## User Stories
 
@@ -29,12 +29,12 @@ Acceptance Scenarios:
 
 ## Functional Requirements
 
-- FR-001: The `on.push.paths` trigger in `update-dashboard.yml` must be updated to watch `.github/agents/**` instead of `.apm/agents/**`.
+- FR-001: The `on.push.paths` trigger in `update-dashboard.yml` must be updated to watch `.github/agents/**` instead of `.github/agents/**`.
 - FR-002: The `on.push.paths` trigger must watch `quorumkit.yml` instead of `apm.yml`.
 - FR-003: The `on.push.paths` trigger must continue to watch `engine/dashboard/generate-dashboard.js`.
 - FR-004: In `generate-dashboard.js`, the `AGENTS_DIR` constant must be updated to `path.join(ROOT, '.github', 'agents')`.
 - FR-005: In `generate-dashboard.js`, the `APM_YML` constant must be verified to point to `quorumkit.yml` at the repo root; update if incorrect.
-- FR-006: The commit message in the workflow step must be updated from `"chore(dashboard): auto-sync agent data from .apm/agents [skip ci]"` to `"chore(dashboard): auto-sync agent data from .github/agents [skip ci]"`.
+- FR-006: The commit message in the workflow step must be updated from `"chore(dashboard): auto-sync agent data from .github/agents [skip ci]"` to `"chore(dashboard): auto-sync agent data from .github/agents [skip ci]"`.
 - FR-007: No other logic in `generate-dashboard.js` or `update-dashboard.yml` may be changed beyond the path updates.
 - FR-008: The updated `generate-dashboard.js` must successfully read all agent markdown files from `.github/agents/` and produce a valid `engine/dashboard/index.html`.
 
@@ -72,7 +72,7 @@ No PII involved. Standard open-source data classification applies per the consti
 
 - All agent definition files are at `.github/agents/*.md` post-rebranding.
 - `quorumkit.yml` is at the repository root (same location as the former `apm.yml`).
-- No other scripts or workflows reference `.apm/agents/` (if found, they are out of scope for this issue).
+- No other scripts or workflows reference `.github/agents/` (if found, they are out of scope for this issue).
 
 ## Open Questions
 

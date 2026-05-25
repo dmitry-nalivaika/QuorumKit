@@ -44,4 +44,4 @@
 
 - [ ] T-17 Run `bash installer/quality-check.sh` — must exit 0
 - [ ] T-18 Run `cd engine/orchestrator && npm test` — all 175+ tests must pass
-- [ ] T-19 Run `grep -r "apm-engine\|agentic-dev-stack" . --include="*.json" --include="*.yml" --include="*.md" --exclude-dir=node_modules` — verify zero matches outside `.apm/` internal tokens and historical CHANGELOG entries
+- [ ] T-19 Run `grep -r "apm-engine\|agentic-dev-stack" . --include="*.json" --include="*.yml" --include="*.md" --exclude-dir=node_modules` — verify zero matches outside `src/` internal tokens and historical CHANGELOG entries

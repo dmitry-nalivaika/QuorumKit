@@ -106,7 +106,7 @@ agent workflow declares no `timeout-minutes:` (treating it as the GitHub
 default of 360 minutes for the comparison). Default per-step timeout: 60 minutes.
 
 Every shipped agent workflow under `templates/github/workflows/copilot-agent-*.yml`
-and `.apm/workflows/agent-*.yml` MUST declare an explicit `timeout-minutes:` on
+and `src/workflows/agent-*.yml` MUST declare an explicit `timeout-minutes:` on
 its job(s). This is enforced by `quality-check.sh` gate **#14** (added below).
 
 ### 5. Required CI status checks
@@ -207,7 +207,7 @@ declared outcome in the regulation document), distinct from `protocol-violation`
 - `specs/044-orchestrator-v2-design/spec.md` — FR-015, FR-016, FR-017, FR-019, FR-021, FR-023
 - ADR-004 (live-status PATCH race acknowledged, mitigated here)
 - ADR-005 (runtime adapter interface — `requiredPermissions` extension)
-- ADR-006 (`.apm/` SoT + mirror — `verify-mirror.sh` referenced as required check)
+- ADR-006 (`src/` SoT + mirror — `verify-mirror.sh` referenced as required check)
 - Constitution §VI (Observable, Auditable Automation), §VIII (Orchestrator as control plane)
 - `.github/agents/devops-agent.md` — infrastructure review checklist
 - GitHub Actions docs — [`concurrency`](https://docs.github.com/en/actions/using-jobs/using-concurrency), [`timeout-minutes`](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes) (cap: 360 min)

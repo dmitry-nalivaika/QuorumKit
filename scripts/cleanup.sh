@@ -37,7 +37,7 @@ _bak .claude/skills
 _bak CLAUDE.md
 
 # ── Orchestrator pipelines ────────────────────────────────────────────────────
-_bak .apm
+_bak src/pipelines
 
 # ── Speckit / project constitution ───────────────────────────────────────────
 _bak .specify
