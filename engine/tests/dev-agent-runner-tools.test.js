@@ -97,6 +97,20 @@ describe('replace_in_file', () => {
 
     expect(result).toMatch(/ERROR.*file not found/);
   });
+
+  it('treats $& in new_str as a literal string, not a back-reference', async () => {
+    fs.writeFileSync(abs('target.txt'), 'hello world\n', 'utf8');
+
+    const result = await executeTool('replace_in_file', {
+      path: rel('target.txt'),
+      old_str: 'world',
+      new_str: '$&-literal',
+    });
+
+    expect(result).toMatch(/Replaced 1 occurrence/);
+    // Must contain the literal '$&-literal', not 'world-literal'
+    expect(fs.readFileSync(abs('target.txt'), 'utf8')).toBe('hello $&-literal\n');
+  });
 });
 
 // ─── write_file size-shrink guard ────────────────────────────────────────────

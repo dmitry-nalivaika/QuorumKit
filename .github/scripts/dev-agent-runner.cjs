@@ -256,7 +256,8 @@ async function executeTool(name, input) {
       if (occurrences > 1) {
         return `ERROR: ambiguous match — old_str appears ${occurrences} times in ${input.path}; include more context`;
       }
-      const updated = original.replace(input.old_str, input.new_str);
+      // Use function form to prevent $& / $1 / $' replacement-pattern interpretation
+      const updated = original.replace(input.old_str, () => input.new_str);
       fs.writeFileSync(resolved, updated, 'utf8');
       return `Replaced 1 occurrence in ${input.path}`;
     }
