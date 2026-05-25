@@ -1,4 +1,4 @@
-# Spec: Fix Agent Invocation — Stale src/ Paths and Ask Mode Regression — Issue #172
+# Spec: Fix Agent Invocation — Stale .apm/ Paths and Ask Mode Regression — Issue #172
 
 **Issue:** #172
 **Branch:** `172-fix-agent-invocation-paths-and-mode`
@@ -10,11 +10,11 @@
 ## Overview
 
 Three regressions broke agent invocation from the QuorumKit dashboard and CI runner
-after the `src/` → `.github/` migration:
+after the `.apm/` → `.github/` migration:
 
-1. **Stale `src/` path references** — `engine/dashboard/server.js` and
+1. **Stale `.apm/` path references** — `engine/dashboard/server.js` and
    `src/.github/scripts/dev-agent-runner.cjs` still resolved agent definitions from
-   `.github/agents/` and skills from `.github/skills/`, which no longer exist in consumer
+   `.apm/agents/` and skills from `.apm/skills/`, which no longer exist in consumer
    projects after `init.sh` installs to `.github/agents/` and `.github/instructions/`.
 
 2. **`@workspace` prefix forces Ask mode** — The generated Copilot Chat prompt began
@@ -34,14 +34,14 @@ after the `src/` → `.github/` migration:
 ### US-1: Dashboard invokes agent with correct paths
 
 As a **developer using the QuorumKit dashboard**, I want the generated Copilot Chat
-prompt to reference `.github/agents/{agent}.md` (not `.github/agents/`), so that the
+prompt to reference `.github/agents/{agent}.md` (not `.apm/agents/`), so that the
 agent can load its role definition without a 404.
 
 **Acceptance Scenarios:**
 - Given the dashboard generates a Copilot Chat prompt for any agent
   When I inspect the prompt
   Then the agent role file path is `.github/agents/{agent}-agent.md`
-  And no `src/` path appears anywhere in the prompt
+  And no `.apm/` path appears anywhere in the prompt
 
 ### US-2: Agent opens in Agent mode (not Ask mode)
 
@@ -79,7 +79,7 @@ Agent workflow has access to the correct role definition.
   When the job runs in a consumer project
   Then `manifests.agent` is read from `.github/agents/developer-agent.md`
   And `manifests.skill` is read from `.github/instructions/dev-agent.instructions.md`
-  And no `src/` path reference appears in the runner
+  And no `.apm/` path reference appears in the runner
 
 ---
 
@@ -88,10 +88,10 @@ Agent workflow has access to the correct role definition.
 - **FR-001:** `engine/dashboard/server.js` — `buildAgentCmd` MUST resolve agent
   definition files from `.github/agents/<agent>-agent.md` (consumer project root
   first, then package `src/` fallback). The old `resolveApmFile` helper that searched
-  `.github/agents/` and `.github/skills/` MUST be removed.
+  `.apm/agents/` and `.apm/skills/` MUST be removed.
 
 - **FR-002:** `engine/dashboard/server.js` — `buildAgentCmd` MUST resolve instruction
-  files from `.github/instructions/<short>-agent.instructions.md`. The `.github/skills/`
+  files from `.github/instructions/<short>-agent.instructions.md`. The `.apm/skills/`
   lookup path MUST be removed.
 
 - **FR-003:** `engine/dashboard/server.js` — `handleCopilotInvoke` MUST set
@@ -105,7 +105,7 @@ Agent workflow has access to the correct role definition.
 
 - **FR-005:** `src/.github/scripts/dev-agent-runner.cjs` — `manifests.agent` MUST be
   read from `.github/agents/developer-agent.md`. `manifests.skill` MUST be read from
-  `.github/instructions/dev-agent.instructions.md`. All `src/` references in this
+  `.github/instructions/dev-agent.instructions.md`. All `.apm/` references in this
   file MUST be removed.
 
 - **FR-006:** `src/.github/prompts/` MUST contain one `{agent}.prompt.md` file for
@@ -129,7 +129,7 @@ Agent workflow has access to the correct role definition.
 ## Success Criteria
 
 - [ ] Dashboard-generated Copilot Chat prompts reference `.github/agents/` paths only
-- [ ] No `src/` path appears in any generated prompt or manifest load
+- [ ] No `.apm/` path appears in any generated prompt or manifest load
 - [ ] Agents start in Agent mode when invoked via the dashboard (no `@workspace` in prompt)
 - [ ] `init.sh` installs 8 `{agent}.prompt.md` files on a fresh consumer project
 - [ ] Re-running `init.sh` skips existing prompt files without error

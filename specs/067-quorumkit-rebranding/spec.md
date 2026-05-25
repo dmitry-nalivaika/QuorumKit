@@ -125,7 +125,7 @@ Acceptance Scenarios:
 
 ## Out of Scope
 
-- **`src/` directory rename** — renaming `src/` to `src/` is a major breaking change for all consumer projects. This is deferred to a future spec with a full migration strategy and a MAJOR version bump.
+- **`src/` directory rename** — renaming `src/` to a dedicated tool-specific path is a major breaking change for all consumer projects. This is deferred to a future spec with a full migration strategy and a MAJOR version bump.
 - **Wire-format token rename** (`apm-msg`, `apm-state`, `apm-pipeline-state`) — changing embedded HTML comment tokens would silently break all existing consumer issue timelines and state recovery. Deferred to a dedicated protocol-migration spec with an ADR.
 - **VS Code Marketplace publisher account rename** — the `publisher` field change in `package.json` requires a new marketplace publisher account or transfer. Scope is limited to updating the `package.json` fields; marketplace re-publishing logistics are handled by the release agent.
 - **GitHub Pages / website domain changes** — out of scope.

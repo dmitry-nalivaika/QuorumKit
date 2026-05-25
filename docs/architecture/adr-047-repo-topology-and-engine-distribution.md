@@ -34,7 +34,7 @@ via `verify-mirror.sh`. Three additional mirror surfaces drift today:
   not mirrored"), and has *already* drifted from `src/pipelines/`. Verified by
   `diff`: `feature-pipeline.yml` is v2 in `src/`, v1 in `templates/`. A
   consumer running `init.sh` today receives a stale orchestrator config.
-- **`.github/agents/`** is a byte-identical duplicate of `.github/agents/` in this
+- **`.github/agents/`** is a byte-identical duplicate of `.apm/agents/` in this
   repo (`diff` returns empty) with no enforcement — pure tax.
 - **14 of 25 workflow files** are duplicated between `templates/github/workflows/`
   and `.github/workflows/` with no parity gate. Workflow changes can silently

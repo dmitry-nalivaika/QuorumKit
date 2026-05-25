@@ -124,13 +124,13 @@ and audit posting (GitHub comments). It does not sequence agents, maintain a job
 queue, or track intermediate step results — that is the Orchestrator's exclusive
 domain.
 
-### Why sibling-directory default over `~/src/pipelines/`
+### Why sibling-directory default over `~/.quorumkit/pipelines/`
 
 The sibling-directory default (`../$(basename "$PWD")-NNN-slug/`) keeps pipelines
 immediately discoverable alongside the main clone without requiring home-directory
 setup or documentation of a tool-specific directory convention. A developer running
 `ls ..` sees all active pipelines at a glance. The `QUORUMKIT_PIPELINES_DIR` override
-accommodates the `~/src/pipelines/` layout for developers who prefer it.
+accommodates the `~/.quorumkit/pipelines/` layout for developers who prefer it.
 
 ### Constitution alignment
 
@@ -181,5 +181,5 @@ accommodates the `~/src/pipelines/` layout for developers who prefer it.
 |---|---|---|---|
 | **Separate full clones** | Simple mental model; complete isolation including `.git` | 2× disk space; separate fetch per clone; no git-level protection against same-branch double-checkout | `git worktree` provides identical working-tree isolation with lower overhead and built-in branch exclusivity |
 | **Local coordination daemon** | Could offer richer pipeline scheduling | Violates Constitution Principle VIII; introduces a second control plane alongside the Orchestrator; local state can diverge from GitHub state | Hard violation of the constitution's single-control-plane rule |
-| **`~/src/pipelines/` as fixed default** | Predictable, tool-specific location | Requires documenting a home-directory convention; not discoverable without knowing the path | Sibling-directory default is more immediately discoverable; `QUORUMKIT_PIPELINES_DIR` provides the same layout for those who prefer it |
+| **`~/.quorumkit/pipelines/` as fixed default** | Predictable, tool-specific location | Requires documenting a home-directory convention; not discoverable without knowing the path | Sibling-directory default is more immediately discoverable; `QUORUMKIT_PIPELINES_DIR` provides the same layout for those who prefer it |
 | **Status quo (single clone, branch switching)** | No new complexity | Cannot run two features in parallel; switching branches loses working-directory context for the previous feature | Does not satisfy the core requirement of simultaneous parallel local pipelines |
