@@ -64,9 +64,9 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-          # setup-node v4+ injects github.token as NODE_AUTH_TOKEN when
-          # registry-url is set. We unset it just before npm publish so npm
-          # falls back to OIDC Trusted Publisher auth instead.
+          # token: '' would suppress github.token injection but setup-node
+          # v4+ still writes the .npmrc placeholder. We obtain the OIDC token
+          # explicitly below and pass it as NODE_AUTH_TOKEN instead.
 
       - name: Install engine devDeps + orchestrator runtime deps
         run: |
@@ -83,15 +83,31 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to npm with OIDC provenance
-        # FR-010 / SEC-HIGH-001: no NPM_TOKEN; npm CLI obtains an OIDC token
-        # from the id-token endpoint and authenticates via the Trusted Publisher
-        # policy. NODE_AUTH_TOKEN is unset here so the GitHub token injected
-        # by setup-node does not shadow the OIDC fallback path.
-        working-directory: engine
+      - name: Obtain npm OIDC token (Trusted Publisher)
+        # SEC-HIGH-001: explicitly request a JWT with the npm audience from
+        # GitHub's OIDC endpoint. The npm registry validates this JWT against
+        # the Trusted Publisher config — no static NPM_TOKEN secret needed.
+        id: npm-oidc
         run: |
-          unset NODE_AUTH_TOKEN
-          npm publish --provenance --access public
+          TOKEN=$(curl -fsSL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https://registry.npmjs.org/" \
+            | jq -r '.value')
+          if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+            echo "::error::Failed to obtain OIDC token — check id-token:write permission"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm with OIDC provenance
+        # Uses the OIDC JWT (not a static NPM_TOKEN) as NODE_AUTH_TOKEN.
+        # npm sends it as Authorization: Bearer <jwt>; the npm registry
+        # validates it against the Trusted Publisher policy.
+        working-directory: engine
+        env:
+          NODE_AUTH_TOKEN: ${{ steps.npm-oidc.outputs.token }}
+        run: npm publish --provenance --access public
 
       - name: Create the GitHub Release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
