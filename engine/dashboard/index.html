@@ -773,7 +773,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
         <label>MODE</label>
         <select id="lp-modal-mode">
           <option value="isolated" selected>isolated (recommended)</option>
-          <option value="fast">fast</option>
+          <option value="shared">shared</option>
         </select>
       </div>
       <div class="lp-modal-err" id="lp-modal-err"></div>
@@ -2357,7 +2357,8 @@ async function confirmStartPipeline() {
   const errEl = document.getElementById('lp-modal-err');
 
   if (!issueNumber || issueNumber <= 0) { errEl.textContent = 'Issue number must be a positive integer.'; return; }
-  if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) { errEl.textContent = 'Slug must match ^[a-z0-9][a-z0-9-]*$'; return; }
+  // FR-176-003: slug is optional — auto-derived server-side when blank
+  if (slug && !/^[a-z0-9][a-z0-9-]*$/.test(slug)) { errEl.textContent = 'Slug must match ^[a-z0-9][a-z0-9-]*$ (or leave blank to auto-derive)'; return; }
 
   errEl.textContent = '';
   document.getElementById('lp-modal-confirm').disabled = true;
