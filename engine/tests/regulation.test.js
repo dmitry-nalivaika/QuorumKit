@@ -72,4 +72,20 @@ describe('regulation.loadRegulation', () => {
     expect(r.triggers.has('issues.labeled')).toBe(true);
     expect(r.triggers.has('workflow_run.completed')).toBe(true);
   });
+
+  it('declares spec-ready outcome (FR-016 — #45)', async () => {
+    // This test is the regression guard for issue #45.
+    // It fails until AGENT_PROTOCOL.md is updated to register the new outcome.
+    const r = await loadRegulation(REPO_ROOT);
+    expect(r.found).toBe(true);
+    expect(r.outcomes.has('spec-ready')).toBe(true);
+  });
+
+  it('declares type:spec label (FR-010 — #45)', async () => {
+    // The BA agent applies type:spec to spec PRs; the label must be declared
+    // in the regulation document so the orchestrator can route on it.
+    const r = await loadRegulation(REPO_ROOT);
+    expect(r.found).toBe(true);
+    expect(r.labels.has('type:spec')).toBe(true);
+  });
 });

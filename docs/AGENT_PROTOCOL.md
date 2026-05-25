@@ -67,6 +67,11 @@ labels do not scale to N counters.)
 Their semantics are owned by the Triage Agent's role definition and reproduced
 here for completeness.
 
+`type:spec` — applied by the BA Agent to spec-only PRs opened when a new
+`specs/NNN-slug/spec.md` is published. The orchestrator may use this label to
+route the Reviewer or Architect Agent to review the spec PR before implementation
+begins.
+
 ---
 
 ## 2. `apm-msg` Outcomes
@@ -86,6 +91,7 @@ declare transitions only on outcomes that the source step's agent can produce.
 | `runtime-error` | Runtime adapter retry-exhausted (ADR-007 §8, FR-030). | Orchestrator (synthetic) | Run fails; does NOT increment loop budget. |
 | `protocol-violation` | Zero / multiple / invalid `apm-msg` blocks. | Orchestrator (synthetic) | Run fails. |
 | `orchestrator-failure` | Orchestrator workflow itself threw uncaught (ADR-007 §6, FR-029). | Orchestrator (synthetic) | Run fails; audit comment links to failed Actions run. |
+| `spec-ready` | BA Agent finished writing/refining a spec and published it to a branch + PR; orchestrator routes to next-agent label (`agent:architect` or `agent:dev`). | BA Agent | → activate next-agent label on the spec PR. |
 
 ### Per-outcome `payload` schemas
 
@@ -96,6 +102,7 @@ declare transitions only on outcomes that the source step's agent can produce.
 - `spec_gap`: `{ "missing": string[], "ba_input_required": string }`
 - `timeout`, `needs-human`, `runtime-error`, `protocol-violation`,
   `orchestrator-failure`: `{ "details"?: string, "actions_run_url"?: string }`
+- `spec-ready`: `{ "specPath": string, "branch": string, "prUrl": string }`
 
 These shapes are advisory at the schema level (`payload` is `additionalProperties: true`)
 because the regulation document is the human-curated source. CI lints

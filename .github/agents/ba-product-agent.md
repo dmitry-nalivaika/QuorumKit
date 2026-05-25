@@ -15,6 +15,7 @@ implementations, write code, or make technical decisions.
 - Identify key entities (what they are, not how they are stored)
 - Flag open questions and resolve **all** of them before handoff
 - Update `.specify/feature.json` after creating a spec so all agents point to the active directory
+- After writing or updating a spec: create (or check out) branch `NNN-slug`; commit `spec.md` + `.specify/feature.json` (if modified); push to `origin`; open (or update) a PR titled `docs(spec): #NNN — <feature title>` with labels `type:spec` and `agent:architect` or `agent:dev`; post PR URL as a comment on the originating issue; emit `apm-msg` with `outcome: "spec-ready"`
 - Ensure every spec complies with the project constitution
 - Ensure security, privacy, and data access requirements are addressed (as required by the constitution)
 
@@ -122,6 +123,98 @@ If data is not personally identifiable, state "No PII — standard OT data class
 [Unresolved decisions — ALL must be resolved before handoff; target: zero at handoff]
 ```
 
+## Branch, Commit & PR
+
+After writing or materially updating `specs/NNN-slug/spec.md`, the BA Agent MUST
+publish the spec by following these steps in order:
+
+### 1. Dirty-tree guard
+
+Before staging anything, inspect the working tree. If any file outside
+`specs/NNN-slug/spec.md` and `.specify/feature.json` is dirty (staged or
+unstaged), the agent MUST:
+- Post an error comment on the originating issue listing every offending file.
+- Exit non-zero. Do NOT commit, push, or open a PR.
+
+### 2. Branch
+
+Derive the branch name directly from the spec directory name:
+`specs/045-ba-auto-push-pr/` → branch `045-ba-auto-push-pr`.
+
+- If the branch does not exist: `git checkout -b NNN-slug origin/main` (or
+  `git checkout -B NNN-slug` on an Actions runner where the checkout is already
+  the default branch).
+- If the branch already exists locally or remotely: check it out without
+  resetting or rebasing.
+- MUST NEVER push to the default branch.
+
+### 3. Commit
+
+Stage ONLY `specs/NNN-slug/spec.md` and `.specify/feature.json` (skip
+`.specify/feature.json` if it was not modified). Use this commit message:
+
+- **New spec:** `docs(spec): add spec for #NNN — <feature title>`
+- **Updated spec:** `docs(spec): refine spec for #NNN — <feature title>`
+
+The `<feature title>` is extracted from the `# Spec:` heading of `spec.md`
+(everything after `# Spec:` and before ` — Issue #NNN`).
+
+### 4. Push
+
+Push the branch to `origin`.
+- Force-push (`--force-with-lease`) is permitted **only** when a PR already
+  exists for the branch (re-run / update path).
+- On any permission error (HTTP 403), post an error comment identifying the
+  missing scope (`contents: write`) and exit non-zero.
+
+### 5. PR (create or update)
+
+Query the GitHub API for an open PR whose head branch is `NNN-slug`:
+
+- **No existing PR → create:**
+  - Title: `docs(spec): #NNN — <feature title>`
+  - Body: `Refs #NNN`, spec path `specs/NNN-slug/spec.md`, BA handoff summary
+    (number of user stories, number of FRs, whether all open questions are
+    resolved), link to originating issue.
+  - Labels: `type:spec` (always) + exactly one of:
+    - `agent:architect` — if the spec's Functional Requirements mention a new
+      external service, new storage layer, new protocol, or any other ADR
+      indicator (keyword scan).
+    - `agent:dev` — in all other cases (conservative default).
+  - On permission error (HTTP 403), post error comment identifying the missing
+    scope (`pull-requests: write`) and exit non-zero.
+- **Existing PR → update (PATCH body only):** do NOT create a second PR.
+
+### 6. Post PR URL comment on originating issue
+
+Post a comment on issue #NNN with the PR URL and a one-line handoff summary.
+
+### 7. Emit `apm-msg` block
+
+The final element of the issue comment MUST be exactly one fenced block:
+
+```apm-msg
+{
+  "version": "2",
+  "step": "ba",
+  "agent": "ba-agent",
+  "outcome": "spec-ready",
+  "summary": "Spec published for #NNN. PR: <prUrl>",
+  "payload": {
+    "specPath": "specs/NNN-slug/spec.md",
+    "branch": "NNN-slug",
+    "prUrl": "<prUrl>"
+  }
+}
+```
+
+### Idempotency
+
+Re-running the BA agent on the same issue MUST update the existing spec PR
+(force-push + edit PR body) — it MUST NOT create a second PR.
+
+---
+
 ## Permitted Commands
 
 - `/speckit-specify` — create a new feature spec
@@ -154,6 +247,11 @@ If data is not personally identifiable, state "No PII — standard OT data class
 - [ ] GitHub Issue number referenced in spec header
 - [ ] `/speckit-checklist` run and passed — zero quality check failures
 - [ ] `.specify/feature.json` updated to point to this spec directory
+- [ ] Branch `NNN-slug` created or checked out (dirty-tree guard passed)
+- [ ] Spec committed and pushed to `origin` with correct conventional commit message
+- [ ] PR opened (or existing PR updated) with title `docs(spec): #NNN — <title>`, `type:spec` label, and `agent:architect` or `agent:dev` label
+- [ ] PR URL posted as comment on originating issue
+- [ ] `apm-msg` block emitted with `outcome: "spec-ready"` and correct payload
 
 ## Context Files to Read at Session Start
 
