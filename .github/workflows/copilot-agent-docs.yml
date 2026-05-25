@@ -50,10 +50,169 @@ jobs:
                 ? `push to ${context.payload.ref} (${context.sha?.slice(0,7)})`
                 : `comment by @${context.payload.comment?.user?.login ?? 'unknown'}`;
 
-            const issueNumber   = context.eventName === 'workflow_dispatch'
+            const issueNumber = context.eventName === 'workflow_dispatch'
               ? Number(context.payload.inputs.issue_number)
               : context.payload.issue?.number;
-            const commentBody   = context.payload.comment?.body ?? '';
+            const commentBody = context.payload.comment?.body ?? '';
+
+            // FR-005 size limits
+            const MAX_PER_FILE = 20 * 1024;   // 20 KB per file patch
+            const MAX_TOTAL    = 400 * 1024;  // 400 KB total diff payload
+
+            // FR-001 / FR-002: Resolve PR number from trigger context
+            let prNumber = null;
+            if (context.eventName === 'workflow_dispatch' && context.payload.inputs.issue_number) {
+              prNumber = Number(context.payload.inputs.issue_number);
+            } else if (context.payload.issue?.pull_request) {
+              prNumber = context.payload.issue.number;          // comment on PR
+            } else if (context.payload.pull_request?.number) {
+              prNumber = context.payload.pull_request.number;   // review comment
+            } else if (context.eventName === 'push') {
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                commit_sha: context.sha,
+              });
+              const merged = prs.find(p => p.merged_at);
+              if (merged) prNumber = merged.number;
+            }
+
+            // FR-003 / FR-004 / FR-005: Fetch real PR data
+            let prContext = null;
+            let apiError  = null;
+
+            if (prNumber) {
+              try {
+                // workflow_dispatch may supply a plain issue number; handle 404 gracefully
+                let pr;
+                try {
+                  const { data } = await github.rest.pulls.get({
+                    owner: context.repo.owner, repo: context.repo.repo,
+                    pull_number: prNumber,
+                  });
+                  pr = data;
+                } catch (e) {
+                  if (e.status === 404) { prNumber = null; }
+                  else throw e;
+                }
+
+                if (pr) {
+                  // Paginate files (up to 300 files)
+                  let files = [], page = 1;
+                  while (true) {
+                    const { data: batch } = await github.rest.pulls.listFiles({
+                      owner: context.repo.owner, repo: context.repo.repo,
+                      pull_number: prNumber, per_page: 100, page,
+                    });
+                    files = files.concat(batch);
+                    if (batch.length < 100) break;
+                    page++;
+                  }
+
+                  const fileSummary = files
+                    .map(f => `- ${f.status}: \`${f.filename}\` (+${f.additions}/-${f.deletions})`)
+                    .join('\n');
+
+                  // FR-005: apply per-file and total size limits
+                  let totalSize = 0;
+                  const omitted = [];
+                  const patchSections = [];
+                  for (const f of files) {
+                    if (!f.patch) continue;
+                    let patch = f.patch;
+                    if (patch.length > MAX_PER_FILE)
+                      patch = patch.slice(0, MAX_PER_FILE) + '\n[... truncated]';
+                    if (totalSize + patch.length > MAX_TOTAL) {
+                      omitted.push(f.filename);
+                      continue;
+                    }
+                    patchSections.push(`### ${f.filename}\n\`\`\`diff\n${patch}\n\`\`\``);
+                    totalSize += patch.length;
+                  }
+                  const truncNotice = omitted.length
+                    ? `\n> ⚠️ Diff truncated at 400 KB. Omitted: ${omitted.map(n => `\`${n}\``).join(', ')}`
+                    : '';
+
+                  prContext = [
+                    `## PR #${prNumber}: ${pr.title}`,
+                    `**Author:** @${pr.user.login}`,
+                    `**Merged:** ${pr.merged_at ?? 'not yet merged'}`,
+                    `**Base → Head:** \`${pr.base.ref}\` ← \`${pr.head.ref}\``,
+                    '',
+                    '### PR Description',
+                    pr.body?.trim() || '(no description)',
+                    '',
+                    `### Files Changed (${files.length})`,
+                    fileSummary,
+                    truncNotice,
+                    '',
+                    '### Patches',
+                    ...patchSections,
+                  ].join('\n');
+                }
+              } catch (err) {
+                apiError = `GitHub API error fetching PR #${prNumber}: ${err.message}`;
+              }
+            }
+
+            // FR-006: fallback to commit compare when push has no associated PR
+            if (!prContext && !apiError && context.eventName === 'push') {
+              try {
+                const { data: comp } = await github.rest.repos.compareCommitsWithBasehead({
+                  owner:    context.repo.owner,
+                  repo:     context.repo.repo,
+                  basehead: `${context.payload.before}...${context.sha}`,
+                });
+                const compFiles = comp.files ?? [];
+                const fileSummary = compFiles
+                  .map(f => `- ${f.status}: \`${f.filename}\` (+${f.additions}/-${f.deletions})`)
+                  .join('\n');
+                let totalSize = 0;
+                const patchSections = [];
+                for (const f of compFiles) {
+                  if (!f.patch) continue;
+                  let patch = f.patch;
+                  if (patch.length > MAX_PER_FILE)
+                    patch = patch.slice(0, MAX_PER_FILE) + '\n[... truncated]';
+                  if (totalSize + patch.length > MAX_TOTAL) break;
+                  patchSections.push(`### ${f.filename}\n\`\`\`diff\n${patch}\n\`\`\``);
+                  totalSize += patch.length;
+                }
+                prContext = [
+                  `> ⚠️ No PR found for this push — using commit diff (${context.payload.before?.slice(0,7)}...${context.sha?.slice(0,7)}).`,
+                  '',
+                  `### Files Changed (${compFiles.length})`,
+                  fileSummary,
+                  '',
+                  '### Patches',
+                  ...patchSections,
+                ].join('\n');
+              } catch (err) {
+                apiError = `GitHub API error fetching commit diff: ${err.message}`;
+              }
+            }
+
+            if (!prContext && !apiError) {
+              prContext = '> ⚠️ No PR or commit diff context found for this trigger.';
+            }
+
+            // FR-007: hard-abort on API error to prevent hallucination
+            if (apiError) {
+              const errBody = `## Docs Agent — API Error\n\n${apiError}\n\nThe Docs Agent could not retrieve the PR diff and is skipping the audit to prevent hallucinated findings.`;
+              if (issueNumber) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  issue_number: issueNumber, body: errBody,
+                });
+              } else {
+                await github.rest.issues.create({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  title: `📄 Docs Agent Error – ${new Date().toISOString().slice(0,10)}`,
+                  body: errBody, labels: ['documentation', 'agent-report'],
+                });
+              }
+              return;
+            }
 
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
@@ -61,11 +220,21 @@ jobs:
             ].filter(Boolean).join('\n\n---\n\n')
               || 'You are a helpful GitHub documentation agent.';
 
-            const userContent =
-              `Triggered by: ${trigger}.\n` +
-              (commentBody ? `Comment:\n${commentBody}\n` : '') +
-              `Audit documentation for the most recently merged PR or the PR referenced in the trigger. ` +
-              `If any updates are needed, describe them clearly so a follow-up PR can be opened.`;
+            // FR-008: grounded prompt — no fabrication
+            const userContent = [
+              `Triggered by: ${trigger}.`,
+              commentBody ? `\nComment:\n${commentBody}` : '',
+              '',
+              '## Real PR Context',
+              prContext,
+              '',
+              '## Your Task',
+              'Using ONLY the real PR data provided above, audit the documentation for this PR.',
+              'Base ALL findings exclusively on the diff — do NOT reference or suggest changes for files that do not appear in the diff.',
+              'If a changed file requires no documentation update, explicitly state "No documentation change needed" for that file rather than fabricating a suggestion.',
+              'Follow every step in your agent instructions and produce the Docs Review report.',
+              'If documentation updates are needed, describe them clearly so a follow-up PR can be opened.',
+            ].filter(Boolean).join('\n');
 
             const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
               method: 'POST',

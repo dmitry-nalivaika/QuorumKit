@@ -101,7 +101,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { execSync } = require('child_process');
+            const { execSync, spawnSync } = require('child_process');
             const fs = require('fs');
 
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');
@@ -153,15 +153,27 @@ jobs:
             execSync('git config user.name "github-actions[bot]"');
 
             // ── 4. Create or check out branch ─────────────────────────────────
-            try {
-              execSync(`git checkout -B ${branchName}`);
-            } catch (e) {
-              core.setFailed(`Failed to create/checkout branch ${branchName}: ${e.message}`);
-              return;
+            {
+              const verifyResult = spawnSync('git', ['rev-parse', '--verify', branchName], { encoding: 'utf8', stdio: 'pipe' });
+              if (verifyResult.status === 0) {
+                // Branch already exists — check it out without resetting (FR-003)
+                const coResult = spawnSync('git', ['checkout', branchName], { encoding: 'utf8' });
+                if (coResult.status !== 0) {
+                  core.setFailed(`Failed to checkout branch ${branchName}: ${coResult.stderr}`);
+                  return;
+                }
+              } else {
+                // Branch is new — create from HEAD
+                const coResult = spawnSync('git', ['checkout', '-b', branchName], { encoding: 'utf8' });
+                if (coResult.status !== 0) {
+                  core.setFailed(`Failed to create branch ${branchName}: ${coResult.stderr}`);
+                  return;
+                }
+              }
             }
 
             // ── 5. Stage spec files ───────────────────────────────────────────
-            execSync(`git add "${specPath}"`);
+            spawnSync('git', ['add', specPath], { encoding: 'utf8' });
             if (fs.existsSync('.specify/feature.json')) {
               execSync('git add .specify/feature.json');
             }
@@ -172,41 +184,42 @@ jobs:
             const featureTitle = titleMatch ? titleMatch[1].trim() : `Issue #${issueNumber}`;
 
             // ── 7. Commit ─────────────────────────────────────────────────────
-            // Determine new vs. update
-            let isUpdate = false;
-            try {
-              execSync(`git log --oneline origin/${branchName} -- "${specPath}"`, { stdio: 'pipe' });
-              isUpdate = true;
-            } catch { /* branch doesn't exist remotely yet */ }
+            // Determine new vs. update using the PR list (more reliable than git log exit code)
+            const existingPrs = await github.rest.pulls.list({
+              owner, repo, head: `${owner}:${branchName}`, state: 'open',
+            });
+            const isUpdate = existingPrs.data.length > 0;
 
             const commitMsg = isUpdate
               ? `docs(spec): refine spec for #${issueNumber} — ${featureTitle}`
               : `docs(spec): add spec for #${issueNumber} — ${featureTitle}`;
 
-            try {
-              execSync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
-            } catch (e) {
-              // Nothing to commit (spec unchanged) — continue to PR upsert.
-              core.info('Nothing to commit; proceeding to PR upsert.');
+            {
+              // Use spawnSync so commitMsg is never interpreted by the shell (OWASP A03)
+              const commitResult = spawnSync('git', ['commit', '-m', commitMsg], { encoding: 'utf8' });
+              if (commitResult.status !== 0) {
+                // Nothing to commit (spec unchanged) — continue to PR upsert.
+                core.info('Nothing to commit; proceeding to PR upsert.');
+              }
             }
 
             // ── 8. Push ───────────────────────────────────────────────────────
-            const existingPrs = await github.rest.pulls.list({
-              owner, repo, head: `${owner}:${branchName}`, state: 'open',
-            });
-            const pushFlag = existingPrs.data.length > 0 ? '--force-with-lease' : '';
-            try {
-              execSync(`git push ${pushFlag} origin ${branchName}`, { encoding: 'utf8' });
-            } catch (e) {
-              if (e.message.includes('403') || e.stderr?.includes('403')) {
-                await github.rest.issues.createComment({
-                  owner, repo, issue_number: issueNumber,
-                  body: `**BA Agent — Permission Error**\n\nFailed to push branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`contents: write\` scope. Please grant this permission in the workflow file and re-run.`,
-                });
-                core.setFailed('Missing contents: write permission.');
+            {
+              const pushArgs = ['push', ...(isUpdate ? ['--force-with-lease'] : []), 'origin', branchName];
+              const pushResult = spawnSync('git', pushArgs, { encoding: 'utf8' });
+              if (pushResult.status !== 0) {
+                const pushStderr = pushResult.stderr ?? '';
+                if (pushStderr.includes('403')) {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: issueNumber,
+                    body: `**BA Agent — Permission Error**\n\nFailed to push branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`contents: write\` scope. Please grant this permission in the workflow file and re-run.`,
+                  });
+                  core.setFailed('Missing contents: write permission.');
+                  return;
+                }
+                core.setFailed(`git push failed: ${pushStderr}`);
                 return;
               }
-              throw e;
             }
 
             // ── 9. ADR-trigger heuristic ──────────────────────────────────────

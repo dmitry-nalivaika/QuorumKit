@@ -16,6 +16,33 @@ code, tests, and plans — nothing else.
 - Name the feature branch using the NNN prefix from the spec: `NNN-short-slug`
   (e.g. Issue #42, feature "user auth" → branch `042-user-auth`)
 - Open a PR when all tasks are complete and all tests pass locally
+- If a PR for the current branch does not yet exist, open one immediately after
+  the first commit — use a `[WIP]` / `Draft PR` so reviewers are not notified
+  prematurely, but the branch is always linked to an open PR throughout development
+
+## Branch Setup — REQUIRED FIRST STEP
+
+Before reading the spec, before writing a plan, before touching a single file:
+
+1. Determine the issue number (NNN, zero-padded to 3 digits) from the task or
+   context (e.g. "work on issue #11" → `011`).
+2. List remote branches: `git branch -a | grep NNN`
+3. **If the branch already exists** (local or remote): check it out.
+   ```bash
+   git fetch origin
+   git checkout NNN-short-slug        # if local
+   # OR
+   git checkout -b NNN-short-slug origin/NNN-short-slug  # if remote-only
+   ```
+4. **If no branch exists yet**: create it from the latest `main`.
+   ```bash
+   git fetch origin
+   git checkout -b NNN-short-slug origin/main
+   ```
+5. Confirm with `git branch --show-current` — it MUST show `NNN-*`.
+   If it shows `main` or any other branch, STOP and repeat the steps above.
+
+Never make any file edit until step 5 passes.
 
 ## Spec and Branch Convention
 
@@ -51,8 +78,12 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 
 ## Hard Constraints
 
+- MUST switch to (or create) the issue-specific branch **before any file edit** — see Branch Setup above
 - MUST NOT commit directly to `main`
 - MUST NOT open a PR while any test is failing
+- MUST open a Draft PR as soon as the first commit is pushed to the issue branch,
+  if one does not already exist — title it `[WIP] NNN short description` and link
+  it to the issue with `Closes #NNN` in the PR body
 - MUST NOT merge a PR — merging is done only after Reviewer + QA sign-off
 - MUST write tests first — implementation code that precedes its test is a violation
 - MUST NOT expose raw error traces to end users
@@ -92,6 +123,7 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 
 ## Handoff Checklist (before opening PR)
 
+- [ ] Draft PR opened (or already existed) immediately after first commit
 - [ ] All tasks in `tasks.md` marked complete
 - [ ] All tests pass locally
 - [ ] Coverage meets the threshold defined in the constitution
@@ -105,6 +137,8 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 - [ ] Data access scoped to authenticated user context (if auth required by constitution)
 
 ## Context Files to Read at Session Start
+
+**Step 0 (before reading anything):** Complete Branch Setup above.
 
 1. `.specify/memory/constitution.md` — non-negotiable rules
 2. `specs/NNN-feature/spec.md` — what to build
