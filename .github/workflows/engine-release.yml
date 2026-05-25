@@ -59,14 +59,14 @@ jobs:
           # signing key is not in the local keyring imported above.
           git verify-tag "$TAG"
 
-      - name: Setup Node 22 with npm registry
+      - name: Setup Node 24 with npm registry
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-          # npm Trusted Publishing requires npm CLI ≥ 11.5.1 (Node ≥ 22.14.0).
-          # setup-node writes .npmrc with _authToken=${NODE_AUTH_TOKEN}; when
-          # NODE_AUTH_TOKEN is unset, npm CLI automatically uses OIDC exchange.
+          # Node 24 ships with npm 11.x which is required for Trusted Publishing.
+          # npm Trusted Publishing (OIDC) requires npm CLI ≥ 11.5.1; Node 22
+          # still bundles npm 10.x and lacks the OIDC token-exchange logic.
 
       - name: Install engine devDeps + orchestrator runtime deps
         run: |
@@ -83,19 +83,8 @@ jobs:
             exit 1
           fi
 
-      - name: Pre-publish diagnostics
-        run: |
-          echo "node=$(node --version) npm=$(npm --version)"
-          echo "--- .npmrc ---"
-          cat ~/.npmrc 2>/dev/null || echo "(no ~/.npmrc)"
-          cat .npmrc 2>/dev/null || echo "(no ./.npmrc)"
-          echo "--- OIDC env ---"
-          echo "ACTIONS_ID_TOKEN_REQUEST_URL set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]] && echo YES || echo NO)"
-          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]] && echo YES || echo NO)"
-          echo "NODE_AUTH_TOKEN set: $([[ -n "$NODE_AUTH_TOKEN" ]] && echo YES || echo NO)"
-
       - name: Publish to npm with OIDC provenance
-        # SEC-HIGH-001: no NODE_AUTH_TOKEN — npm CLI 11+ (bundled with Node 22+)
+        # SEC-HIGH-001: no NODE_AUTH_TOKEN — npm CLI 11+ (bundled with Node 24)
         # automatically performs the OIDC Trusted Publisher flow:
         #   1. npm fetches a JWT (audience=npm) from GitHub's OIDC endpoint
         #   2. npm exchanges it at the npm registry for a scoped publish token
@@ -103,7 +92,7 @@ jobs:
         # Provenance is generated automatically when publishing via Trusted
         # Publisher; the --provenance flag is kept for explicitness.
         working-directory: engine
-        run: npm publish --provenance --access public --loglevel verbose
+        run: npm publish --provenance --access public
 
       - name: Create the GitHub Release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
