@@ -205,13 +205,43 @@ GitHub Issue individually.
   comment. If findings include `HIGH` or `CRITICAL` severity items, it MUST also
   post a comment on the linked issue (without disclosing exploit details publicly).
 
-- **FR-008:** The `apm-msg` block format MUST be extended to version 2 with these
-  required fields: `version`, `step`, `agent`, `outcome`, `issue`, `pr` (nullable),
-  `branch`, `pipeline_id` (nullable for cloud/CI runs), `event_type`
-  (`start | complete | fail`), and `timestamp`.
+- **FR-008:** The `apm-msg` block format MUST be extended with new **optional**
+  fields: `issue`, `pr` (nullable), `branch`, `pipeline_id` (nullable for
+  cloud/CI runs), `event_type` (`complete | fail`), and `timestamp`.
+
+  **Backward-compatibility constraint**: The existing schema at
+  `engine/orchestrator/schemas/apm-msg.schema.json` declares
+  `"additionalProperties": false`. The Developer Agent MUST update this schema
+  **before** any agent definition is changed to emit new fields. The schema
+  update MUST:
+  1. Add all new fields as **optional** (not required) properties so existing
+     agents that do not yet include them continue to pass validation.
+  2. Change `"additionalProperties": false` to `"additionalProperties": true`
+     OR explicitly declare all new fields as optional properties.
+  Making new fields required is deferred to a follow-on PR once all agents have
+  been updated.
+
+  **`outcome` field for `agent-start` events**: `apm-msg` blocks are emitted
+  only at step completion or failure — they are NOT required in `agent-start`
+  comments. FR-002 `agent-start` comments use a plain structured GitHub comment
+  (no `apm-msg` block). FR-003 `agent-complete` / `agent-fail` comments include
+  an `apm-msg` block with `event_type: "complete"` or `event_type: "fail"`
+  respectively. The `outcome` field therefore always has a meaningful value when
+  an `apm-msg` block is present. The `event_type` enum in the schema MUST be
+  restricted to `"complete" | "fail"` — `"start"` is NOT a valid `event_type`
+  in an `apm-msg` block.
 
 - **FR-009:** The Triage Agent's existing triage comment MUST be updated to include
-  an `apm-msg` block so its output enters the Orchestrator's routing logic.
+  an `apm-msg` block so its output enters the Orchestrator's routing logic. The
+  Triage Agent MUST emit `outcome: "success"` on successful triage and
+  `outcome: "fail"` if it cannot classify the issue. No new `outcome` enum value
+  is required.
+
+- **FR-024:** The implementation MUST update `docs/AGENT_PROTOCOL.md` Section 2
+  to document the extended `apm-msg` schema fields (`event_type`, `pipeline_id`,
+  `issue`, `pr`, `branch`, `timestamp`) **before** any agent definition is
+  updated to emit them. This ensures the `regulation-lint` CI job and the
+  Reviewer Agent's hard-constraint check remain satisfied throughout rollout.
 
 ### Theme 2 — Branch Guard
 
