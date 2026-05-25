@@ -96,6 +96,7 @@ fi
 if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
   check_file ".github/copilot-instructions.md"
   check_dir  ".github/instructions"  11
+  check_dir  ".github/prompts"        8
 fi
 
 # ── Shared checks (all modes) ─────────────────────────────────────────────────
