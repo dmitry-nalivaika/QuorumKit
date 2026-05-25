@@ -209,6 +209,12 @@ cmd_start() {
       '<!-- pipeline: started -->\n**Pipeline started** for issue #%s\n\n- **Mode:** isolated\n- **Branch:** `%s`\n- **Worktree path:** `%s`\n- **Timestamp:** %s\n\n_Use `scripts/pipeline.sh join %s` to attach to this pipeline._' \
       "$issue_number" "$branch_slug" "$wt_path" "$timestamp" "$issue_number")"
     log "Pipeline started (isolated) at ${wt_path}"
+    echo ""
+    echo "[pipeline] IMPORTANT: Open VS Code in the worktree to work on this feature:"
+    echo "  code \"${wt_path}\""
+    echo "  (Copilot agents operate relative to the VS Code workspace root — staying in the main"
+    echo "   checkout means agents read/write the wrong branch.)"
+    echo ""
 
   else
     # shared mode — checkout in current directory
