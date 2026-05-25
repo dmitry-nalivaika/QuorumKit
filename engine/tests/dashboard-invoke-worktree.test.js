@@ -83,6 +83,7 @@ let serverProcess;
 let port;
 let fakeRepo;
 let tmpDir;
+let cfgFile;
 let stubPipelineSh;
 
 beforeAll(async () => {
@@ -96,6 +97,23 @@ beforeAll(async () => {
   writeFileSync(stubPipelineSh, '#!/usr/bin/env bash\necho "STUB: $*"\nexit 0\n', 'utf8');
   chmodSync(stubPipelineSh, 0o755);
 
+  // Write an isolated config file so this test never contaminates the real
+  // engine/dashboard/.apm-project.json (matches the isolation pattern in
+  // dashboard-invoke.test.js FR-003).
+  const customCmd = `echo "PWD=$PWD,ENV=$QUORUMKIT_PIPELINE_ID" > "${tmpDir}/{agent}.txt" && exit 0`;
+  const cfgDir = mkdtempSync(join(tmpdir(), 'qk-221-cfg-'));
+  cfgFile = join(cfgDir, 'config.json');
+  writeFileSync(cfgFile, JSON.stringify({
+    localPath:   fakeRepo.dir,
+    repoUrl:     '',
+    branch:      'main',
+    projectName: 'test',
+    aiTool:      'custom',
+    customCmd,
+    terminalApp: 'terminal',
+    vscodeApp:   '',
+  }), 'utf8');
+
   serverProcess = spawn(
     process.execPath,
     ['server.js', '--port', String(port)],
@@ -105,6 +123,7 @@ beforeAll(async () => {
         ...process.env,
         QUORUMKIT_PORT:             String(port),
         QUORUMKIT_PROJECT_DIR:      fakeRepo.dir,
+        QUORUMKIT_CONFIG_FILE:      cfgFile,
         QUORUMKIT_TEST_PIPELINE_SH: stubPipelineSh,
         QUORUMKIT_PIPELINES_DIR:    '',
       },
@@ -123,12 +142,6 @@ beforeAll(async () => {
     serverProcess.on('error', reject);
     serverProcess.stderr.on('data', () => {});
   });
-
-  // Set aiTool to 'custom' with a command that records cwd + env to a tmpfile.
-  // The command: echo "PWD=<cwd>,ENV=<pipeline_id>" > <tmpDir>/<agentId>.txt && exit 0
-  // We use a template — actual agentId substituted via {agent} placeholder.
-  const customCmd = `echo "PWD=$PWD,ENV=$QUORUMKIT_PIPELINE_ID" > "${tmpDir}/{agent}.txt" && exit 0`;
-  await httpPost(port, '/api/config', { aiTool: 'custom', customCmd });
 }, 20_000);
 
 afterAll(() => {
@@ -136,6 +149,7 @@ afterAll(() => {
   // Clean up tmp dirs
   try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* */ }
   try { rmSync(fakeRepo.dir, { recursive: true, force: true }); } catch { /* */ }
+  try { cfgFile && rmSync(dirname(cfgFile), { recursive: true, force: true }); } catch { /* */ }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
