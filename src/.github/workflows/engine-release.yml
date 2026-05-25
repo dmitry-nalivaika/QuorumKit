@@ -84,7 +84,7 @@ jobs:
           fi
 
       - name: Publish to npm with OIDC provenance
-        # SEC-HIGH-001: no NODE_AUTH_TOKEN — npm CLI 11+ (bundled with Node 22+)
+        # SEC-HIGH-001: no NODE_AUTH_TOKEN — npm CLI 11+ (bundled with Node 24)
         # automatically performs the OIDC Trusted Publisher flow:
         #   1. npm fetches a JWT (audience=npm) from GitHub's OIDC endpoint
         #   2. npm exchanges it at the npm registry for a scoped publish token
