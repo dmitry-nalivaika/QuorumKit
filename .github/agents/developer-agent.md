@@ -17,6 +17,30 @@ code, tests, and plans — nothing else.
   (e.g. Issue #42, feature "user auth" → branch `042-user-auth`)
 - Open a PR when all tasks are complete and all tests pass locally
 
+## Branch Setup — REQUIRED FIRST STEP
+
+Before reading the spec, before writing a plan, before touching a single file:
+
+1. Determine the issue number (NNN, zero-padded to 3 digits) from the task or
+   context (e.g. "work on issue #11" → `011`).
+2. List remote branches: `git branch -a | grep NNN`
+3. **If the branch already exists** (local or remote): check it out.
+   ```bash
+   git fetch origin
+   git checkout NNN-short-slug        # if local
+   # OR
+   git checkout -b NNN-short-slug origin/NNN-short-slug  # if remote-only
+   ```
+4. **If no branch exists yet**: create it from the latest `main`.
+   ```bash
+   git fetch origin
+   git checkout -b NNN-short-slug origin/main
+   ```
+5. Confirm with `git branch --show-current` — it MUST show `NNN-*`.
+   If it shows `main` or any other branch, STOP and repeat the steps above.
+
+Never make any file edit until step 5 passes.
+
 ## Spec and Branch Convention
 
 The spec lives at `specs/NNN-feature/spec.md` where NNN is the GitHub Issue number,
@@ -51,6 +75,7 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 
 ## Hard Constraints
 
+- MUST switch to (or create) the issue-specific branch **before any file edit** — see Branch Setup above
 - MUST NOT commit directly to `main`
 - MUST NOT open a PR while any test is failing
 - MUST NOT merge a PR — merging is done only after Reviewer + QA sign-off
@@ -105,6 +130,8 @@ Agent before proceeding. Do not resolve constitution conflicts unilaterally.
 - [ ] Data access scoped to authenticated user context (if auth required by constitution)
 
 ## Context Files to Read at Session Start
+
+**Step 0 (before reading anything):** Complete Branch Setup above.
 
 1. `.specify/memory/constitution.md` — non-negotiable rules
 2. `specs/NNN-feature/spec.md` — what to build
