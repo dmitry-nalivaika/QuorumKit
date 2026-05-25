@@ -3,8 +3,9 @@
 This guide documents every breaking change introduced in Issue #67 and tells you
 exactly what to update in your consumer project.
 
-> **Wire-format tokens and `src/` directory are NOT renamed in this release.**
-> `apm-msg`, `apm-state`, `apm-pipeline-state`, and `src/` paths are unchanged.
+> **Wire-format tokens and `.apm/` directory were NOT renamed in the v3 rebranding release (#67).**
+> `apm-msg`, `apm-state`, `apm-pipeline-state`, and `.apm/` paths were unchanged in v3.
+> The `.apm/` directory is retired in Issue #251 — see the [migration section below](#upgrading-from-apm-layout-to-src-layout-issue-251).
 > Existing GitHub Issues with embedded `<!-- apm-state -->` blocks continue to work.
 
 ---
@@ -108,7 +109,7 @@ in a future release with a dedicated protocol-migration ADR:
 
 | Identifier | Reason frozen |
 |-----------|--------------|
-| `src/` directory | Renaming breaks all consumer `init.sh` installs; requires full migration strategy |
+| `.apm/` directory | Renamed to `src/` in Issue #251 — see [upgrade section](#upgrading-from-apm-layout-to-src-layout-issue-251) |
 | `apm-msg` (HTML comment token) | Changing breaks existing GitHub Issue state recovery |
 | `apm-state` (HTML comment token) | Same — embedded in live Issue bodies |
 | `apm-pipeline-state` (HTML comment token) | Same |
@@ -157,3 +158,50 @@ The dashboard webhook authentication identifiers have been renamed:
 - Open an Issue at `github.com/dmitry-nalivaika/quorumkit/issues`
 - See `CHANGELOG.md` for the full release notes
 - See `docs/architecture/adr-067-quorumkit-rebranding.md` for the full rationale
+
+---
+
+## Upgrading from `.apm/` layout to `src/` layout (Issue #251)
+
+This section covers consumer projects initialised before Issue #251. If you ran
+`init.sh` after the v3.1 release you already have the `src/` layout and can skip
+this section.
+
+### What changed
+
+| Before (`.apm/` layout) | After (`src/` layout) |
+|-------------------------|----------------------|
+| `.apm/pipelines/*.yml` | `src/pipelines/*.yml` |
+| `.apm/runtimes.yml` | `src/runtimes.yml` |
+| `.apm/agent-identities.yml` | `src/agent-identities.yml` |
+| `.apm/agents/*.md` | `.github/agents/*.md` |
+| `.apm/skills/*/` | `.github/skills/*/` |
+
+### Migration steps
+
+```bash
+# 1. Move pipeline configs
+mkdir -p src/pipelines
+mv .apm/pipelines/*.yml src/pipelines/
+
+# 2. Move runtime and identity configs
+mv .apm/runtimes.yml src/runtimes.yml
+mv .apm/agent-identities.yml src/agent-identities.yml
+
+# 3. Move agent and skill definitions
+mkdir -p .github/agents .github/skills
+mv .apm/agents/*.md .github/agents/
+cp -r .apm/skills/* .github/skills/
+
+# 4. Remove the now-empty .apm/ directory
+rm -rf .apm/
+
+# 5. Re-run init to refresh workflow templates
+bash /path/to/quorumkit/src/scripts/init.sh --ai=both
+```
+
+> **Note:** If your project already has a `src/` directory for application
+> source code, the QuorumKit files are placed alongside it in `src/pipelines/`,
+> `src/runtimes.yml`, and `src/agent-identities.yml`. This is intentional — `src/`
+> is the QuorumKit canonical root for all consumer-installed config files after
+> Issue #251.
