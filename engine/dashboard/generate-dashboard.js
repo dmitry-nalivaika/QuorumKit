@@ -2,7 +2,7 @@
 /**
  * QuorumKit Dashboard Generator
  * ─────────────────────────────────────────────────────────────────────────────
- * Reads .apm/agents/*.md and quorumkit.yml, then patches dashboard/index.html with
+ * Reads .github/agents/*.md and quorumkit.yml, then patches dashboard/index.html with
  * up-to-date agent data.
  *
  * Run:  node dashboard/generate-dashboard.js
@@ -16,8 +16,8 @@ const fs   = require('fs');
 const path = require('path');
 
 const ROOT        = path.resolve(__dirname, '..');
-const AGENTS_DIR  = path.join(ROOT, '.apm', 'agents');
-const APM_YML     = path.join(ROOT, 'quorumkit.yml');
+const AGENTS_DIR  = path.join(ROOT, '..', '.github', 'agents');
+const APM_YML     = path.join(ROOT, '..', 'quorumkit.yml');
 const DASHBOARD   = path.join(__dirname, 'index.html');
 
 // ─── Canonical short IDs (used as desk/DOM element IDs and bootQuips keys) ──
@@ -277,7 +277,7 @@ function main() {
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e');
 
-  const SENTINEL_START = '// ─── Agent Definitions (synced from .apm/agents/*.md + apm.yml) ─────────────';
+  const SENTINEL_START = '// ─── Agent Definitions (synced from .github/agents/*.md + quorumkit.yml) ───';
     const SENTINEL_END   = '// ─── SDLC Pipeline (for the About tab) ────────────────────────────────────';
 
   const startIdx = html.indexOf(SENTINEL_START);
