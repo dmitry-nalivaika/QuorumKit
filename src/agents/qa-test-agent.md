@@ -131,3 +131,96 @@ If no mutation threshold is defined in the constitution, mark this section N/A.
 1. `.specify/memory/constitution.md` — quality standards
 2. `specs/NNN-feature/spec.md` — acceptance scenarios to validate
 3. `specs/NNN-feature/tasks.md` — what was supposed to be implemented
+
+---
+
+## Agent Footprint
+
+All invocations MUST post structured GitHub comments (FR-001, FR-006, FR-012).
+A Branch Guard invocation is required before any branch operation (FR-010 to FR-014).
+
+**Comment targets:**
+- QA Report posted as a PR comment on the **PR** (FR-006).
+- Summary comment posted on the **linked Issue** (FR-006).
+
+### `agent-start` comment
+
+```markdown
+<!-- agent-footprint: start -->
+**Agent started:** `qa-test-agent`
+- **Event type:** `agent-start`
+- **PR:** #NNN
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+```
+
+No `apm-msg` block is included in `agent-start` comments.
+
+### `agent-complete` comment
+
+Posted on both the **PR** (full QA Report) and the **linked Issue** (summary).
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `qa-test-agent`
+- **Event type:** `agent-complete`
+- **PR:** #NNN
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Summary:** QA complete — N tests passed / N failed.
+- **Next recommended action:** Reviewer Agent review requested.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "qa",
+  "agent": "qa-test-agent",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary ≤ 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+### `agent-fail` comment
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `qa-test-agent`
+- **Event type:** `agent-fail`
+- **PR:** #NNN
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** Re-run the QA workflow; if problem persists, check Actions log.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "qa",
+  "agent": "qa-test-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary ≤ 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+Silent termination (no comment posted) is prohibited under any code path (FR-004).

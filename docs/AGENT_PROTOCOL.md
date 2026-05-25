@@ -74,7 +74,37 @@ begins.
 
 ---
 
-## 2. `apm-msg` Outcomes
+## 2. `apm-msg` Schema (v2)
+
+### 2.0 Extended field reference
+
+Every `apm-msg` block carries the following fields. All fields introduced in
+**v2 extension** (Issue #175, FR-008) are **optional** — existing agents that
+do not yet emit them continue to pass schema validation.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `version` | `"2"` | ✓ | Schema version. Only `"2"` is accepted. |
+| `runId` | string (UUID) | ✓ | Pipeline run UUID matching the active run. |
+| `step` | string | ✓ | Step name as declared in the pipeline. |
+| `agent` | string | ✓ | Agent slug (e.g. `"qa-agent"`) matching the identity registry. |
+| `iteration` | integer ≥ 1 | ✓ | 1-based iteration counter for the step on the current edge. |
+| `outcome` | enum (see §2.1) | ✓ | Declared outcome. `"start"` is NOT a valid value — `apm-msg` blocks are emitted only at step completion or failure. |
+| `summary` | string ≤ 280 chars | ✓ | Single-line human summary. |
+| `payload` | object | — | Optional per-outcome payload (see §2.2). |
+| `event_type` | `"complete"` \| `"fail"` | — | *v2 extension* — discriminates agent-complete vs agent-fail lifecycle events. |
+| `pipeline_id` | string \| null | — | *v2 extension* — NNN zero-padded issue number; `null` for cloud/CI runs. |
+| `issue` | string \| null | — | *v2 extension* — GitHub Issue URL or number string (e.g. `"42"`). |
+| `pr` | string \| null | — | *v2 extension* — GitHub PR URL or number string; `null` when no PR is open. |
+| `branch` | string | — | *v2 extension* — Git branch name at the time of emission. |
+| `timestamp` | string (ISO-8601) | — | *v2 extension* — UTC timestamp of emission (`YYYY-MM-DDTHH:MM:SSZ`). |
+
+> **`event_type` in `agent-start` comments**: `apm-msg` blocks are emitted
+> only at step completion or failure — they are **not** included in
+> `agent-start` comments. `agent-start` comments use a plain structured GitHub
+> comment (no `apm-msg` block). See §2.3 for the full comment formats.
+
+### 2.1 `apm-msg` Outcomes
 
 Every agent ends a step by emitting exactly one fenced ` ```apm-msg ``` ` block
 (FR-011). The `outcome` field MUST be one of the values below. Pipelines may
@@ -107,6 +137,90 @@ declare transitions only on outcomes that the source step's agent can produce.
 These shapes are advisory at the schema level (`payload` is `additionalProperties: true`)
 because the regulation document is the human-curated source. CI lints
 references at the *outcome name* level, not the payload shape.
+
+### 2.3 Agent Footprint Comment Formats
+
+All agents MUST post structured comments on the relevant GitHub Issue or PR at
+the start and end of every invocation (FR-002, FR-003, FR-004). This section
+defines the canonical comment shapes. **These are GitHub comments — not
+`apm-msg` blocks.**
+
+#### `agent-start` comment (posted on the Issue or PR before any work begins)
+
+```markdown
+<!-- agent-footprint: start -->
+**Agent started:** `<agent-name>`
+- **Event type:** `agent-start`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+```
+
+No `apm-msg` block is included in `agent-start` comments.
+
+#### `agent-complete` comment (posted on the Issue or PR when work finishes successfully)
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `<agent-name>`
+- **Event type:** `agent-complete`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Summary:** <one-line outcome summary>
+- **Next recommended action:** <e.g. "Reviewer Agent review requested">
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "<step-name>",
+  "agent": "<agent-slug>",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary ≤ 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+#### `agent-fail` comment (posted under ALL abnormal termination conditions)
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `<agent-name>`
+- **Event type:** `agent-fail`
+- **Issue / PR:** #NNN (or PR #NNN)
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** <e.g. "Re-run the workflow; if problem persists, check Actions log">
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "<step-name>",
+  "agent": "<agent-slug>",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary ≤ 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+Silent termination (no comment posted) is prohibited under any code path (FR-004).
 
 ---
 

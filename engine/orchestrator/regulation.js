@@ -50,9 +50,10 @@ export function parseRegulation(markdown) {
     }
   }
 
-  // Section: ## 2. apm-msg Outcomes — first column of the outcomes table is
-  // a backticked outcome name.
-  const outcomesSection = extractSection(markdown, /^##\s+2\..*Outcomes/m, /^##\s+3\./m);
+  // Section: ## 2. apm-msg Schema — outcomes table may be at ## 2. or ### 2.x level.
+  // Supports both the original "## 2. apm-msg Outcomes" heading and the extended
+  // "### 2.1 apm-msg Outcomes" sub-heading introduced in Issue #175 (FR-024).
+  const outcomesSection = extractSection(markdown, /^#{2,3}\s+2[\d.]*\s.*Outcomes/m, /^##\s+3\./m);
   if (outcomesSection) {
     // Match table rows: | `outcome-name` | …
     const re = /^\|\s*`([a-z][a-z0-9_\-]*)`\s*\|/gm;

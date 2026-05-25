@@ -187,7 +187,10 @@ async function advancePipeline({ client, event, pipeline, state, owner, repo, ai
   );
 
   try {
-    await invokeAgent(client, owner, repo, step.agent, issueNumber, ref ?? 'main', aiTool);
+    await invokeAgent(client, owner, repo, step.agent, issueNumber, ref ?? 'main', aiTool, {
+      pipeline_id: event.pipeline_id,
+      worktree_path: event.worktree_path,
+    });
   } catch (err) {
     const isInvalidTool = err.message.includes('INVALID_AI_TOOL');
     state.status = 'failed';
@@ -384,6 +387,8 @@ async function advanceV2Pipeline({
       issueNumber, runId: state.runId, step: stepDef.name,
       iteration: state.currentIteration,
       runtime: resolution.runtime, runtimeName: resolution.name,
+      pipeline_id: event.pipeline_id,
+      worktree_path: event.worktree_path,
       env, clock,
     });
     state.runtime_retries = r.retries;

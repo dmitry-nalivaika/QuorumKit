@@ -122,3 +122,96 @@ SUGGESTION: [improvement idea] — [why it would help] — [not required for mer
 2. `specs/NNN-feature/spec.md` — what was specified
 3. `specs/NNN-feature/plan.md` — what was planned
 4. The PR diff (via `gh pr diff <number>`)
+
+---
+
+## Agent Footprint
+
+All invocations MUST post structured GitHub comments (FR-001, FR-005, FR-012).
+A Branch Guard invocation is required before any branch operation (FR-010 to FR-014).
+
+**Comment targets:**
+- Full PR review posted as a GitHub PR Review (approve/request-changes/comment) on the **PR** (FR-005).
+- Summary comment posted on the **linked Issue** (FR-005).
+
+### `agent-start` comment
+
+```markdown
+<!-- agent-footprint: start -->
+**Agent started:** `reviewer-agent`
+- **Event type:** `agent-start`
+- **PR:** #NNN
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+```
+
+No `apm-msg` block is included in `agent-start` comments.
+
+### `agent-complete` comment
+
+Posted on both the **PR** (as a GitHub PR Review) and the **linked Issue** (as a plain comment).
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `reviewer-agent`
+- **Event type:** `agent-complete`
+- **PR:** #NNN
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Summary:** Review complete — APPROVE / REQUEST_CHANGES / COMMENT.
+- **Next recommended action:** Merge when all BLOCKERs resolved, or author revises.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "review",
+  "agent": "reviewer-agent",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary ≤ 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+### `agent-fail` comment
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `reviewer-agent`
+- **Event type:** `agent-fail`
+- **PR:** #NNN
+- **Issue:** #NNN
+- **Branch:** `NNN-slug`
+- **Timestamp:** `YYYY-MM-DDTHH:MM:SSZ`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** Re-run the review workflow; if problem persists, check Actions log.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "review",
+  "agent": "reviewer-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary ≤ 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+Silent termination (no comment posted) is prohibited under any code path (FR-004).
