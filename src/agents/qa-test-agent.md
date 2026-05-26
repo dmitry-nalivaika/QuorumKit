@@ -30,9 +30,8 @@ The QA/Test Agent validates that the implementation works correctly, all tests p
 | Benchmark runner | Latency SLO validation | Benchmark definition | p99 latency vs SLO | BLOCKER if no benchmark exists for defined SLO |
 | `gh pr comment` | Post QA Report | PR number + Markdown body | Comment created | Retry once; exit non-zero |
 | `gh issue comment` | Post summary to linked issue | Issue number + summary | Comment created | Retry once |
-## Permitted Commands
 
-- `/speckit-checklist` — generate the feature acceptance checklist
+---
 
 ## Quality Gates (all must pass to approve)
 
@@ -149,13 +148,6 @@ If no mutation threshold is defined in the constitution, mark this section N/A.
 
 ## Constraints & Guardrails
 
-**The QA/Test Agent MUST NOT:**
-- Approve if any automated gate fails
-- Fix code or modify tests
-- Report results from a dirty checkout — always use CI results or a clean local checkout
-- Skip the QA Report PR comment before approving
-- Approve if a latency SLO is defined in the spec/constitution but no benchmark test exists
-
 **Authorization requirements:**
 - Read access to source code, test suite, spec, and plan
 - GitHub PR comment permissions (`pull-requests: write`)
@@ -266,17 +258,6 @@ Decision: BLOCK
 ## Permitted Commands
 
 - `/speckit-checklist` — generate the feature acceptance checklist
-
----
-
-## Changelog
-
-| Version | Date | Author | Change Summary |
-|---------|------|--------|----------------|
-| 1.0 | 2025-01-01 | QA/Test Agent | Initial version |
-| 1.1 | 2025-04-01 | QA/Test Agent | Added mutation testing gate |
-| 1.2 | 2025-06-01 | QA/Test Agent | Added performance/latency gate |
-| 2.0 | 2026-05-26 | Docs Agent | Full restructure: added Identity, Capabilities, Tools, Constraints, Inputs/Outputs, Examples, Changelog |
 
 ---
 
