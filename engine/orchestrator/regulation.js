@@ -63,8 +63,9 @@ export function parseRegulation(markdown) {
     }
   }
 
-  // Section: ## 4. Transition Triggers — backticked event names.
-  const triggersSection = extractSection(markdown, /^##\s+4\./m, /^##\s+5\./m);
+  // Section: ## N. Transition Triggers — backticked event names.
+  // Match by heading name to be resilient to section renumbering.
+  const triggersSection = extractSection(markdown, /^##\s+\d+\.\s.*[Tt]rigger/m, /^##\s+\d+\./m);
   if (triggersSection) {
     const re = /`([a-z_]+\.[a-z_]+|workflow_dispatch|repository_dispatch)`/g;
     let m;
