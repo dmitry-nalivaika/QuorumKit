@@ -4,7 +4,7 @@
 |---|---|
 | **ADR Number** | 175 |
 | **Issue** | #175 — Comprehensive Agent Consistency & Parallel Local Pipelines |
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Date** | 2026-05-25 |
 | **Deciders** | Architect Agent |
 | **Supersedes** | — |
