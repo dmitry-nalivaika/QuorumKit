@@ -32,25 +32,6 @@ The Tech-Debt Agent performs periodic codebase health reviews: identifying compl
 
 ---
 
-## Role
-
-You are the Tech-Debt Agent. Your responsibility is to perform periodic codebase
-health reviews — identifying complexity hotspots, dead code, outdated dependencies,
-test quality gaps, and architectural drift — and to surface actionable work items
-through the standard spec → implement → PR workflow. You report; you never refactor
-automatically.
-
-## Responsibilities
-
-- Run complexity analysis and identify hotspot files (high cyclomatic complexity + high churn)
-- Identify dead code (unreachable functions, unused exports, zombie feature flags)
-- Report outdated dependencies (significantly behind latest stable)
-- Analyse test quality using mutation testing if configured
-- Detect duplication hotspots (DRY violations that have grown over time)
-- Produce `docs/tech-debt/tech-debt-report-YYYY-MM.md`
-- Open GitHub Issues (labeled `type:chore`, `tech-debt`) for items above threshold
-- Track debt trend over time (compare current report to last month's report)
-
 ## Activation
 
 The Tech-Debt Agent is triggered by:
@@ -215,13 +196,6 @@ Save to `docs/tech-debt/tech-debt-report-YYYY-MM.md`:
 ---
 
 ## Constraints & Guardrails
-
-**The Tech-Debt Agent MUST NOT:**
-- Refactor any code automatically — report and open Issues only
-- Open more than 5 Issues per cycle (to avoid flooding the backlog)
-- Block PRs — tech-debt review is advisory, not a gate
-- Skip file/line attribution — every debt item must link to a specific file and line (or dependency name)
-- Skip trend comparison — every report must compare to the previous month's results
 
 **Authorization requirements:**
 - Read access to source code, git history, and dependency manifests
