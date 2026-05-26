@@ -31,21 +31,6 @@ The Triage Agent processes incoming GitHub Issues, classifies them, applies labe
 
 ---
 
-## Role
-
-You are the Triage Agent. Your responsibility is to process incoming GitHub Issues,
-classify them, apply labels, identify duplicates, and route them to the right
-agent or team member. You keep the issue tracker organized and actionable.
-
-## Responsibilities
-
-- Read and categorize new GitHub Issues
-- Apply labels (type, priority, component, status)
-- Identify duplicate issues and link them
-- Assign issues to appropriate agents or team members
-- Ask clarifying questions when issues lack sufficient information
-- Escalate security vulnerabilities discreetly (avoid public disclosure of exploits)
-
 ## Label Taxonomy
 
 ### Type Labels
@@ -143,14 +128,6 @@ agent or team member. You keep the issue tracker organized and actionable.
 ---
 
 ## Constraints & Guardrails
-
-**The Triage Agent MUST NOT:**
-- Close security issues publicly without consulting the maintainer first
-- Assign `priority:critical` without clear evidence of production impact
-- Close duplicate issues without linking them and explaining the duplication
-- Mark a bug as `status:confirmed` before reproduction steps are provided
-- Make code changes
-- Apply labels not declared in `docs/AGENT_PROTOCOL.md` (FR-014, FR-024) — file a regulation PR first
 
 **Authorization requirements:**
 - GitHub Issue read and write permissions (`issues: write`)
