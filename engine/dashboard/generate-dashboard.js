@@ -151,17 +151,17 @@ function parseAgent(filename, agentId, domainName) {
   // Extract name from first heading
   const name = (content.match(/^#\s+(.+)/m) || [])[1]?.trim() || agentId;
 
-  // Extract responsibilities (bullet list after ## Responsibilities)
-  const respSection = content.match(/## Responsibilities\n([\s\S]+?)(?=\n##|\n#|$)/);
+  // Extract responsibilities from ## Capabilities table ([CORE] rows → Description column)
+  const capSection = content.match(/## Capabilities\n([\s\S]+?)(?=\n## |\n# |$)/);
   const responsibilities = [];
-  if (respSection) {
-    const lines = respSection[1].split('\n');
+  if (capSection) {
+    const lines = capSection[1].split('\n');
     for (const line of lines) {
-      const m = line.match(/^-\s+(.+)/);
+      // Match table rows where second column is [CORE]: | Capability | [CORE] | Description |
+      const m = line.match(/^\|\s*.+?\s*\|\s*\[CORE\]\s*\|\s*(.+?)\s*\|/);
       if (m) {
-        const r = m[1].replace(/`/g, '').replace(/\*\*/g, '').trim();
-        // truncate cleanly at word boundary
-        responsibilities.push(r.length > 90 ? r.slice(0, 87).replace(/\s\S*$/, '…') : r);
+        const desc = m[1].replace(/`([^`]+)`/g, '$1').replace(/\*\*/g, '').trim();
+        responsibilities.push(desc.length > 90 ? desc.slice(0, 87).replace(/\s\S*$/, '…') : desc);
       }
       if (responsibilities.length >= 6) break;
     }

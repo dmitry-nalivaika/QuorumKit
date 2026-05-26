@@ -930,7 +930,14 @@ const AGENTS = [
     "color": "#43b97f",
     "status": "idle",
     "monitorText": "Writing spec.md...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Writes specs/NNN-feature/spec.md using /speckit-specify",
+      "Resolves ambiguities using /speckit-clarify; targets zero open questions before handoff",
+      "Produces Given/When/Then acceptance scenarios for every user story",
+      "Infers missing information from context; updates issue body and labels",
+      "Keeps the active feature pointer in sync after every spec create/update",
+      "Creates docs(spec): #NNN PRs and posts PR URL to the originating issue"
+    ],
     "commands": [
       "/speckit-specify",
       "/speckit-clarify",
@@ -952,7 +959,14 @@ const AGENTS = [
     "color": "#00fff5",
     "status": "idle",
     "monitorText": "npm install...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Generates plan.md via /speckit-plan; includes a Constitution Check table",
+      "Creates tasks.md via /speckit-tasks; tasks are ordered by dependency",
+      "Executes tasks via /speckit-implement; writes tests before code",
+      "Creates or checks out NNN-short-slug branch before any file edit",
+      "Opens a [WIP] PR after the first commit; keeps it linked throughout development",
+      "Runs markdown-link-check on every .md file before committing"
+    ],
     "commands": [
       "/speckit-plan",
       "/speckit-tasks",
@@ -974,7 +988,13 @@ const AGENTS = [
     "color": "#ffb700",
     "status": "idle",
     "monitorText": "Running test suite...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Executes the full test suite and reports results (pass/fail count, failures listed)",
+      "Confirms coverage meets the threshold defined in the constitution",
+      "Runs each user story's happy-path and error-path scenarios from spec.md",
+      "Tests authenticated user data isolation (only if constitution requires auth)",
+      "Runs /speckit-checklist to produce and validate the feature checklist"
+    ],
     "commands": [
       "/speckit-checklist"
     ],
@@ -994,7 +1014,14 @@ const AGENTS = [
     "color": "#9d4edd",
     "status": "idle",
     "monitorText": "Reviewing PR #...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Verifies every FR in spec.md is covered; flags scope creep and missing coverage",
+      "Enforces all non-negotiable constitution rules: auth, data isolation, no secrets,…",
+      "Checks for debug output, type annotations, linting, and coverage threshold",
+      "Runs oasdiff/buf/graphql-inspector diff; classifies additive vs. breaking changes",
+      "Validates reversibility, backward compatibility, idempotency, and lock safety",
+      "Runs /speckit-analyze for spec/plan/tasks consistency"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1014,7 +1041,13 @@ const AGENTS = [
     "color": "#e94560",
     "status": "idle",
     "monitorText": "Drafting ADR...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Writes docs/architecture/adr-NNN-\u003cslug\u003e.md for every qualifying decision",
+      "Evaluates Developer Agent plans against the constitution and existing ADRs",
+      "Scans all specs/*/spec.md for entity, NFR, scope, and dependency conflicts before…",
+      "Analyses the last 10 merged PRs against each constitution rule; flags stale or unclear…",
+      "Raises ARCH-BLOCKER or ARCH-CONCERN on PRs and issues"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1034,7 +1067,12 @@ const AGENTS = [
     "color": "#2ed573",
     "status": "idle",
     "monitorText": "Deploying ring 1...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Writes and reviews GitHub Actions workflows; enforces all quality gates before merge",
+      "Authors Dockerfile, Terraform, Helm, and equivalent IaC; runs cost estimation via…",
+      "Orchestrates staging → production deploys; enforces ring model and soak periods",
+      "Sets up monitoring, alerting, and dashboards; routes production alerts to GitHub Issues"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1054,7 +1092,14 @@ const AGENTS = [
     "color": "#ff4757",
     "status": "idle",
     "monitorText": "OWASP scan...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Checks the PR diff for all 10 OWASP risk categories",
+      "Scans for hardcoded credentials, tokens, and keys using trufflehog or equivalent",
+      "Runs npm audit/pip-audit/cargo audit; checks for known CVEs",
+      "Reviews and comments on Dependabot PRs per the constitution policy",
+      "Accepts .security-ignore suppression entries with mandatory justification",
+      "Verifies all authenticated endpoints enforce scoped data access (per constitution)"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1074,7 +1119,14 @@ const AGENTS = [
     "color": "#6c63ff",
     "status": "idle",
     "monitorText": "Scanning issues...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Reads new issues and applies type, priority, status, and agent labels from the taxonomy",
+      "Identifies duplicate issues; links them with context",
+      "Assigns issues to the correct agent or team member based on type and component",
+      "Posts a comment asking for reproduction steps or additional information when an issue…",
+      "Escalates security vulnerabilities discreetly without public exploit disclosure",
+      "Ensures priority:critical issues are triaged within 2 hours (or constitution-specified…"
+    ],
     "commands": [
       "/triage-agent \u003cissue-number\u003e"
     ],
@@ -1094,7 +1146,14 @@ const AGENTS = [
     "color": "#ffa502",
     "status": "idle",
     "monitorText": "Bumping semver...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Analyses conventional commits since the last tag; determines PATCH/MINOR/MAJOR bump",
+      "Groups commits into Breaking/Features/Fixes/Security/Chores; links each entry to its…",
+      "Updates package.json, pyproject.toml, Cargo.toml, version.txt, or equivalent",
+      "Opens a PR with changelog preview; never commits directly to main",
+      "Creates the GitHub Release and pushes the Git tag after the Version Bump PR merges",
+      "Accepts `/release-agent [patch"
+    ],
     "commands": [
       "/release-agent [patch|minor|major]",
       "/release-agent"
@@ -1115,7 +1174,14 @@ const AGENTS = [
     "color": "#54a0ff",
     "status": "idle",
     "monitorText": "Syncing README...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Updates the README when a merged feature adds or changes user-visible capability",
+      "Creates or updates doc comments (JSDoc, Python docstrings, Go doc, Rust doc) from code…",
+      "Adds missing doc comments to public functions, classes, and modules",
+      "Raises DOCS-BLOCKER when an ADR-triggering feature merges without a corresponding…",
+      "Detects and repairs broken markdown links across all documentation files",
+      "Ensures CHANGELOG.md accurately reflects user-facing behaviour changes"
+    ],
     "commands": [
       "/docs-agent"
     ],
@@ -1135,7 +1201,14 @@ const AGENTS = [
     "color": "#eccc68",
     "status": "idle",
     "monitorText": "Measuring churn×complexity...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Identifies files with high cyclomatic complexity AND high git churn (the most…",
+      "Finds unreachable functions, unused exports, and zombie feature flags",
+      "Flags dependencies significantly behind the latest stable release",
+      "Detects DRY violations that have grown across the codebase",
+      "Produces docs/tech-debt/tech-debt-report-YYYY-MM.md with trend comparison",
+      "Opens up to 5 labeled type:chore, tech-debt issues per cycle"
+    ],
     "commands": [
       "/tech-debt-agent run",
       "/tech-debt-agent report \u003cYYYY-MM\u003e",
@@ -1157,7 +1230,14 @@ const AGENTS = [
     "color": "#ff6348",
     "status": "idle",
     "monitorText": "OPC-UA scan...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Reviews OPC-UA, MQTT, Modbus, PROFINET, EtherNet/IP adapter code for correctness and…",
+      "Validates data flows against the spec and the architecture zone model",
+      "Checks synchronisation logic for data loss, ordering, and backpressure handling",
+      "Verifies schema correctness, engineering units, and backward compatibility",
+      "Ensures offline/fault handling is defined; blocks commands on stale or bad-quality data",
+      "Runs OPC-UA endpoint security check; fails on SecurityMode=None"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1177,7 +1257,13 @@ const AGENTS = [
     "color": "#70a1ff",
     "status": "idle",
     "monitorText": "Diffing DTDL schema...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Verifies asset model properties match the physical asset inventory and historian schema",
+      "Checks twin state update latency, stale-data handling, and offline-asset behaviour",
+      "Validates simulation CI integration and scenario coverage (nominal, fault, reconnect)",
+      "Runs DTDL/RDF/JSON Schema diff tools to classify breaking vs. additive changes",
+      "Verifies migration plans exist for breaking schema changes"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1197,7 +1283,13 @@ const AGENTS = [
     "color": "#a29bfe",
     "status": "idle",
     "monitorText": "Checking IEC 62443...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Checks zone/conduit model, identity, least privilege, patch management, and audit logging",
+      "Verifies MES/ERP data flows stay within the correct ISA-95 level model",
+      "Identifies SIL-classified subsystems; enforces human-authorship requirement; blocks…",
+      "Tracks open findings, their status, and resolution across PRs",
+      "Produces structured reports on PRs touching regulated subsystems"
+    ],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1217,7 +1309,14 @@ const AGENTS = [
     "color": "#fd79a8",
     "status": "idle",
     "monitorText": "Classifying severity...",
-    "responsibilities": [],
+    "responsibilities": [
+      "Classifies SEV-1/2/3 from issue title and body using keyword matching",
+      "Guides through detection, diagnosis, mitigation options, and resolution checklist",
+      "Facilitates 5-Whys and Fishbone methods; produces systemic root cause statement",
+      "Generates docs/post-mortems/YYYY-MM-DD-NNN-\u003cslug\u003e.md",
+      "Opens a GitHub Issue for every action item in the post-mortem",
+      "Records start time, resolution time, and MTTR for every incident"
+    ],
     "commands": [
       "/incident"
     ],
