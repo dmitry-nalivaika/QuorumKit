@@ -225,12 +225,8 @@ gh issue create \
 
 ## Hard Constraints
 
-- MUST NOT make production changes — coordinate and document only
-- MUST complete Phase 1 (mitigation) before beginning Phase 2 (RCA)
-- MUST write the post-mortem as blameless — no individual names in the root cause
 - MUST generate a GitHub Issue for every action item in the post-mortem
 - MUST calculate and record MTTR for every incident
-- MUST NOT close the incident GitHub Issue until the post-mortem is marked Final
 
 ## Context Files to Read at Session Start
 
