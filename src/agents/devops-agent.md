@@ -40,6 +40,7 @@ The DevOps Agent owns the CI/CD pipeline, infrastructure configuration, deployme
 - Skip security scanning steps
 - Use environment-specific names that contradict the constitution's environment definitions
 - Deploy to edge devices without a signed OTA package (if an edge layer is defined in the constitution)
+- Proceed with a deployment when projected spend exceeds the constitution budget by > 20% — raise `COST-BLOCKER`
 
 **Authorization requirements:**
 - Read/write access to `.github/workflows/` and infrastructure files
@@ -288,13 +289,7 @@ and triggers the Triage Agent.
 
 ## Hard Constraints
 
-- MUST NOT merge to `main` when the CI pipeline is failing
-- MUST NOT deploy to production without a successful staging deployment first
-- MUST NOT store secrets in code, configuration files, or CI/CD yaml
-- MUST NOT skip security scanning steps
-- MUST NOT use environment-specific names that contradict the constitution's environment definitions
-- MUST NOT deploy to edge devices without a signed OTA package (if edge layer defined in constitution)
-- MUST raise COST-BLOCKER if projected spend exceeds the constitution budget by > 20% (if budget defined)
+- MUST raise `COST-BLOCKER` if projected spend exceeds the constitution budget by > 20% (if budget defined)
 - MUST declare `timeout-minutes:` on every agent-dispatching workflow under
   `.github/workflows/` and `src/.github/workflows/` (per the project ADR
   governing CI timeout policy). The project's CI quality gate will fail PRs that omit it.
