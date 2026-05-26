@@ -8,9 +8,9 @@
 # fully working QuorumKit-enabled project.
 #
 # Usage (from repo root):
-#   bash scripts/test-external-install.sh [--ai=claude|copilot|both]
+#   bash scripts/test-external-install.sh [--ai=claude|copilot|both] [--domain=industrial]
 #
-# Tests all three modes if no flag is given.
+# Tests all three modes if no --ai flag is given.
 # =============================================================================
 set -euo pipefail
 
@@ -27,14 +27,16 @@ h1()   { echo -e "\n${BOLD}$*${NC}"; }
 
 # ── Arguments ─────────────────────────────────────────────────────────────────
 MODES=()
+DOMAIN=""
 for arg in "$@"; do
   case "$arg" in
-    --ai=claude)  MODES+=("claude")  ;;
-    --ai=copilot) MODES+=("copilot") ;;
-    --ai=both)    MODES+=("both")    ;;
+    --ai=claude)         MODES+=("claude")    ;;
+    --ai=copilot)        MODES+=("copilot")   ;;
+    --ai=both)           MODES+=("both")      ;;
+    --domain=industrial) DOMAIN="industrial"  ;;
     *)
-      echo "Usage: $0 [--ai=claude|copilot|both]"
-      echo "  (Omit flag to run all three modes sequentially)"
+      echo "Usage: $0 [--ai=claude|copilot|both] [--domain=industrial]"
+      echo "  (Omit --ai to run all three modes sequentially)"
       exit 1
       ;;
   esac
@@ -48,10 +50,11 @@ fi
 # ── Per-mode test function ────────────────────────────────────────────────────
 run_mode_test() {
   local ai_mode="$1"
+  local domain="${2:-}"
   FAILURES=0
 
   h1 "════════════════════════════════════════"
-  h1 " External install test  —  --ai=$ai_mode"
+  h1 " External install test  —  --ai=$ai_mode${domain:+ --domain=$domain}"
   h1 "════════════════════════════════════════"
 
   # Create a fresh temp directory and initialise git
@@ -65,10 +68,10 @@ run_mode_test() {
   git -C "$tmpdir" config user.name  "QuorumKit Test"
 
   # ── Run init.sh ───────────────────────────────────────────────────────────
-  h1 "Running src/scripts/init.sh --ai=$ai_mode"
+  h1 "Running src/scripts/init.sh --ai=$ai_mode${domain:+ --domain=$domain}"
   cd "$tmpdir"
   QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
-    bash "$REPO_ROOT/src/scripts/init.sh" "--ai=$ai_mode"
+    bash "$REPO_ROOT/src/scripts/init.sh" "--ai=$ai_mode" ${domain:+"--domain=$domain"}
   cd "$REPO_ROOT"
 
   # ── Verify helpers ────────────────────────────────────────────────────────
@@ -96,8 +99,13 @@ run_mode_test() {
   # ── Verify: Claude files ──────────────────────────────────────────────────
   if [[ "$ai_mode" == "claude" || "$ai_mode" == "both" ]]; then
     h1 "Claude Code files"
-    check_dir  ".claude/agents"  11
-    check_dir  ".claude/skills"  16
+    if [[ "$domain" == "industrial" ]]; then
+      check_dir  ".claude/agents"  15
+      check_dir  ".claude/skills"  20
+    else
+      check_dir  ".claude/agents"  11
+      check_dir  ".claude/skills"  16
+    fi
     check_file "CLAUDE.md"
   fi
 
@@ -105,11 +113,15 @@ run_mode_test() {
   if [[ "$ai_mode" == "copilot" || "$ai_mode" == "both" ]]; then
     h1 "Copilot files"
     check_file ".github/copilot-instructions.md"
+    if [[ "$domain" == "industrial" ]]; then
+      check_dir  ".github/instructions"  15
+    else
+      check_dir  ".github/instructions"  11
+    fi
   fi
 
   # ── Verify: Shared GitHub templates ──────────────────────────────────────
   h1 "Shared GitHub templates"
-  check_dir  ".github/instructions"            11
   check_file ".github/workflows/orchestrator.yml"
   check_file ".github/workflows/alert-to-issue.yml"
   check_dir  ".github/ISSUE_TEMPLATE"          4
@@ -121,12 +133,22 @@ run_mode_test() {
     for wf in agent-architect agent-docs agent-qa agent-release agent-reviewer agent-security agent-tech-debt agent-triage; do
       check_file ".github/workflows/${wf}.yml"
     done
+    if [[ "$domain" == "industrial" ]]; then
+      for wf in agent-ot-integration agent-digital-twin agent-compliance agent-incident; do
+        check_file ".github/workflows/${wf}.yml"
+      done
+    fi
   fi
   if [[ "$ai_mode" == "copilot" || "$ai_mode" == "both" ]]; then
     h1 "Copilot agent workflows"
     for wf in copilot-agent-architect copilot-agent-ba copilot-agent-docs copilot-agent-qa copilot-agent-release copilot-agent-reviewer copilot-agent-security copilot-agent-tech-debt copilot-agent-triage; do
       check_file ".github/workflows/${wf}.yml"
     done
+    if [[ "$domain" == "industrial" ]]; then
+      for wf in copilot-agent-ot-integration copilot-agent-digital-twin copilot-agent-compliance copilot-agent-incident; do
+        check_file ".github/workflows/${wf}.yml"
+      done
+    fi
   fi
 
   # ── Verify: Pipeline templates (installed for external consumers) ─────────
@@ -161,9 +183,9 @@ run_mode_test() {
   # ── Summary ───────────────────────────────────────────────────────────────
   echo ""
   if [ "$FAILURES" -eq 0 ]; then
-    echo -e "${GREEN}${BOLD}PASS  --ai=$ai_mode${NC}"
+    echo -e "${GREEN}${BOLD}PASS  --ai=$ai_mode${domain:+ --domain=$domain}${NC}"
   else
-    echo -e "${RED}${BOLD}FAIL  --ai=$ai_mode  ($FAILURES failures)${NC}"
+    echo -e "${RED}${BOLD}FAIL  --ai=$ai_mode${domain:+ --domain=$domain}  ($FAILURES failures)${NC}"
   fi
 
   return "$FAILURES"
@@ -172,13 +194,13 @@ run_mode_test() {
 # ── Run all requested modes ───────────────────────────────────────────────────
 TOTAL_FAILURES=0
 for mode in "${MODES[@]}"; do
-  run_mode_test "$mode" || TOTAL_FAILURES=$((TOTAL_FAILURES + $?))
+  run_mode_test "$mode" "$DOMAIN" || TOTAL_FAILURES=$((TOTAL_FAILURES + $?))
 done
 
 echo ""
 if [ "$TOTAL_FAILURES" -eq 0 ]; then
-  echo -e "${GREEN}${BOLD}All external install tests passed (modes: ${MODES[*]})${NC}"
+  echo -e "${GREEN}${BOLD}All external install tests passed (modes: ${MODES[*]}${DOMAIN:+, domain: $DOMAIN})${NC}"
 else
-  echo -e "${RED}${BOLD}$TOTAL_FAILURES total failure(s) across modes: ${MODES[*]}${NC}"
+  echo -e "${RED}${BOLD}$TOTAL_FAILURES total failure(s) across modes: ${MODES[*]}${DOMAIN:+, domain: $DOMAIN}${NC}"
   exit 1
 fi
