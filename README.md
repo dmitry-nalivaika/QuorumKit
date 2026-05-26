@@ -265,7 +265,7 @@ After initialisation:
 1. **`/speckit-constitution`** — define your project's non-negotiable rules,
    tech stack, quality thresholds, and cost limits.
 2. **Edit agent definitions** in `.claude/agents/` (or
-   `.github/instructions/` for Copilot) to add domain-specific rules.
+   `.github/agents/` for Copilot) to add domain-specific rules.
 3. **Edit `src/pipelines/*.yml`** to customise agent chains, loop budgets,
    approvals, and per-step timeouts (see [`docs/PIPELINES.md`](docs/PIPELINES.md)).
 4. **Edit `.specify/extensions/git/git-config.yml`** to toggle auto-commits.

@@ -140,7 +140,7 @@ bash /path/to/quorumkit-clone/scripts/init.sh --upgrade --apply --engine-ref=v3
 
 ---
 
-
+## [2.2.0] — 2026-05-07 (Issue #44)
 
 ### ✨ Features — Orchestrator v2 (#44)
 
