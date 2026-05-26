@@ -91,7 +91,7 @@ args = parser.parse_args()
 
 blockers = [ep for ep in args.endpoints if check_endpoint(ep)]
 if blockers:
-    print(f"\nOT-BLOCKER: {len(blocker(s))} endpoint(s) use SecurityMode=None")
+    print(f"\nOT-BLOCKER: {len(blockers)} endpoint(s) use SecurityMode=None")
     sys.exit(1)
 print("\nAll endpoints passed OT security check.")
 ```
