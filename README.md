@@ -1,34 +1,51 @@
 # QuorumKit
 
-A reusable **QuorumKit** package that initialises a
-**fully autonomous, lights-out software development cycle** in any project.
-One command sets up 15 specialised AI agents, 26 GitHub Actions workflows
-(including a v2 declarative orchestrator), Spec Kit integration, and
-issue/PR templates.
+**QuorumKit** sets up a fully autonomous software-development cycle in any GitHub repository — one command installs 15 specialised AI agents, a declarative orchestrator, Spec Kit integration, and 26 GitHub Actions workflows.
 
-> **"Dark Factory" = the software factory runs itself.** The loop is:
-> Triage → Spec → Plan → Implement → Test → Review → Security → Merge →
-> Release → Document → Deploy → Monitor → Feedback → new Issue. Humans set
-> strategy and approve escalations; agents handle all execution.
+> **"Dark Factory"** — the software factory runs itself.
+> The loop: Triage → Spec → Plan → Implement → Test → Review → Security → Merge → Release → Document → Deploy → Monitor → Feedback → new Issue.
+> Humans set strategy and approve escalations. Agents handle execution.
 
 Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 
 ---
 
-## Documentation map
+## Prerequisites
 
-| Doc | Purpose |
-|-----|---------|
-| `README.md` *(this file)* | What you get, agent catalogue, quick start |
-| [`docs/INIT.md`](docs/INIT.md) | Initialisation guide (`init.sh` flags, examples) |
-| [`docs/PIPELINES.md`](docs/PIPELINES.md) | v2 orchestrator: pipeline YAML, runtime registry, two-channel state, apm-msg protocol |
-| [`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md) | Agent contract: outcomes, apm-msg framing, `<!-- apm-state -->` |
-| [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | Local browser dashboard for live agent invocation |
-| [`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md) | Adopting QuorumKit in an existing repo (conflict detection, gradual rollout) |
-| [`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md) | Greenfield industrial / lights-out manufacturing guide |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contributing to this library (NNN convention, quality gates) |
-| [`docs/ENHANCEMENTS.md`](docs/ENHANCEMENTS.md) | Gap analysis & roadmap |
-| [`CHANGELOG.md`](CHANGELOG.md) | Released changes |
+| Requirement | Needed for |
+|-------------|-----------|
+| [Claude Code](https://claude.ai/code) CLI + `ANTHROPIC_API_KEY` repo secret | Claude-mode agents |
+| Active Copilot subscription (Business / Enterprise recommended) + `permissions: models: read` | Copilot-mode agents |
+| [GitHub CLI](https://cli.github.com) | Both modes |
+| Node.js | Spec Kit integration |
+
+---
+
+## Quick start
+
+```bash
+# Clone QuorumKit once
+git clone <this-repo-url> ~/quorumkit
+
+# Go to your project
+cd /path/to/my-project
+
+# Claude Code only (default)
+bash ~/quorumkit/scripts/init.sh
+
+# GitHub Copilot only
+bash ~/quorumkit/scripts/init.sh --ai=copilot
+
+# Both runtimes
+bash ~/quorumkit/scripts/init.sh --ai=both
+
+# Both + industrial domain pack
+bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
+```
+
+All flags and options: [`docs/INIT.md`](docs/INIT.md).
+Adding to an existing repo: [`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md).
+Industrial / OT projects: [`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md).
 
 ---
 
@@ -59,43 +76,42 @@ Works with **Claude Code**, **GitHub Copilot**, or **both** simultaneously.
 | Compliance (`/compliance-agent`) | IEC 62443, ISA-95, SIL / functional safety |
 | Incident (`/incident-agent`) | SEV classify → mitigate → RCA → post-mortem |
 
-### Spec Kit integration
+### Spec Kit
 
+Nine guided commands walk agents through spec-driven development:
 `/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`,
 `/speckit-implement`, `/speckit-analyze`, `/speckit-checklist`,
 `/speckit-constitution`, `/speckit-taskstoissues`.
 
-### Autonomous orchestration (v2)
+### Orchestrator
 
-The **QuorumKit Orchestrator** is a single GitHub Actions workflow that drives
-agent chains from declarative pipeline YAML — no slash commands needed for
-routine SDLC work.
+The orchestrator drives agent chains automatically from declarative pipeline YAML — no slash commands needed for routine SDLC work.
 
-| Capability | Notes |
-|------------|-------|
-| Event-driven pipelines | Issues, PRs, labels, `workflow_run` events |
-| v2 schema | `entry` / `transitions` / `loop_budget`; runtime selected per step |
-| Runtime registry | `src/runtimes.yml` — supported: `claude`, `copilot` (ADR-005) |
-| Two-channel state | Public timeline comments + idempotent `<!-- apm-state -->` block (ADR-004) |
-| apm-msg protocol | Agents emit `<!-- apm-msg v="1" outcome="…" -->…<!-- /apm-msg -->` |
-| Loop budget | Per-pipeline cap stops infinite ping-pongs (FR-018) |
-| Per-step timeout | `timeout_minutes` enforced; orchestrator-failure fallback runs (FR-019) |
+| Capability | Detail |
+|------------|--------|
+| Event-driven | Issues, PRs, labels, `workflow_run` |
+| Pipeline schema | `entry` / `transitions` / `loop_budget` |
+| Runtimes | `claude`, `copilot` — selected per step (`src/runtimes.yml`) |
+| State | Public timeline comments + idempotent `<!-- apm-state -->` block |
+| Protocol | Agents emit `<!-- apm-msg v="1" outcome="…" -->` tokens |
+| Loop budget | Per-pipeline cap prevents infinite ping-pong |
+| Timeouts | `timeout_minutes` per step; failure fallback runs |
 | Approval gates | `approval: required` resumes on `/approve` from a `write`+ collaborator |
-| Dashboard broadcast | Pipeline state pushed to the dashboard within ~5 s |
+| Dashboard | Pipeline state visible in the browser dashboard within ~5 s |
 
-**Built-in pipelines** (`src/pipelines/*.yml`):
+**Built-in pipelines** (`src/pipelines/`):
 
-| Pipeline | Path |
-|----------|------|
-| Feature pipeline | triage → ba → architect → dev → qa → reviewer → release |
-| Bug-fix pipeline | triage → dev → qa → reviewer |
-| Release pipeline | qa → reviewer → **[approval]** → release |
+| Pipeline | Stages |
+|----------|--------|
+| Feature | triage → ba → architect → dev → qa → reviewer → release |
+| Bug-fix | triage → dev → qa → reviewer |
+| Release | qa → reviewer → **[approval]** → release |
 
-Full reference: **[docs/PIPELINES.md](docs/PIPELINES.md)**.
+Full reference: [`docs/PIPELINES.md`](docs/PIPELINES.md).
 
 ### GitHub templates
 
-- 26 GitHub Actions workflows — 12 Claude + 12 Copilot + `orchestrator` + `alert-to-issue`
+- 26 GitHub Actions workflows (12 Claude + 12 Copilot + `orchestrator` + `alert-to-issue`)
 - PR template with agent sign-off checklists
 - Issue templates: bug report, feature request, security vulnerability
 - `CONTRIBUTING.md`, `SECURITY.md`
@@ -104,7 +120,7 @@ Full reference: **[docs/PIPELINES.md](docs/PIPELINES.md)**.
 
 ## NNN naming convention
 
-A single number ties everything together:
+A single number — the GitHub issue number — ties every artifact together:
 
 | Artifact | Pattern | Example |
 |----------|---------|---------|
@@ -113,68 +129,13 @@ A single number ties everything together:
 | Git branch | `NNN-short-slug` | `042-user-auth` |
 | ADR | `docs/architecture/adr-NNN-slug.md` | `adr-042-jwt-vs-opaque.md` |
 
-`NNN` = the GitHub issue number, zero-padded to 3 digits. No separate counter.
+`NNN` is the issue number zero-padded to 3 digits. No separate counter.
 
 ---
 
-## Quick start
+## Agent invocation
 
-```bash
-# 1. Clone this repo
-git clone <this-repo-url> ~/quorumkit
-
-# 2. Navigate to your new project
-cd /path/to/my-new-project
-
-# 3a. Claude Code only (default)
-bash ~/quorumkit/scripts/init.sh
-
-# 3b. GitHub Copilot only
-bash ~/quorumkit/scripts/init.sh --ai=copilot
-
-# 3c. Both
-bash ~/quorumkit/scripts/init.sh --ai=both
-
-# 3d. With industrial domain pack
-bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
-```
-
-Detailed flags: [`docs/INIT.md`](docs/INIT.md). Adding to an existing repo:
-[`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md). Industrial / OT projects:
-[`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md).
-
----
-
-## Repository layout
-
-```
-.
-├── quorumkit.yml                         # QuorumKit package manifest
-├── README.md / CHANGELOG.md / CONTRIBUTING.md / SECURITY.md
-│
-├── src/                            # Single distributable source (what init.sh reads)
-│   ├── agents/                     # Agent definitions (single source of truth)
-│   ├── skills/                     # Slash-command wrappers
-│   ├── pipelines/                  # v2 orchestrator pipelines
-│   ├── runtimes.yml                # Runtime registry (claude, copilot)
-│   ├── agent-identities.yml        # Agent → runtime defaults
-│   ├── seed/                       # Seed docs: CLAUDE.md, CONTRIBUTING.md, SECURITY.md, …
-│   ├── .github/                    # Template workflows, instructions, issue/PR templates
-│   └── scripts/                    # init.sh, quality-check.sh, verify-mirror.sh
-│
-├── engine/                         # Orchestrator runtime + dashboard (NOT distributed to consumers)
-│   ├── orchestrator/               # v2 orchestrator runtime (Node)
-│   └── dashboard/                  # Local browser control centre
-│
-├── docs/                           # Documentation (INIT.md, PIPELINES.md, guides, ADRs, …)
-└── scripts/                        # Backward-compat shims (→ src/scripts/) + dev-setup.sh
-```
-
----
-
-## Agent invocation reference
-
-### Claude Code (local slash commands)
+### Claude Code (slash commands)
 
 ```bash
 /ba-agent Add user authentication
@@ -185,17 +146,13 @@ Detailed flags: [`docs/INIT.md`](docs/INIT.md). Adding to an existing repo:
 /devops-agent                       # CI/CD review
 /security-agent                     # security review
 /triage-agent                       # triage open issues
-
-# Lifecycle
 /release-agent [patch|minor|major]
 /docs-agent
 /tech-debt-agent [focus]
-
-# Guided
-/onboard
+/onboard                            # interactive guided setup
 ```
 
-### GitHub (automated via PR comments / labels)
+### GitHub (PR comments and labels)
 
 ```
 @qa-agent              # QA + mutation testing on PR
@@ -208,31 +165,66 @@ Detailed flags: [`docs/INIT.md`](docs/INIT.md). Adding to an existing repo:
 @ot-integration-agent  @digital-twin-agent  @compliance-agent  @incident-agent
 ```
 
-`triage-agent` runs on every new issue, `release-agent` on every push to
-`main`, and `tech-debt-agent` on the first Monday each month.
+`triage-agent` runs automatically on every new issue, `release-agent` on every push to `main`, and `tech-debt-agent` on the first Monday of each month.
 
 ---
 
-## Prerequisites
+## Local dashboard
 
-For **Claude Code**: [Claude Code](https://claude.ai/code) CLI, `ANTHROPIC_API_KEY`
-in repo secrets, and Node.js (for github-speckit).
+A browser control centre for live agent invocation, log streaming, Kanban board, and per-agent terminal.
 
-For **GitHub Copilot**: Active Copilot subscription (Business / Enterprise
-recommended for Actions); `permissions: models: read` — no extra secrets.
+```bash
+bash engine/dashboard/start.sh    # opens http://localhost:3131
+```
 
-For both: [GitHub CLI](https://cli.github.com) and a Git repo connected to GitHub.
+Full guide: [`docs/DASHBOARD.md`](docs/DASHBOARD.md).
 
 ---
 
-## Alternative: install via APM package manager
+## Customisation
 
-If you have [APM](https://github.com/microsoft/apm) (Microsoft's Agent Package Manager) installed, declare QuorumKit as a dependency:
+After initialisation, tune QuorumKit to your project:
+
+1. **Run `/speckit-constitution`** — define your non-negotiable rules, tech stack, quality thresholds, and cost limits.
+2. **Edit agent definitions** in `.claude/agents/` (or `.github/agents/` for Copilot) to add domain-specific rules.
+3. **Edit `src/pipelines/*.yml`** to customise agent chains, loop budgets, approvals, and timeouts (see [`docs/PIPELINES.md`](docs/PIPELINES.md)).
+4. **Edit `.specify/extensions/git/git-config.yml`** to toggle auto-commits.
+5. **Edit `.github/workflows/`** for project-specific CI/CD steps.
+
+---
+
+## Repository layout
+
+```
+.
+├── quorumkit.yml               # QuorumKit package manifest
+│
+├── src/                        # Source — what init.sh reads and distributes
+│   ├── agents/                 # Agent definitions (single source of truth)
+│   ├── skills/                 # Slash-command wrappers
+│   ├── pipelines/              # Orchestrator pipelines
+│   ├── runtimes.yml            # Runtime registry (claude, copilot)
+│   ├── agent-identities.yml    # Agent → runtime defaults
+│   ├── seed/                   # Seed docs deployed to consumer repos
+│   ├── .github/                # Template workflows, instructions, issue/PR templates
+│   └── scripts/                # init.sh, quality-check.sh, verify-mirror.sh
+│
+├── engine/                     # Orchestrator runtime + dashboard (not distributed)
+│   ├── orchestrator/           # v2 orchestrator (Node.js)
+│   └── dashboard/              # Local browser control centre
+│
+├── docs/                       # Guides and ADRs
+└── scripts/                    # Dev-setup and backward-compat shims
+```
+
+---
+
+## Alternative install: APM
+
+If you use [APM](https://github.com/microsoft/apm) (Microsoft's Agent Package Manager), declare QuorumKit as a dependency instead of cloning:
 
 ```yaml
 # quorumkit.yml in your project
-name: my-project
-version: 1.0.0
 dependencies:
   apm:
     - source: github:<your-username>/quorumkit
@@ -245,36 +237,19 @@ apm install
 
 ---
 
-## Local dashboard
+## Further reading
 
-A browser-based control centre for live agent invocation, log streaming,
-a Kanban board, and a native terminal per agent.
-
-```zsh
-bash engine/dashboard/start.sh    # opens http://localhost:3131
-```
-
-Full guide: [`docs/DASHBOARD.md`](docs/DASHBOARD.md).
-
----
-
-## Customisation
-
-After initialisation:
-
-1. **`/speckit-constitution`** — define your project's non-negotiable rules,
-   tech stack, quality thresholds, and cost limits.
-2. **Edit agent definitions** in `.claude/agents/` (or
-   `.github/agents/` for Copilot) to add domain-specific rules.
-3. **Edit `src/pipelines/*.yml`** to customise agent chains, loop budgets,
-   approvals, and per-step timeouts (see [`docs/PIPELINES.md`](docs/PIPELINES.md)).
-4. **Edit `.specify/extensions/git/git-config.yml`** to toggle auto-commits.
-5. **Edit `.github/workflows/`** for project-specific setup steps.
+| Doc | Purpose |
+|-----|---------|
+| [`docs/INIT.md`](docs/INIT.md) | All `init.sh` flags and examples |
+| [`docs/PIPELINES.md`](docs/PIPELINES.md) | Pipeline YAML reference, runtime registry, apm-msg protocol |
+| [`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md) | Agent contract: outcomes, apm-msg framing, state tokens |
+| [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | Local browser dashboard |
+| [`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md) | Adopting QuorumKit in an existing repo |
+| [`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md) | Greenfield industrial / lights-out guide |
+| [`docs/ENHANCEMENTS.md`](docs/ENHANCEMENTS.md) | Gap analysis & roadmap |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 
 ---
 
-## Contributing & roadmap
-
-- Contributing to this library: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Gap analysis & roadmap: [`docs/ENHANCEMENTS.md`](docs/ENHANCEMENTS.md)
-- Released changes: [`CHANGELOG.md`](CHANGELOG.md)
+Contributing to this library: [`CONTRIBUTING.md`](CONTRIBUTING.md).
