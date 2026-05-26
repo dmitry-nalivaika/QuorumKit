@@ -25,7 +25,7 @@ permissions:
 ```
 
 The engine **MUST NOT** be invoked with `permissions: write-all`.
-`installer/init.sh --upgrade` (T-20) refuses to broaden the consumer's
+`scripts/init.sh --upgrade` (T-20) refuses to broaden the consumer's
 existing `permissions:` block.
 
 ---
@@ -51,10 +51,10 @@ existing `permissions:` block.
 
 | Threat                                                          | Mitigation                                                                                                                                       | Tracked in                            |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| Compromised third-party `uses:` ref                             | All third-party Actions SHA-pinned (FR-031, M9 mirror gate). Dependabot opens PRs for tag→SHA rotation.                                            | `installer/verify-mirror.sh` M9       |
+| Compromised third-party `uses:` ref                             | All third-party Actions SHA-pinned (FR-031, M9 mirror gate). Dependabot opens PRs for tag→SHA rotation.                                            | `src/scripts/verify-mirror.sh` M9       |
 | Untrusted YAML in `src/pipelines/**` deserialising arbitrary code | `yaml.load` pinned to `CORE_SCHEMA`; tag-aware loaders banned. Negative test: `engine/tests/api-version.test.js` `!!js/function` case.            | FR-013, T-10                          |
 | Pipeline declares `apiVersion` newer than the pinned engine     | `assertApiVersionSupported` fails fast with a remediation message naming both versions.                                                          | FR-013, T-10                          |
-| Workflow run with `permissions: write-all` (CWE-732 over-grant) | `installer/init.sh --upgrade` refuses to widen `permissions:` blocks; engine itself requests nothing.                                            | FR-024, SEC-MED-002, T-20             |
+| Workflow run with `permissions: write-all` (CWE-732 over-grant) | `scripts/init.sh --upgrade` refuses to widen `permissions:` blocks; engine itself requests nothing.                                            | FR-024, SEC-MED-002, T-20             |
 | Long-lived `NPM_TOKEN` in repo secrets                          | Release workflow uses **OIDC trusted publishing + `npm publish --provenance`**; no `NPM_TOKEN` ever written to env.                              | SEC-HIGH-001, T-12                    |
 | Tampered release artefact                                       | Signed `v*` tags + SLSA build provenance attached by `npm publish --provenance`. Verifying key documented in `engine/RELEASING.md`.              | SC-009, SEC-MED-004, T-12, T-23       |
 | Engine-bundle drift (unreviewed `dist/` change)                 | `engine-build-gate.yml` rebuilds via `ncc` on every PR touching `engine/**` and fails if `git diff --quiet engine/dist/` is non-empty.            | FR-009, T-09                          |

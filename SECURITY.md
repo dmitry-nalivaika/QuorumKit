@@ -13,8 +13,10 @@
 
 ### Preferred Channel
 
-<!-- TODO: Replace with your actual contact — e.g. security@yourcompany.com -->
-Email: **[security@your-domain.com]**
+Use GitHub's **private vulnerability reporting** for this repository:
+<https://github.com/dmitry-nalivaika/quorumkit/security/advisories/new>
+
+Do **not** open a public GitHub Issue for security vulnerabilities.
 
 Include in your report:
 - A description of the vulnerability and the component affected

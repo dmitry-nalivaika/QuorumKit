@@ -13,7 +13,7 @@
 ---
 
 > **Status note (2026-05-08):** This ADR is superseded by ADR-004 for Orchestrator
-> v2 (spec #44). The append-only-only model described below remains the v1
+> v2 (spec #44). The append-only model described below remains the v1
 > behaviour and is kept for historical reference and v1 backward compatibility
 > (see spec 044 US-7, FR-002, FR-015).
 

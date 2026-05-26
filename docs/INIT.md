@@ -30,10 +30,10 @@ Install only the tools for the mode(s) you are using.
 mkdir -p /path/to/my-project && cd /path/to/my-project
 
 # 2. Run init — choose your AI mode
-bash ~/path/to/quorumkit/installer/init.sh                                # Claude only (default)
-bash ~/path/to/quorumkit/installer/init.sh --ai=copilot                   # Copilot only
-bash ~/path/to/quorumkit/installer/init.sh --ai=both                      # Both (universal)
-bash ~/path/to/quorumkit/installer/init.sh --ai=both --domain=industrial  # Both + industrial pack
+bash ~/path/to/quorumkit/scripts/init.sh                                # Claude only (default)
+bash ~/path/to/quorumkit/scripts/init.sh --ai=copilot                   # Copilot only
+bash ~/path/to/quorumkit/scripts/init.sh --ai=both                      # Both (universal)
+bash ~/path/to/quorumkit/scripts/init.sh --ai=both --domain=industrial  # Both + industrial pack
 ```
 
 The script is **idempotent** — it skips any file that already exists, making it
@@ -146,30 +146,30 @@ NNN = Issue number, **zero-padded to 3 digits**.
 ```zsh
 # Step 1: Agents and skills
 mkdir -p .claude/agents .claude/skills
-cp -r /path/to/quorumkit/.github/agents/* .claude/agents/
-for skill in /path/to/quorumkit/.github/skills/*/; do
+cp -r /path/to/quorumkit/src/agents/* .claude/agents/
+for skill in /path/to/quorumkit/src/skills/*/; do
   skill_name="$(basename "$skill")"
   mkdir -p ".claude/skills/$skill_name"
   cp "$skill/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
 done
 
 # Step 2: CLAUDE.md
-cp /path/to/quorumkit/templates/seed/CLAUDE.md CLAUDE.md
+cp /path/to/quorumkit/src/seed/CLAUDE.md CLAUDE.md
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
-cp /path/to/quorumkit/templates/github/workflows/agent-*.yml .github/workflows/
-cp /path/to/quorumkit/templates/github/pull_request_template.md .github/
-cp /path/to/quorumkit/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
+cp /path/to/quorumkit/src/.github/workflows/agent-*.yml .github/workflows/
+cp /path/to/quorumkit/src/.github/pull_request_template.md .github/
+cp /path/to/quorumkit/src/.github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
+cp /path/to/quorumkit/src/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/quorumkit/src/seed/SECURITY.md SECURITY.md
 
 # Step 4: github-speckit
 npx github-speckit@latest
 # Choose: claude / sequential / CLAUDE.md / sh
 
 # Step 5: Git
-git init && git add . && git commit -m "chore: initialize agentic dev stack"
+git init && git add . && git commit -m "chore: initialize QuorumKit"
 ```
 
 ### GitHub Copilot
@@ -177,23 +177,23 @@ git init && git add . && git commit -m "chore: initialize agentic dev stack"
 ```zsh
 # Step 1: Agent definitions
 mkdir -p .github/agents
-cp -r /path/to/quorumkit/.github/agents/* .github/agents/
+cp -r /path/to/quorumkit/src/agents/* .github/agents/
 
 # Step 2: Copilot context and instructions
 mkdir -p .github/instructions
-cp /path/to/quorumkit/templates/seed/copilot-instructions.md .github/copilot-instructions.md
-cp /path/to/quorumkit/templates/github/instructions/*.instructions.md .github/instructions/
+cp /path/to/quorumkit/src/seed/copilot-instructions.md .github/copilot-instructions.md
+cp /path/to/quorumkit/src/.github/instructions/*.instructions.md .github/instructions/
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
-cp /path/to/quorumkit/templates/github/workflows/copilot-agent-*.yml .github/workflows/
-cp /path/to/quorumkit/templates/github/pull_request_template.md .github/
-cp /path/to/quorumkit/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
+cp /path/to/quorumkit/src/.github/workflows/copilot-agent-*.yml .github/workflows/
+cp /path/to/quorumkit/src/.github/pull_request_template.md .github/
+cp /path/to/quorumkit/src/.github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
+cp /path/to/quorumkit/src/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/quorumkit/src/seed/SECURITY.md SECURITY.md
 
 # Step 4: Git
-git init && git add . && git commit -m "chore: initialize agentic dev stack"
+git init && git add . && git commit -m "chore: initialize QuorumKit"
 ```
 
 ---
@@ -235,8 +235,8 @@ it at every session start and treat it as non-negotiable.
 ### 3. Copy additional templates to your project root
 
 ```zsh
-cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
+cp /path/to/quorumkit/src/seed/CONTRIBUTING.md CONTRIBUTING.md
+cp /path/to/quorumkit/src/seed/SECURITY.md SECURITY.md
 ```
 
 Edit `SECURITY.md` to replace `[security@your-domain.com]` with your actual contact.
@@ -373,7 +373,7 @@ Common customisations:
 
 ```zsh
 # Re-run init (skips existing files)
-bash /path/to/quorumkit/installer/init.sh --ai=both
+bash /path/to/quorumkit/scripts/init.sh --ai=both
 
 # Or update a single agent
 cp /path/to/quorumkit/.github/agents/security-agent.md .claude/agents/
@@ -465,5 +465,5 @@ apm install
 ```
 
 APM installs `.github/agents/` → `.claude/agents/` and `.github/skills/` → `.claude/skills/`
-automatically. Run `installer/init.sh` separately for full setup (GitHub templates,
+automatically. Run `scripts/init.sh` separately for full setup (GitHub templates,
 speckit, Copilot files).

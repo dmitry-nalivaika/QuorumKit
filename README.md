@@ -225,10 +225,9 @@ For both: [GitHub CLI](https://cli.github.com) and a Git repo connected to GitHu
 
 ---
 
-## APM installation (alternative)
+## Alternative: install via APM package manager
 
-If you have [APM](https://github.com/microsoft/apm) installed, declare it as
-a dependency:
+If you have [APM](https://github.com/microsoft/apm) (Microsoft's Agent Package Manager) installed, declare QuorumKit as a dependency:
 
 ```yaml
 # quorumkit.yml in your project

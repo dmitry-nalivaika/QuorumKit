@@ -71,14 +71,14 @@ The stack currently delivers:
 | 18 | OPC-UA endpoint security scanner — OT Agent | 🟡 Medium | 3 |
 | 19 | Incident severity auto-classification | 🟡 Medium | 3 |
 | 20 | Deployment ring model enforcement gate | 🟡 Medium | 3 |
-| 21 | **No Release Agent** — semver, changelog, GitHub Release | 🔴 Critical | 4 |
-| 22 | **No Docs Agent** — README, API ref, inline comments drift | 🔴 Critical | 4 |
-| 23 | **No Tech-Debt Agent** — complexity accumulates silently | 🟠 High | 4 |
-| 24 | No API contract governance — breaking changes undetected | 🟠 High | 4 |
-| 25 | No observability → Issue feedback loop | 🟠 High | 4 |
-| 26 | No mutation testing gate — coverage % ≠ test quality | 🟡 Medium | 4 |
-| 27 | No cross-spec consistency check | 🟡 Medium | 4 |
-| 28 | No constitution evolution process | 🟡 Medium | 4 |
+| ~~21~~ | ~~No Release Agent — semver, changelog, GitHub Release~~ | ✅ Delivered in v3.0.0 | 4 |
+| ~~22~~ | ~~No Docs Agent — README, API ref, inline comments drift~~ | ✅ Delivered in v3.0.0 | 4 |
+| ~~23~~ | ~~No Tech-Debt Agent — complexity accumulates silently~~ | ✅ Delivered in v3.0.0 | 4 |
+| ~~24~~ | ~~No API contract governance — breaking changes undetected~~ | ✅ Delivered (Reviewer Agent, v3.0.0) | 4 |
+| ~~25~~ | ~~No observability → Issue feedback loop~~ | ✅ Delivered (DevOps Agent + alert-to-issue.yml, v3.0.0) | 4 |
+| ~~26~~ | ~~No mutation testing gate — coverage % ≠ test quality~~ | ✅ Delivered (QA Agent, v3.0.0) | 4 |
+| ~~27~~ | ~~No cross-spec consistency check~~ | ✅ Delivered (Architect Agent, v3.0.0) | 4 |
+| ~~28~~ | ~~No constitution evolution process~~ | ✅ Delivered (constitution amendment workflow, v3.0.0) | 4 |
 
 ---
 

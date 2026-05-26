@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ⚠️ Breaking changes
 
 - **Project renamed to QuorumKit.** `apm-engine` → `quorumkit-engine`, `apm-orchestrator` → `quorumkit-orchestrator`. No backward-compatible alias published (Issue #67, FR-002/FR-003).
-- **`apm.yml` renamed to `quorumkit.yml`** — v3 does not accept the old filename. `installer/init.sh` exits non-zero with a migration notice if `apm.yml` is detected (FR-004/FR-005, ADR-067).
+- **`apm.yml` renamed to `quorumkit.yml`** — v3 does not accept the old filename. `scripts/init.sh` exits non-zero with a migration notice if `apm.yml` is detected (FR-004/FR-005, ADR-067).
 - **GitHub repository renamed**: `agentic-dev-stack` → `quorumkit`. Consumer `uses:` paths must be updated to `uses: dmitry-nalivaika/quorumkit/engine@v3`.
 - **VS Code extension renamed**: `apm-copilot-bridge` → `quorumkit-copilot-bridge`; command prefix changed from `apm.` to `quorumkit.`.
 - **Wire-format tokens unchanged** — `apm-msg`, `apm-state`, `apm-pipeline-state` are intentionally NOT renamed (FR-013, FR-014).
@@ -48,20 +48,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/orchestrator/` → `engine/tests/`, `dashboard/` → `engine/dashboard/`.
   Consumer workflows that ran `node scripts/orchestrator/index.js` MUST
   switch to `uses: dmitry-nalivaika/quorumkit/engine@v3` (or a SHA pin).
-  Migration: `bash installer/init.sh --upgrade --apply --engine-ref=v3`.
+  Migration: `bash scripts/init.sh --upgrade --apply --engine-ref=v3`.
 - **Installer moved.** `scripts/{init,verify-mirror,quality-check}.sh` →
-  `installer/`. Backward-compatible shims at `scripts/*.sh` `exec` the new
+  `src/scripts/`. Backward-compatible shims at `scripts/*.sh` `exec` the new
   path; they will be removed in v4.0.0.
 - **Seed files moved.** `templates/{CLAUDE,CONTRIBUTING,SECURITY,copilot-instructions}.md`
-  → `templates/seed/`. The installer copies them from the new location;
+  → `src/seed/`. The installer copies them from the new location;
   external scripts that reference the old path must be updated.
 - **`apm.yml` `version: 2.1.0` → `3.0.0`** (T-25).
 - **`templates/src/pipelines/` removed.** Pipelines live only at
-  `src/pipelines/`; `installer/init.sh` copies them straight from the
+  `src/pipelines/`; `scripts/init.sh` copies them straight from the
   SoT (FR-005, mirror gate M4).
 - **`.github/agents/` removed from this repo.** That directory is created
   in *consumer* repos by the installer; in the SoT, agent definitions
-  live only at `.github/agents/` (FR-006, mirror gate M6).
+  live only at `src/agents/` (FR-006, mirror gate M6).
 - **Pipelines may now declare `apiVersion: 'X.Y'`.** The engine refuses
   to load a pipeline whose `apiVersion` is newer than its own (FR-013).
   `ENGINE_API_VERSION` is `1.0` in this release.
@@ -70,8 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Three-zone repo topology** documented in `CONTRIBUTING.md` →
   *Repo Topology* (FR-026). Mirror surfaces M4–M9 added to
-  `installer/verify-mirror.sh` with negative-test fixtures
-  (`installer/tests/test-verify-mirror.sh` — 13/13).
+  `src/scripts/verify-mirror.sh` with negative-test fixtures
+  (`src/scripts/tests/test-verify-mirror.sh` — 13/13).
 - **Engine GitHub Action** (`engine/action.yml`) — `runs.using: 'node20'`,
   `runs.main: 'dist/index.js'`. Bundle built via `@vercel/ncc` and committed
   to `engine/dist/`. `.github/workflows/engine-build-gate.yml` rebuilds on
@@ -85,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   threat-model snapshot, and change-control rules. Default consumer-side
   permission posture is `contents: read` + `issues: write` +
   `pull-requests: write` (T-11, FR-014, SEC-MED-001).
-- **`installer/init.sh --upgrade`** rewrites consumer `.github/workflows/*.yml`
+- **`scripts/init.sh --upgrade`** rewrites consumer `.github/workflows/*.yml`
   from `node engine/orchestrator/index.js` to the Action `uses:` form.
   Dry-run by default; refuses to broaden any `permissions:` block
   (T-20, FR-024, SEC-MED-002).
@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔒 Security
 
 - **All third-party `uses:` SHA-pinned** in `.github/workflows/` and
-  `templates/github/workflows/` (T-16, FR-031, mirror gate M9).
+  `src/.github/workflows/` (T-16, FR-031, mirror gate M9).
 - **Engine release path is reproducible**: signed tag → rebuilt bundle
   → provenance-attested npm tarball. Verifying GPG fingerprint published
   in `docs/architecture/adr-047-action-runtime.md` and rotation procedure
@@ -113,8 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   via `npm deprecate` + dist-tag swap, fallback-token disaster recovery.
 - `engine/SECURITY.md` — per-scope permissions table + threat model.
 - `BROWNFIELD_GUIDE.md`, `INIT.md`, `PIPELINES.md`, `DASHBOARD.md`,
-  `README.md`, `CONTRIBUTING.md` — path references updated to `installer/`,
-  `engine/`, `templates/seed/`.
+  `README.md`, `CONTRIBUTING.md` — path references updated to `src/scripts/`,
+  `engine/`, `src/seed/`.
 - `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
   + `docs/architecture/adr-047-action-runtime.md` — design record and
   runtime amendment.
@@ -127,12 +127,12 @@ cd /path/to/quorumkit-clone && git pull --ff-only
 
 # 2. From the consumer repo, dry-run the upgrade.
 cd /path/to/your-project
-bash /path/to/quorumkit-clone/installer/init.sh --upgrade --engine-ref=v3
+bash /path/to/quorumkit-clone/scripts/init.sh --upgrade --engine-ref=v3
 # Review the diff. The script refuses if existing 'permissions:' blocks
 # lack required engine scopes — fix those by hand and re-run.
 
 # 3. Apply.
-bash /path/to/quorumkit-clone/installer/init.sh --upgrade --apply --engine-ref=v3
+bash /path/to/quorumkit-clone/scripts/init.sh --upgrade --apply --engine-ref=v3
 
 # 4. Commit + open a PR. Branch protection runs verify-mirror; the PR
 #    must be green before merge.

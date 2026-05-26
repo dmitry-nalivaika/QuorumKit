@@ -105,7 +105,7 @@ for every step. The orchestrator MUST also reject at runtime any step whose
 agent workflow declares no `timeout-minutes:` (treating it as the GitHub
 default of 360 minutes for the comparison). Default per-step timeout: 60 minutes.
 
-Every shipped agent workflow under `templates/github/workflows/copilot-agent-*.yml`
+Every shipped agent workflow under `src/.github/workflows/copilot-agent-*.yml`
 and `src/workflows/agent-*.yml` MUST declare an explicit `timeout-minutes:` on
 its job(s). This is enforced by `quality-check.sh` gate **#14** (added below).
 
@@ -177,12 +177,12 @@ declared outcome in the regulation document), distinct from `protocol-violation`
   busy threads. Acceptable: the orchestrator is the hot path's coordinator,
   not an autoscaling worker.
 - Bounded retries inside adapters add code per kind. Acceptable: the policy is
-  a small shared helper exported from `scripts/orchestrator/runtimes/_retry.js`.
+  a small shared helper exported from `engine/orchestrator/runtimes/_retry.js`.
 
 **Risks**
 - *Risk*: A GitHub Actions context field referenced in §1 is renamed by GitHub.
   *Mitigation*: The dedup-key formulas are tested against fixture event payloads
-  in `tests/orchestrator/fixtures/`; a renamed field fails CI immediately.
+  in `engine/tests/fixtures/`; a renamed field fails CI immediately.
 - *Risk*: A consumer project disables required status checks.
   *Mitigation*: This is their right; the upstream constraint is documented and
   the `verify-mirror.sh` pattern from ADR-006 establishes the precedent.

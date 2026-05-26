@@ -69,9 +69,10 @@ What **MUST NOT** exist in this repo (enforced by `src/scripts/verify-mirror.sh`
 
 - `src/.github/pipelines/` — pipelines are read directly from
   `src/pipelines/` per ADR-006 §3 (M4).
-- `.github/agents/` — that directory is generated in *consumer* repos by
-  `src/scripts/init.sh`; in this SoT repo, agent definitions live only at
-  `src/agents/` (M6).
+- `.github/agents/` out of sync with `src/agents/` — when `.github/agents/`
+  is present (it is in this self-host repo for Copilot parity), it must be
+  byte-identical to `src/agents/` (M6). Run `bash scripts/dev-setup.sh` to
+  sync it.
 
 Mirror surfaces:
 
@@ -79,6 +80,7 @@ Mirror surfaces:
 |---|---|---|
 | M1 | `src/agents/<x>.md` | `src/.github/instructions/<short>.instructions.md` parity |
 | M5 | `src/.github/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` byte-identity (if both exist; `# apm-allow-divergence:` exempts an intentional split) |
+| M6 | `src/agents/<x>.md` | `.github/agents/<x>.md` byte-parity (when `.github/agents/` exists in this repo) |
 | M7 | `src/agents/<x>.md` | `.claude/agents/<x>.md` AND `.github/instructions/<short>.instructions.md` |
 | M8 | — | no `node (scripts\|engine)/orchestrator/` in distributed workflows (engine invoked via `uses:` only) |
 | M9 | — | every third-party `uses:` SHA-pinned (40 hex) |

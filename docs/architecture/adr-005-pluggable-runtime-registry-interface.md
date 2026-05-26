@@ -54,7 +54,7 @@ A runtime entry in `src/runtimes.yml`:
 
 The orchestrator itself MUST NOT contain any kind-specific code paths. Each
 registered kind delegates to a **runtime adapter** module under
-`scripts/orchestrator/runtimes/<kind>.js` that exports a single
+`engine/orchestrator/runtimes/<kind>.js` that exports a single
 `invoke(context)` function. Loading the adapter requires the kind to be present
 in the **kind allowlist**.
 

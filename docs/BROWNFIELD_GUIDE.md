@@ -85,7 +85,7 @@ for agent in ba-product-agent developer-agent qa-test-agent reviewer-agent \
              architect-agent devops-agent security-agent triage-agent; do
   echo ""
   echo "══ $agent ══"
-  diff ".claude/agents/$agent.md" "$APM/src/agents/$agent.md" | head -30 \
+  diff ".claude/agents/$agent.md" "$QUORUMKIT/src/agents/$agent.md" | head -30 \
     && echo "(no diff)" || true
 done
 ```
@@ -200,9 +200,9 @@ If tags are missing, add them anywhere in your CLAUDE.md:
 cd /path/to/your-existing-project
 
 # Choose the mode that matches your team
-bash /path/to/quorumkit/src/scripts/init.sh --ai=both     # Claude + Copilot
-bash /path/to/quorumkit/src/scripts/init.sh --ai=claude   # Claude Code only
-bash /path/to/quorumkit/src/scripts/init.sh --ai=copilot  # GitHub Copilot only
+bash /path/to/quorumkit/scripts/init.sh --ai=both     # Claude + Copilot
+bash /path/to/quorumkit/scripts/init.sh --ai=claude   # Claude Code only
+bash /path/to/quorumkit/scripts/init.sh --ai=copilot  # GitHub Copilot only
 ```
 
 The script is safe to run on existing projects — it **skips any file that already

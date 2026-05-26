@@ -31,7 +31,7 @@
 
 ---
 
-## 1. What the Orchestrator Is
+## 1. What the Dashboard Is
 
 The Orchestrator is a two-part system:
 

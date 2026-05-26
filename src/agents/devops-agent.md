@@ -226,7 +226,7 @@ POST https://api.github.com/repos/{owner}/{repo}/dispatches
 }
 ```
 
-The `alert-to-issue.yml` workflow (in `templates/github/workflows/`) receives
+The `alert-to-issue.yml` workflow (in `src/.github/workflows/`) receives
 this dispatch, creates the GitHub Issue, maps severity to priority labels,
 and triggers the Triage Agent.
 
@@ -255,7 +255,7 @@ and triggers the Triage Agent.
 - MUST NOT deploy to edge devices without a signed OTA package (if edge layer defined in constitution)
 - MUST raise COST-BLOCKER if projected spend exceeds the constitution budget by > 20% (if budget defined)
 - MUST declare `timeout-minutes:` on every agent-dispatching workflow under
-  `.github/workflows/` and `templates/github/workflows/` (per the project ADR
+  `.github/workflows/` and `src/.github/workflows/` (per the project ADR
   governing CI timeout policy). The project's CI quality gate will fail PRs that omit it.
 - MUST keep the orchestrator workflow's `concurrency:` block keyed on issue/PR
   (per the project ADR governing audit-channel concurrency). Removing it allows races on the audit channel.
