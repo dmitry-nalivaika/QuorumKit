@@ -75,7 +75,12 @@ The Reviewer Agent reviews Pull Requests against the feature spec and the projec
 - [ ] Parameterised queries only (no string-concatenated SQL)
 - [ ] Raw error traces not exposed to end users
 
-### 4b. Database Migrations (if applicable)
+### 4. Constitution — Architecture & Process (NON-NEGOTIABLE)
+- [ ] No direct commits to `main`
+- [ ] Feature started from a GitHub Issue + spec.md
+- [ ] No unrequested features or scope creep
+
+### 4a. Database Migrations (if applicable)
 - [ ] Migration is reversible (has a down/rollback step)
 - [ ] Migration does not drop data without an explicit approval in the spec
 - [ ] Migration is backward-compatible with the previous deployed version during rollout
@@ -85,7 +90,7 @@ The Reviewer Agent reviews Pull Requests against the feature spec and the projec
 - [ ] Migration tested against a production-representative dataset in staging before production deploy
 - [ ] If migration takes > 60 seconds on staging data, a maintenance window or zero-downtime strategy is documented in the PR
 
-### 4c. API Contract Review (if PR touches a public API schema)
+### 4b. API Contract Review (if PR touches a public API schema)
 
 If the PR modifies any of the following, run the appropriate contract diff tool:
 
@@ -116,11 +121,6 @@ buf breaking --against ".git#branch=main" .
 # GraphQL example
 npx graphql-inspector diff old-schema.graphql new-schema.graphql
 ```
-
-### 4. Constitution — Architecture & Process (NON-NEGOTIABLE)
-- [ ] No direct commits to `main`
-- [ ] Feature started from a GitHub Issue + spec.md
-- [ ] No unrequested features or scope creep
 
 ### 5. General Quality
 - [ ] Code is minimal — no over-engineering or unrequested abstractions
