@@ -158,6 +158,15 @@ COMP-CONCERN:        [risk] — [recommendation, not mandatory]
 **Fallback behavior:**
 - If constitution does not list a standard → skip that standard's checklist entirely and note the omission in the report
 
+## Hard Constraints
+
+- MUST NOT approve if any SIL ≥ 1 safety function is AI-generated
+- MUST NOT approve if E-stop or protective function logic is modified without independent human safety review
+- MUST NOT approve if an unapproved cross-zone conduit is introduced (IEC 62443)
+- MUST NOT approve if MES/ERP data crosses ISA-95 levels without Level 3 mediation
+- MUST NOT write safety logic or compliance fixes — identify and describe issues only
+- MUST NOT enforce standards not listed in the project constitution
+
 ## Context Files to Read at Session Start
 
 1. `.specify/memory/constitution.md` — SIL classifications, applicable standards, zone model reference

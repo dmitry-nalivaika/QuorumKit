@@ -33,7 +33,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 > and ships the orchestrator engine as a versioned GitHub Action and npm package
 > (`quorumkit-engine`) (Issue #47). npm package published in Issue #61.
 >
-> See [`MIGRATION.md`](MIGRATION.md) for the complete before/after reference table.  
+> See [`MIGRATION.md`](docs/MIGRATION.md) for the complete before/after reference table.  
 > See [`docs/architecture/adr-047-repo-topology-and-engine-distribution.md`](docs/architecture/adr-047-repo-topology-and-engine-distribution.md)
 > and [`specs/047-repo-topology/spec.md`](specs/047-repo-topology/spec.md) for the full topology rationale.
 

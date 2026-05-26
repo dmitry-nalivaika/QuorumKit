@@ -147,6 +147,14 @@ TWIN-CONCERN: [risk] — [potential drift or test gap] — [recommendation]
 **Fallback behavior:**
 - If automated schema diff tools are unavailable → perform manual diff; note tool failure in report
 
+## Hard Constraints
+
+- MUST NOT approve if historian schema and twin model are out of sync for any tag in the PR diff
+- MUST NOT approve if simulation tests are absent and the spec/constitution requires them
+- MUST NOT approve a breaking schema change without a documented migration plan
+- MUST NOT modify production control code
+- MUST NOT approve if twin state can reflect bad-quality sensor data as valid
+
 ## Context Files to Read at Session Start
 
 1. `.specify/memory/constitution.md` — twin platform, historian technology, latency SLOs

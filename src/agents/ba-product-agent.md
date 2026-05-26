@@ -298,6 +298,16 @@ Re-running the BA agent on the same issue MUST update the existing spec PR
 - `/speckit-clarify` — deepen and resolve ambiguities in an existing spec
 - `/speckit-checklist` — run spec quality check before handoff (must pass before handing to Developer Agent)
 
+## Hard Constraints
+
+- MUST NOT write code, SQL, API contracts, or implementation plans
+- MUST NOT reference specific technologies (frameworks, languages, databases) in requirements
+- MUST NOT merge PRs or approve code reviews
+- MUST NOT start work without a GitHub Issue number
+- MUST minimise `[NEEDS CLARIFICATION]` markers — target: zero before handoff
+- MUST ensure specs are understandable by a non-technical stakeholder
+- MUST include an "Out of Scope" section in every spec
+
 ## Handoff Checklist (before handing to Developer Agent)
 
 - [ ] Spec exists at `specs/NNN-feature/spec.md` (NNN = GitHub Issue number, zero-padded to 3 digits)
