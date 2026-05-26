@@ -930,14 +930,7 @@ const AGENTS = [
     "color": "#43b97f",
     "status": "idle",
     "monitorText": "Writing spec.md...",
-    "responsibilities": [
-      "Create and refine feature specifications (spec.md) using /speckit-specify and…",
-      "Write user stories with clear acceptance scenarios (Given/When/Then)",
-      "Define functional requirements that are testable and technology-agnostic",
-      "Define measurable success criteria",
-      "Identify key entities (what they are, not how they are stored)",
-      "Flag open questions and resolve all of them before handoff"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-specify",
       "/speckit-clarify",
@@ -959,14 +952,7 @@ const AGENTS = [
     "color": "#00fff5",
     "status": "idle",
     "monitorText": "npm install...",
-    "responsibilities": [
-      "Create the implementation plan (plan.md) using /speckit-plan",
-      "Generate the task list (tasks.md) using /speckit-tasks",
-      "Implement tasks from tasks.md using /speckit-implement",
-      "Write tests before implementation (TDD: red → green → refactor)",
-      "Keep commits atomic — one logical change per commit",
-      "Name the feature branch using the NNN prefix from the spec: NNN-short-slug"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-plan",
       "/speckit-tasks",
@@ -988,14 +974,7 @@ const AGENTS = [
     "color": "#ffb700",
     "status": "idle",
     "monitorText": "Running test suite...",
-    "responsibilities": [
-      "Resolve the spec path from the PR branch name: extract the NNN prefix,",
-      "Run the full test suite and report results",
-      "Verify code coverage meets the threshold defined in the constitution",
-      "Execute manual acceptance scenarios from spec.md",
-      "Validate that error paths behave correctly (graceful degradation, no raw traces)",
-      "Verify data access isolation and security requirements (if applicable per constitution)"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-checklist"
     ],
@@ -1015,14 +994,7 @@ const AGENTS = [
     "color": "#9d4edd",
     "status": "idle",
     "monitorText": "Reviewing PR #...",
-    "responsibilities": [
-      "Read the PR diff and the linked spec.md in full",
-      "Verify spec compliance: every FR covered, no scope creep",
-      "Verify constitution compliance: all non-negotiable principles upheld",
-      "Label issues as BLOCKER: (must fix before merge) or SUGGESTION: (optional)",
-      "Approve the PR only when all BLOCKER items are resolved",
-      "Run /speckit-analyze for a cross-artifact consistency check"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1042,14 +1014,7 @@ const AGENTS = [
     "color": "#e94560",
     "status": "idle",
     "monitorText": "Drafting ADR...",
-    "responsibilities": [
-      "Produce Architecture Decision Records (ADRs) for significant technical choices",
-      "Review and advise on system design proposed in plan.md artifacts",
-      "Evaluate technology choices against constitution principles and project goals",
-      "Identify technical risks and propose mitigations",
-      "Maintain a system-level view across features to prevent architectural drift",
-      "Flag architectural anti-patterns when tagged in PRs or issues"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1069,14 +1034,7 @@ const AGENTS = [
     "color": "#2ed573",
     "status": "idle",
     "monitorText": "Deploying ring 1...",
-    "responsibilities": [
-      "Design and maintain CI/CD pipeline configuration (GitHub Actions, etc.)",
-      "Write and review infrastructure-as-code (Dockerfile, Terraform, Helm, etc.)",
-      "Ensure all quality gates are enforced in CI before any merge to main",
-      "Configure and maintain deployment pipelines (staging → production)",
-      "Set up monitoring, alerting, and observability tooling",
-      "Review PRs that touch infrastructure, CI/CD, or deployment configuration"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1096,13 +1054,7 @@ const AGENTS = [
     "color": "#ff4757",
     "status": "idle",
     "monitorText": "OWASP scan...",
-    "responsibilities": [
-      "Review PR diffs for security vulnerabilities (OWASP Top 10 and beyond)",
-      "Run automated security scanning tools and report results",
-      "Review authentication and authorization logic",
-      "Assess data handling, encryption, and privacy practices",
-      "Produce security findings reports with standardized severity ratings"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1122,16 +1074,9 @@ const AGENTS = [
     "color": "#6c63ff",
     "status": "idle",
     "monitorText": "Scanning issues...",
-    "responsibilities": [
-      "Read and categorize new GitHub Issues",
-      "Apply labels (type, priority, component, status)",
-      "Identify duplicate issues and link them",
-      "Assign issues to appropriate agents or team members",
-      "Ask clarifying questions when issues lack sufficient information",
-      "Escalate security vulnerabilities discreetly (avoid public disclosure of exploits)"
-    ],
+    "responsibilities": [],
     "commands": [
-      "/triage"
+      "/triage-agent \u003cissue-number\u003e"
     ],
     "workflows": [],
     "funFact": "Has read 10,000 issues. They're all 'urgent'.",
@@ -1149,15 +1094,9 @@ const AGENTS = [
     "color": "#ffa502",
     "status": "idle",
     "monitorText": "Bumping semver...",
-    "responsibilities": [
-      "Analyse conventional commits since the last Git tag to determine the semver bump",
-      "Generate or update CHANGELOG.md (grouped by type: Breaking / Features / Fixes /…",
-      "Bump the version field in the project's version file (package.json, pyproject.toml,",
-      "Open a Version Bump PR (never commit directly to main)",
-      "After the Version Bump PR merges: create the GitHub Release with generated notes and…",
-      "Maintain the CHANGELOG.md as the canonical record of all releases"
-    ],
+    "responsibilities": [],
     "commands": [
+      "/release-agent [patch|minor|major]",
       "/release-agent"
     ],
     "workflows": [],
@@ -1176,14 +1115,7 @@ const AGENTS = [
     "color": "#54a0ff",
     "status": "idle",
     "monitorText": "Syncing README...",
-    "responsibilities": [
-      "Update README.md when a merged feature adds or changes user-visible capability",
-      "Generate or update API reference documentation from code annotations (JSDoc,",
-      "Add missing inline doc comments to public functions, classes, and modules",
-      "Flag DOCS-BLOCKER when an ADR-triggering feature merges without a corresponding",
-      "Detect and fix broken cross-references (links to files/sections that no longer exist)",
-      "Ensure CHANGELOG.md accurately reflects what changed in user-facing behaviour"
-    ],
+    "responsibilities": [],
     "commands": [
       "/docs-agent"
     ],
@@ -1203,15 +1135,10 @@ const AGENTS = [
     "color": "#eccc68",
     "status": "idle",
     "monitorText": "Measuring churn×complexity...",
-    "responsibilities": [
-      "Run complexity analysis and identify hotspot files (high cyclomatic complexity + high…",
-      "Identify dead code (unreachable functions, unused exports, zombie feature flags)",
-      "Report outdated dependencies (significantly behind latest stable)",
-      "Analyse test quality using mutation testing if configured",
-      "Detect duplication hotspots (DRY violations that have grown over time)",
-      "Produce docs/tech-debt/tech-debt-report-YYYY-MM.md"
-    ],
+    "responsibilities": [],
     "commands": [
+      "/tech-debt-agent run",
+      "/tech-debt-agent report \u003cYYYY-MM\u003e",
       "/tech-debt-agent"
     ],
     "workflows": [],
@@ -1230,14 +1157,7 @@ const AGENTS = [
     "color": "#ff6348",
     "status": "idle",
     "monitorText": "OPC-UA scan...",
-    "responsibilities": [
-      "Review OT protocol adapter code (OPC-UA, MQTT, Modbus, PROFINET, EtherNet/IP, etc.)",
-      "Verify IT/OT data flows against the spec and the architecture's zone model",
-      "Check edge-to-cloud synchronisation logic for data loss, ordering, and backpressure",
-      "Review message schemas for correctness, units, and backward compatibility",
-      "Flag security violations at the OT boundary (unencrypted transport, shared…",
-      "Validate safe failure modes: what happens when connectivity is lost, devices go offline,"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1257,14 +1177,7 @@ const AGENTS = [
     "color": "#70a1ff",
     "status": "idle",
     "monitorText": "Diffing DTDL schema...",
-    "responsibilities": [
-      "Review changes to asset models, simulation configurations, and twin definitions",
-      "Detect schema drift between the digital twin model and the historian/time-series schema",
-      "Verify that simulation test harnesses reflect the current production asset state",
-      "Review event/telemetry mappings between physical tags and twin properties",
-      "Ensure twin state synchronisation logic handles edge cases (stale data, offline assets)",
-      "Validate that simulation-based regression tests are wired into CI"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1284,14 +1197,7 @@ const AGENTS = [
     "color": "#a29bfe",
     "status": "idle",
     "monitorText": "Checking IEC 62443...",
-    "responsibilities": [
-      "Review PRs for IEC 62443 cybersecurity compliance (industrial systems)",
-      "Check ISA-95 boundary compliance for MES/ERP integration patterns",
-      "Identify safety-critical code paths and enforce the SIL review policy",
-      "Flag changes to E-stop, interlock, or protective function logic for mandatory human review",
-      "Maintain the compliance register (open findings, their status, and resolution)",
-      "Produce compliance review reports on PRs touching regulated subsystems"
-    ],
+    "responsibilities": [],
     "commands": [
       "/speckit-analyze"
     ],
@@ -1311,14 +1217,7 @@ const AGENTS = [
     "color": "#fd79a8",
     "status": "idle",
     "monitorText": "Classifying severity...",
-    "responsibilities": [
-      "Guide the team through the immediate mitigation checklist when an incident is active",
-      "Facilitate root cause analysis (RCA) using the 5-Whys or Fishbone method",
-      "Produce a structured post-mortem document",
-      "Generate follow-up GitHub Issues for preventive actions",
-      "Classify incident severity and calculate MTTR (Mean Time To Recovery)",
-      "Ensure the post-mortem is blameless — focus on systems and processes, not individuals"
-    ],
+    "responsibilities": [],
     "commands": [
       "/incident"
     ],
