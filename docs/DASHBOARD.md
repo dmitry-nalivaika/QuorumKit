@@ -12,7 +12,7 @@
 
 ## Table of Contents
 
-1. [What the Orchestrator Is](#1-what-the-orchestrator-is)
+1. [What the Dashboard Is](#1-what-the-dashboard-is)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Prerequisites](#3-prerequisites)
 4. [Installing quorumkit into your project](#4-installing-quorumkit-into-your-project)
