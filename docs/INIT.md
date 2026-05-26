@@ -15,11 +15,12 @@ projects) and **brownfield** (existing projects), using **Claude Code**,
 |------|---------|---------|
 | Git | Version control | Pre-installed on most systems |
 | [GitHub CLI (`gh`)](https://cli.github.com) | Agent workflows, PR/issue commands | `brew install gh` |
-| [Node.js ≥ 18](https://nodejs.org) | github-speckit | nodejs.org |
+| [uv](https://docs.astral.sh/uv/) | Installs `specify-cli` | `brew install uv` |
 | [Claude Code](https://claude.ai/code) | Claude AI CLI (Claude mode only) | `npm i -g @anthropic-ai/claude-code` |
 | GitHub Copilot subscription | Copilot agents (Copilot mode only) | [github.com/features/copilot](https://github.com/features/copilot) |
 
-Install only the tools for the mode(s) you are using.
+Install only the tools for the mode(s) you are using. If `uv` is unavailable,
+`pipx` works as a substitute for installing `specify-cli`.
 
 ---
 
@@ -27,17 +28,22 @@ Install only the tools for the mode(s) you are using.
 
 ```zsh
 # 1. Navigate to your project directory (create it first if greenfield)
-mkdir -p /path/to/my-project && cd /path/to/my-project
+mkdir -p ~/projects/my-project && cd ~/projects/my-project
 
-# 2. Run init — choose your AI mode
-bash ~/path/to/quorumkit/installer/init.sh                                # Claude only (default)
-bash ~/path/to/quorumkit/installer/init.sh --ai=copilot                   # Copilot only
-bash ~/path/to/quorumkit/installer/init.sh --ai=both                      # Both (universal)
-bash ~/path/to/quorumkit/installer/init.sh --ai=both --domain=industrial  # Both + industrial pack
+# 2. Clone or download QuorumKit, then run init — choose your AI mode
+QUORUMKIT=/path/to/quorumkit
+
+bash "$QUORUMKIT/scripts/init.sh"                                # Claude only (default)
+bash "$QUORUMKIT/scripts/init.sh" --ai=copilot                   # Copilot only
+bash "$QUORUMKIT/scripts/init.sh" --ai=both                      # Both (universal)
+bash "$QUORUMKIT/scripts/init.sh" --ai=both --domain=industrial  # Both + industrial pack
 ```
 
-The script is **idempotent** — it skips any file that already exists, making it
-safe to re-run on existing projects.
+The script is **idempotent** — it skips any file that already exists, so it is
+safe to re-run on an existing project.
+
+> `scripts/init.sh` is a backward-compatibility shim. It forwards to the canonical
+> installer at `src/scripts/init.sh`. Both invocation paths are equivalent.
 
 ### What each mode installs
 
@@ -50,24 +56,26 @@ safe to re-run on existing projects.
 | `.github/agents/` — agent definitions | — | ✓ | ✓ | ✓ |
 | `.github/copilot-instructions.md` | — | ✓ | ✓ | ✓ |
 | `.github/instructions/*.instructions.md` | — | ✓ | ✓ | ✓ |
+| `.github/prompts/*.prompt.md` | — | ✓ | ✓ | ✓ |
 | `agent-*.yml` workflows — 11 universal | ✓ | — | ✓ | ✓ |
 | `agent-*.yml` workflows — 4 industrial | — | — | — | ✓ |
 | `copilot-agent-*.yml` — 11 universal | — | ✓ | ✓ | ✓ |
 | `copilot-agent-*.yml` — 4 industrial | — | — | — | ✓ |
 | `alert-to-issue.yml` (always) | ✓ | ✓ | ✓ | ✓ |
 | PR template, issue templates | ✓ | ✓ | ✓ | ✓ |
-| `github-speckit` initialisation | ✓ | — | ✓ | ✓ |
+| `.specify/` via `specify-cli` | ✓ | — | ✓ | ✓ |
 
 ---
 
-## github-speckit — What It Creates
+## specify-cli — What It Creates
 
-`github-speckit` creates the `.specify/` directory that all agents depend on:
+`specify-cli` (from [github/spec-kit](https://github.com/github/spec-kit)) creates
+the `.specify/` directory that all agents depend on:
 
 ```
 .specify/
   memory/
-    constitution.md        ← project governance document (you fill this)
+    constitution.md        ← project governance document (you edit this)
   templates/
     spec-template.md       ← spec.md structure template
     plan-template.md       ← plan.md structure template
@@ -82,23 +90,23 @@ safe to re-run on existing projects.
     bash/                  ← speckit helper scripts (do not edit)
 ```
 
-### Running github-speckit
+`init.sh` installs `specify-cli` automatically (via `uv`, `pipx`, or `pip3`,
+whichever is available) and runs it non-interactively. To run it manually:
 
 ```zsh
-npx github-speckit@latest
+# Install specify-cli
+uv tool install specify-cli          # preferred
+# pipx install specify-cli           # alternative
+
+# Initialise .specify/ for Claude mode
+specify init . --integration claude --script sh
+
+# Initialise .specify/ for Copilot mode
+specify init . --integration copilot --script sh
+
+# Add Copilot integration to an existing Claude setup
+specify integration install copilot --force --script sh
 ```
-
-Prompts and recommended answers:
-
-| Prompt | Claude mode | Copilot mode | Both |
-|--------|-------------|--------------|------|
-| AI integration | `claude` | `copilot` | `claude` |
-| Branch numbering | `sequential` | `sequential` | `sequential` |
-| Context file | `CLAUDE.md` (default) | `.github/copilot-instructions.md` | `CLAUDE.md` (default) |
-| Script type | `sh` (macOS/Linux) | `sh` (macOS/Linux) | `sh` (macOS/Linux) |
-
-> **Re-running on an existing project**: speckit detects existing config and
-> prompts before overwriting. Answer **no** to preserve your existing constitution.
 
 ### The `feature.json` file
 
@@ -112,8 +120,8 @@ Every agent reads `.specify/feature.json` to find the active spec. It looks like
 }
 ```
 
-It is updated automatically when you run `/speckit-specify` or `/speckit-git-feature`.
-To set it manually:
+`feature.json` is updated automatically when you run `/speckit-specify` or
+`/speckit-git-feature`. To set it manually:
 
 ```zsh
 echo '{"featureDir":"specs/042-user-auth","specFile":"specs/042-user-auth/spec.md","branch":"042-user-auth"}' \
@@ -141,59 +149,67 @@ NNN = Issue number, **zero-padded to 3 digits**.
 
 ## Manual Setup (Step-by-Step)
 
+Use this section when you cannot run `init.sh` directly — for example, in a CI
+environment or when installing into a monorepo sub-directory.
+
 ### Claude Code
 
 ```zsh
+QUORUMKIT=/path/to/quorumkit
+
 # Step 1: Agents and skills
 mkdir -p .claude/agents .claude/skills
-cp -r /path/to/quorumkit/.github/agents/* .claude/agents/
-for skill in /path/to/quorumkit/.github/skills/*/; do
+cp "$QUORUMKIT/src/agents/"*.md .claude/agents/
+for skill in "$QUORUMKIT/src/skills/"/*/; do
   skill_name="$(basename "$skill")"
   mkdir -p ".claude/skills/$skill_name"
   cp "$skill/SKILL.md" ".claude/skills/$skill_name/SKILL.md"
 done
 
 # Step 2: CLAUDE.md
-cp /path/to/quorumkit/templates/seed/CLAUDE.md CLAUDE.md
+cp "$QUORUMKIT/src/seed/CLAUDE.md" CLAUDE.md
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
-cp /path/to/quorumkit/templates/github/workflows/agent-*.yml .github/workflows/
-cp /path/to/quorumkit/templates/github/pull_request_template.md .github/
-cp /path/to/quorumkit/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
+cp "$QUORUMKIT/src/.github/workflows/agent-"*.yml .github/workflows/
+cp "$QUORUMKIT/src/.github/pull_request_template.md" .github/
+cp "$QUORUMKIT/src/.github/ISSUE_TEMPLATE/"* .github/ISSUE_TEMPLATE/
+cp "$QUORUMKIT/src/seed/CONTRIBUTING.md" CONTRIBUTING.md
+cp "$QUORUMKIT/src/seed/SECURITY.md" SECURITY.md
 
-# Step 4: github-speckit
-npx github-speckit@latest
-# Choose: claude / sequential / CLAUDE.md / sh
+# Step 4: specify-cli
+uv tool install specify-cli
+specify init . --integration claude --script sh
 
 # Step 5: Git
-git init && git add . && git commit -m "chore: initialize agentic dev stack"
+git init && git add . && git commit -m "chore: initialize QuorumKit"
 ```
 
 ### GitHub Copilot
 
 ```zsh
+QUORUMKIT=/path/to/quorumkit
+
 # Step 1: Agent definitions
 mkdir -p .github/agents
-cp -r /path/to/quorumkit/.github/agents/* .github/agents/
+cp "$QUORUMKIT/src/agents/"*.md .github/agents/
 
-# Step 2: Copilot context and instructions
-mkdir -p .github/instructions
-cp /path/to/quorumkit/templates/seed/copilot-instructions.md .github/copilot-instructions.md
-cp /path/to/quorumkit/templates/github/instructions/*.instructions.md .github/instructions/
+# Step 2: Copilot context, instructions, and prompt files
+mkdir -p .github/instructions .github/prompts
+cp "$QUORUMKIT/src/seed/copilot-instructions.md" .github/copilot-instructions.md
+cp "$QUORUMKIT/src/.github/instructions/"*.instructions.md .github/instructions/
+cp "$QUORUMKIT/src/.github/prompts/"*.prompt.md .github/prompts/
 
 # Step 3: GitHub templates
 mkdir -p .github/workflows .github/ISSUE_TEMPLATE
-cp /path/to/quorumkit/templates/github/workflows/copilot-agent-*.yml .github/workflows/
-cp /path/to/quorumkit/templates/github/pull_request_template.md .github/
-cp /path/to/quorumkit/templates/github/ISSUE_TEMPLATE/* .github/ISSUE_TEMPLATE/
-cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
+cp "$QUORUMKIT/src/.github/workflows/copilot-agent-"*.yml .github/workflows/
+cp "$QUORUMKIT/src/.github/pull_request_template.md" .github/
+cp "$QUORUMKIT/src/.github/ISSUE_TEMPLATE/"* .github/ISSUE_TEMPLATE/
+cp "$QUORUMKIT/src/seed/CONTRIBUTING.md" CONTRIBUTING.md
+cp "$QUORUMKIT/src/seed/SECURITY.md" SECURITY.md
 
 # Step 4: Git
-git init && git add . && git commit -m "chore: initialize agentic dev stack"
+git init && git add . && git commit -m "chore: initialize QuorumKit"
 ```
 
 ---
@@ -208,8 +224,8 @@ ANTHROPIC_API_KEY = <your key from console.anthropic.com>
 ```
 
 **Copilot mode** — no secrets needed. Workflows use `secrets.GITHUB_TOKEN`
-(auto-provided) and `permissions: models: read`. Ensure the repository has a
-Copilot license active.
+(auto-provided) and `permissions: models: read`. Ensure the repository has an
+active Copilot licence.
 
 ### 2. Write the Project Constitution
 
@@ -217,7 +233,8 @@ Copilot license active.
 /speckit-constitution
 ```
 
-You will be guided through:
+This guided command populates `.specify/memory/constitution.md`. Provide answers
+for each section:
 
 | Section | What to provide |
 |---------|----------------|
@@ -229,19 +246,15 @@ You will be guided through:
 | Cost limits | Monthly budget limit (if applicable) |
 | SLOs | Uptime and response time targets (if applicable) |
 
-The constitution is saved to `.specify/memory/constitution.md`. All agents read
-it at every session start and treat it as non-negotiable.
+All agents read `.specify/memory/constitution.md` at the start of every session
+and treat it as non-negotiable.
 
-### 3. Copy additional templates to your project root
+### 3. Edit project-root templates
 
-```zsh
-cp /path/to/quorumkit/templates/seed/CONTRIBUTING.md CONTRIBUTING.md
-cp /path/to/quorumkit/templates/seed/SECURITY.md SECURITY.md
-```
+Edit `SECURITY.md` to replace `[security@your-domain.com]` with your actual
+security contact address.
 
-Edit `SECURITY.md` to replace `[security@your-domain.com]` with your actual contact.
-
-### 4. Configure Branch Protection (Recommended)
+### 4. Configure branch protection (recommended)
 
 ```zsh
 gh api repos/:owner/:repo/branches/main/protection \
@@ -252,9 +265,9 @@ gh api repos/:owner/:repo/branches/main/protection \
   --field restrictions=null
 ```
 
-Replace `"CI"` with the name of your status check job.
+Replace `"CI"` with the name of your status-check job.
 
-### 5. Enable Auto-Commit Hooks (Optional)
+### 5. Enable auto-commit hooks (optional)
 
 Edit `.specify/extensions/git/git-config.yml`:
 
@@ -278,20 +291,20 @@ auto_commit:
 Open a Feature Request issue. The Triage Agent classifies it automatically.
 Note the issue number — it becomes the NNN prefix for everything below.
 
-### 2. Write the Spec
+### 2. Write the spec
 
 ```
 /ba-agent Add user authentication with email/password login
 ```
 
 The BA Agent creates `specs/042-user-auth/spec.md` (using the issue number).
-Review it, then confirm handoff:
+Review it, then ask for clarification if needed:
 
 ```
 /ba-agent clarify
 ```
 
-### 3. Create the Feature Branch
+### 3. Create the feature branch
 
 ```zsh
 git checkout -b 042-user-auth
@@ -318,7 +331,7 @@ The Developer Agent will:
 
 Push the branch and open a PR using the PR template. Link the spec and issue.
 
-### 6. Request Agent Reviews
+### 6. Request agent reviews
 
 ```
 @reviewer-agent      ← spec + constitution compliance
@@ -329,56 +342,78 @@ Push the branch and open a PR using the PR template. Link the spec and issue.
 
 ### 7. Merge
 
-Once all agents approve and CI passes, merge. The following then run automatically:
+Once all agents approve and CI passes, merge. The following run automatically:
 
 - **Release Agent** — analyses commits since last tag, opens a Version Bump PR (semver + CHANGELOG)
-- **Docs Agent** — audits documentation changes, opens a Docs PR if anything needs updating
+- **Docs Agent** — audits documentation, opens a Docs PR if anything needs updating
 - **Triage Agent** — any production alert fired via `alert-to-issue.yml` becomes a new routed Issue
 
 ### Lifecycle commands (available any time)
 
 ```
-/release-agent           ← calculate semver + open Version Bump PR
-/release-agent minor     ← override bump type (patch | minor | major)
-/docs-agent              ← audit and sync all documentation
-/docs-agent 42           ← audit docs impact of PR #42
-/tech-debt-agent         ← run full codebase health review
+/release-agent                ← calculate semver + open Version Bump PR
+/release-agent minor          ← override bump type (patch | minor | major)
+/docs-agent                   ← audit and sync all documentation
+/docs-agent 42                ← audit docs impact of PR #42
+/tech-debt-agent              ← run full codebase health review
 /tech-debt-agent complexity   ← focus on one area
-/onboard                 ← guided 7-step onboarding wizard (for new team members)
+/onboard                      ← guided 7-step onboarding wizard (for new team members)
 ```
 
 ---
 
 ## Customising Agents
 
-After initialisation, customise agents for your project:
+After initialisation, customise agents for your project by editing the installed
+copies:
 
 | Mode | Agent location |
 |------|---------------|
 | Claude | `.claude/agents/<agent-name>.md` |
 | Copilot | `.github/agents/<agent-name>.md` |
 
-> The source definitions in `.github/agents/` are **platform-agnostic and shared**.
+> The source definitions in `src/agents/` are **platform-agnostic and shared**.
 > Edits to `.claude/agents/` or `.github/agents/` are local to your project.
 
 Common customisations:
-- Add domain-specific rules (`every DB query must include tenant_id`)
+- Add domain-specific rules (e.g. "every DB query must include `tenant_id`")
 - Add project-specific toolchain commands (`cargo test --workspace`, `go test ./...`)
 - Reference project architecture docs (`docs/architecture/overview.md`)
-- Adjust coverage threshold after establishing a baseline
+- Adjust the coverage threshold after establishing a baseline
 
 ---
 
-## Updating the Package
+## Updating QuorumKit
 
 ```zsh
-# Re-run init (skips existing files)
-bash /path/to/quorumkit/installer/init.sh --ai=both
+# Re-run init — skips files that already exist, updates new artifacts
+QUORUMKIT=/path/to/quorumkit
+bash "$QUORUMKIT/scripts/init.sh" --ai=both
 
-# Or update a single agent
-cp /path/to/quorumkit/.github/agents/security-agent.md .claude/agents/
-cp /path/to/quorumkit/.github/agents/security-agent.md .github/agents/
+# Update a single agent
+cp "$QUORUMKIT/src/agents/security-agent.md" .claude/agents/
+cp "$QUORUMKIT/src/agents/security-agent.md" .github/agents/
 ```
+
+### Upgrading consumer workflows to the Action runtime
+
+If your consumer project still invokes the orchestrator directly via
+`node engine/orchestrator/index.js`, upgrade to the `uses:` Action syntax:
+
+```zsh
+# Preview changes (dry-run)
+bash "$QUORUMKIT/scripts/init.sh" --upgrade
+
+# Apply changes
+bash "$QUORUMKIT/scripts/init.sh" --upgrade --apply
+
+# Pin to a specific engine release
+bash "$QUORUMKIT/scripts/init.sh" --upgrade --apply --engine-ref=v3.1.0
+```
+
+The `--upgrade` flag rewrites matching workflow files in `.github/workflows/`
+in place. It refuses to broaden existing `permissions:` blocks automatically —
+add any missing scopes manually before re-running.
 
 ---
 
@@ -386,35 +421,38 @@ cp /path/to/quorumkit/.github/agents/security-agent.md .github/agents/
 
 ### `/speckit-*` commands not working
 
-The speckit commands require the `.specify/` directory. If it is missing:
+The speckit slash commands require the `.specify/` directory to exist. If it
+is missing, initialise it manually:
 
 ```zsh
-npx github-speckit@latest
+uv tool install specify-cli
+specify init . --integration claude --script sh   # or: --integration copilot
 ```
 
 ### Agents not loading in Claude Code
 
-Verify the directories exist at the project root:
+Verify both directories exist at the project root:
 
 ```zsh
 ls .claude/agents/
 ls .claude/skills/
 ```
 
-Claude Code looks for these relative to where `CLAUDE.md` lives.
+Claude Code resolves these paths relative to the directory that contains `CLAUDE.md`.
 
 ### Copilot not following agent instructions
 
-- Ensure `.github/copilot-instructions.md` exists (Copilot reads this automatically)
+- Ensure `.github/copilot-instructions.md` exists (Copilot reads this automatically).
 - For an interactive session, explicitly activate the agent:
   > "Read `.github/agents/developer-agent.md` in full, then help me implement..."
 
 ### GitHub Actions workflows not triggering
 
-**Claude workflows**: check `ANTHROPIC_API_KEY` is set in repository secrets.
+**Claude workflows**: confirm `ANTHROPIC_API_KEY` is set under Settings →
+Secrets and variables → Actions.
 
-**Copilot workflows**: check the repository has an active Copilot licence;
-check Actions → workflow run logs.
+**Copilot workflows**: confirm the repository has an active Copilot licence,
+then inspect Actions → workflow run logs for details.
 
 ### Constitution not found
 
@@ -422,11 +460,11 @@ check Actions → workflow run logs.
 /speckit-constitution
 ```
 
-Creates `.specify/memory/constitution.md` from the template.
+This creates `.specify/memory/constitution.md` from the seed template.
 
 ### feature.json out of sync
 
-If agents cannot find the active spec, reset feature.json:
+If agents cannot find the active spec, reset `feature.json` manually:
 
 ```zsh
 echo '{"featureDir":"specs/NNN-short-slug","specFile":"specs/NNN-short-slug/spec.md","branch":"NNN-short-slug"}' \
@@ -434,6 +472,20 @@ echo '{"featureDir":"specs/NNN-short-slug","specFile":"specs/NNN-short-slug/spec
 ```
 
 Replace `NNN-short-slug` with your actual spec directory name.
+
+### Legacy `apm.yml` detected
+
+QuorumKit v3 requires `quorumkit.yml`. If the installer exits with
+`Legacy configuration file detected: apm.yml`, migrate:
+
+```zsh
+mv apm.yml quorumkit.yml
+# Edit quorumkit.yml: update the 'name' field if it still reads
+# 'agentic-dev-stack' or 'quorumkit'
+bash "$QUORUMKIT/scripts/init.sh" --ai=both
+```
+
+See [MIGRATION.md](MIGRATION.md) for the full before/after reference.
 
 ---
 
@@ -448,22 +500,12 @@ See **[BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md)** for:
 
 ---
 
-## Using with APM CLI (microsoft/apm)
+## Next Steps
 
-```yaml
-# quorumkit.yml in your project
-name: my-project
-version: 1.0.0
-dependencies:
-  apm:
-    - source: github:<your-username>/quorumkit
-      version: main
-```
-
-```zsh
-apm install
-```
-
-APM installs `.github/agents/` → `.claude/agents/` and `.github/skills/` → `.claude/skills/`
-automatically. Run `installer/init.sh` separately for full setup (GitHub templates,
-speckit, Copilot files).
+| Goal | Where to go |
+|------|------------|
+| Understand the full agent workflow | [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md) |
+| Set up the local pipeline runner | [LOCAL_PIPELINES.md](LOCAL_PIPELINES.md) |
+| Install into an existing project | [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md) |
+| Migrate from an earlier version | [MIGRATION.md](MIGRATION.md) |
+| View the live pipeline dashboard | [DASHBOARD.md](DASHBOARD.md) |

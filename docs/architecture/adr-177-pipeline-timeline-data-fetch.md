@@ -4,7 +4,7 @@
 |---|---|
 | **ADR Number** | 177 |
 | **Issue** | #177 — Pipeline Progress Timeline UI |
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Date** | 2026-05-25 |
 | **Deciders** | Architect Agent |
 | **Supersedes** | — |

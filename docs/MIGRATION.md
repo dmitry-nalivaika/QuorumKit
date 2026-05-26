@@ -36,7 +36,7 @@ mv apm.yml quorumkit.yml
 sed -i '' 's/^name: agentic-dev-stack/name: quorumkit/' quorumkit.yml
 ```
 
-> `installer/init.sh` will exit non-zero with a migration notice if it detects
+> `scripts/init.sh` will exit non-zero with a migration notice if it detects
 > `apm.yml` without a corresponding `quorumkit.yml`.
 
 ---
@@ -56,7 +56,7 @@ grep -rl "dmitry-nalivaika/agentic-dev-stack" .github/workflows/ | \
 
 Then re-run the installer to get updated workflow templates:
 ```bash
-bash /path/to/quorumkit/installer/init.sh --upgrade --apply --engine-ref=v3
+bash /path/to/quorumkit/scripts/init.sh --upgrade --apply --engine-ref=v3
 ```
 
 ---
@@ -124,10 +124,10 @@ mv apm.yml quorumkit.yml
 sed -i '' 's/^name: agentic-dev-stack/name: quorumkit/' quorumkit.yml
 
 # Re-run init to pull updated templates:
-bash /path/to/quorumkit/installer/init.sh --ai=both
+bash /path/to/quorumkit/scripts/init.sh --ai=both
 
 # Or for v2 → v3 workflow upgrade:
-bash /path/to/quorumkit/installer/init.sh --upgrade --apply --engine-ref=v3
+bash /path/to/quorumkit/scripts/init.sh --upgrade --apply --engine-ref=v3
 ```
 
 ---
@@ -196,7 +196,7 @@ cp -r .apm/skills/* .github/skills/
 rm -rf .apm/
 
 # 5. Re-run init to refresh workflow templates
-bash /path/to/quorumkit/src/scripts/init.sh --ai=both
+bash /path/to/quorumkit/scripts/init.sh --ai=both
 ```
 
 > **Note:** If your project already has a `src/` directory for application

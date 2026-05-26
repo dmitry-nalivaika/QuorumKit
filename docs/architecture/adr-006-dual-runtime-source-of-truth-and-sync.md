@@ -57,7 +57,7 @@ regulation document, agent identity registry), the project adopts a
    hard-coding the search root.
 
 3. **Copilot-tree mirroring is generated**, not authored. `scripts/init.sh`
-   (and a new `scripts/sync-copilot-tree.sh` invokable in CI) mirrors the
+   (with parity enforced in CI by `scripts/verify-mirror.sh`) mirrors the
    needed subset into `.github/` derivatives:
    - `src/pipelines/*.yml` → not mirrored (orchestrator reads `src/` directly
      in both runtimes; only the dispatched workflows differ, and those already
@@ -130,5 +130,5 @@ chosen as canonical because:
 - `specs/044-orchestrator-v2-design/spec.md` — FR-002, FR-007, FR-014
 - Constitution §IV (Dual-AI Compatibility — NON-NEGOTIABLE), §V (Zero-config
   defaults), §VII (Simplicity)
-- `scripts/init.sh` — existing mirroring entry point
+- `scripts/init.sh` — backward-compat shim; canonical source is `src/scripts/init.sh`
 - ADR-005 (Runtime registry interface) — registry path consumed by this ADR

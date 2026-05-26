@@ -6,7 +6,7 @@
 | **Issue** | [#47](https://github.com/dmitry-nalivaika/quorumkit/issues/47) |
 | **Parent ADR** | `docs/architecture/adr-047-repo-topology-and-engine-distribution.md` |
 | **Spec** | `specs/047-repo-topology/spec.md` (FR-008, FR-014, FR-031) |
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Date** | 2026-05-10 |
 | **Deciders** | Architect Agent |
 | **Resolves** | SEC-MED-005 (Security Agent review, 2026-05-09 — issue #47) |

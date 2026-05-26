@@ -5,7 +5,7 @@
 | **ADR Number** | 047 |
 | **Issue** | [#47](https://github.com/dmitry-nalivaika/quorumkit/issues/47) — Structural cleanup + engine distribution |
 | **Spec** | `specs/047-repo-topology/spec.md` |
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Date** | 2026-05-09 |
 | **Deciders** | Architect Agent, @dmitry-nalivaika |
 | **Supersedes** | — |

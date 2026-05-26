@@ -37,13 +37,20 @@ mkdir -p ~/projects/dark-factory && cd ~/projects/dark-factory
 # 2. Initialize git
 git init && git remote add origin <your-github-repo-url>
 
-# 3. Initialize the QuorumKit
-bash /path/to/quorumkit/scripts/init.sh --ai=both   # recommended
-# or --ai=claude / --ai=copilot for single-mode
+# 3. Clone QuorumKit (if not already cloned)
+git clone https://github.com/your-org/quorumkit.git ~/quorumkit
 
-# 4. Initialize github-speckit
-npx github-speckit@latest
-# Answers: claude (or copilot) / sequential / CLAUDE.md / sh
+# 4. Run the installer — include --domain=industrial for dark factory projects
+#    This installs the 11 universal agents PLUS the 4 industrial agents:
+#    OT Integration, Digital Twin, Compliance, and Incident.
+bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
+# Use --ai=claude for Claude Code only, --ai=copilot for GitHub Copilot only.
+# init.sh also installs specify-cli and creates .specify/ automatically.
+
+# 5. Commit the generated files
+git add .github/ .claude/ .specify/ specs/
+git commit -m "chore: install QuorumKit with industrial domain pack"
+git push
 ```
 
 ---
@@ -127,7 +134,8 @@ line"] with minimal human intervention. Target: [N] concurrent production lines,
 
 ## Agent Roles
 - All 8 standard agents active
-- See [DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.md) for domain-specific agent extensions
+- Industrial domain agents active: OT Integration, Digital Twin, Compliance, Incident
+  (installed by `bash init.sh --domain=industrial`)
 ```
 
 ---
@@ -233,7 +241,9 @@ Store at `docs/architecture/adr-NNN-<slug>.md`.
 Dark factory CI pipelines need more stages than typical software:
 
 ```yaml
-# Recommended pipeline stages for dark factory projects
+# Conceptual stage list — not valid GitHub Actions syntax.
+# Provide this list to the DevOps Agent; it generates the full
+# .github/workflows/ci.yml for you (see the /devops-agent command below).
 stages:
   - lint              # Static analysis, type checking
   - unit-test         # Fast, no I/O
@@ -247,7 +257,7 @@ stages:
   - production-deploy # Manual approval gate for production
 ```
 
-Ask the DevOps Agent to generate this pipeline:
+Generate the CI/CD pipeline with the DevOps Agent:
 ```
 /devops-agent Create CI/CD pipeline for dark factory project with edge and cloud stages
 ```
@@ -288,7 +298,7 @@ Dark factories require two layers of observability:
 | **OT layer** | Machine uptime, cycle time, OEE, sensor drift, alarm frequency | Historian (PI / TimescaleDB) + custom dashboards |
 | **Cross-layer** | End-to-end latency (PLC signal → cloud action), data pipeline lag | Custom metrics |
 
-Ask the DevOps Agent:
+Design the observability stack with the DevOps Agent:
 ```
 /devops-agent Design observability stack for dark factory with IT and OT layers
 ```
@@ -306,7 +316,6 @@ Create `docker-compose.sim.yml` at the project root:
 
 ```yaml
 # docker-compose.sim.yml — local simulation for dark factory integration tests
-version: "3.9"
 services:
   mqtt-broker:
     image: eclipse-mosquitto:2
@@ -359,16 +368,22 @@ Version-control simulation datasets in `tests/simulation/data/`:
       - uses: actions/checkout@v4
       - name: Start simulation stack
         run: docker compose -f docker-compose.sim.yml up -d
-      - name: Wait for services
-        run: sleep 15
+      - name: Wait for services to be healthy
+        run: |
+          # Poll until the MQTT broker and OPC-UA simulator report running (60 s timeout)
+          timeout 60 bash -c \
+            'until docker compose -f docker-compose.sim.yml ps --format json | \
+             grep -q "\"State\":\"running\""; do sleep 2; done'
       - name: Run simulation tests
-        run: <your test command against the simulation stack>
+        run: |  # Replace with your test runner and path, e.g.:
+          # pytest tests/simulation/ --timeout=120
+          <your test command against the simulation stack>
       - name: Tear down
         if: always()
         run: docker compose -f docker-compose.sim.yml down
 ```
 
-Ask the Digital Twin Agent to verify simulation coverage:
+Verify simulation coverage with the Digital Twin Agent:
 ```
 /digital-twin-agent Review simulation test coverage for specs/NNN-feature
 ```
@@ -434,7 +449,7 @@ For analytics that span sites (OEE comparison, fleet-wide anomaly detection):
 - Use a separate `aggregation` service that has read access to all sites
 - Per-site dashboards use `WHERE site_id = ?`; fleet dashboards go through the aggregation service
 
-Ask the Architect Agent:
+Document the multi-site strategy as an ADR:
 ```
 /architect-agent Write ADR: multi-site data isolation and aggregation strategy
 ```
@@ -443,8 +458,7 @@ Ask the Architect Agent:
 
 ## Checklist: Dark Factory Project Ready to Build
 
-- [ ] `init.sh` run; agents and skills installed (including dark-factory agents: OT Integration, Digital Twin, Compliance, Incident)
-- [ ] `github-speckit` initialized; `.specify/` directory created
+- [ ] `init.sh` run with `--ai=both --domain=industrial`; agents, skills, and `.specify/` directory created automatically (OT Integration, Digital Twin, Compliance, and Incident agents active)
 - [ ] Dark factory constitution written (Step 2 above)
 - [ ] Repository structure created (Step 3 above)
 - [ ] 5 foundational ADRs written (Step 5 above)
@@ -456,3 +470,16 @@ Ask the Architect Agent:
 - [ ] Multi-site isolation strategy decided and documented as ADR (Step 10 above, if multi-site)
 - [ ] OT/IT zone model documented at `docs/security/zones.md`
 - [ ] Team has read this guide and the project constitution
+
+---
+
+## Related Topics
+
+| Document | When to read it |
+|----------|-----------------|
+| [INIT.md](INIT.md) | Full installer reference — prerequisites, flags, what each mode installs |
+| [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md) | Adopting QuorumKit in an existing project without disrupting it |
+| [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md) | How agents communicate, orchestration rules, and state management |
+| [PIPELINES.md](PIPELINES.md) | Pipeline lifecycle, stages, and the orchestrator substrate |
+| [docs/architecture/](architecture/) | All ADRs — start here when making design decisions |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution workflow, PR checklist, and domain pack authoring guide |

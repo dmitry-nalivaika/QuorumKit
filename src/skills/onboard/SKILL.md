@@ -1,6 +1,6 @@
 ---
 name: "onboard"
-description: "Interactive onboarding wizard for new team members using the Agentic Dev Stack."
+description: "Interactive onboarding wizard for new team members using the QuorumKit."
 argument-hint: "Leave empty to start the guided wizard"
 user-invocable: true
 ---
