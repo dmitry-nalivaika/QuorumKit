@@ -40,7 +40,7 @@ The dashboard is a two-part local system:
 | Part | File | What it does |
 |------|------|--------------|
 | **Backend server** | `engine/dashboard/server.js` | Node.js HTTP + WebSocket server. Spawns agent processes, streams their output in real time, opens native terminal windows, and manages project configuration. |
-| **Dashboard UI** | `engine/dashboard/index.html` | Single-page app served by the backend. Displays all 15 agents as cards, a live console, a Kanban board, and a settings modal. |
+| **Dashboard UI** | `engine/dashboard/index.html` | Single-page app served by the backend. Displays all 15 agents as cards, a live console, a Kanban board, a local pipelines panel, and a settings modal. |
 
 The two parts communicate over **WebSocket** (`ws://localhost:3131`). When the server
 is not running, the UI degrades gracefully to a built-in simulation mode — you can
@@ -996,6 +996,7 @@ The server logs the exit code and stderr to the console. Common causes:
 - [DARK_FACTORY_GUIDE.md](DARK_FACTORY_GUIDE.md) — Industrial (OT/ICS) agent configuration and dark factory mode
 - [BROWNFIELD_GUIDE.md](BROWNFIELD_GUIDE.md) — Adopting QuorumKit in an existing project without disrupting conventions
 - [PIPELINES.md](PIPELINES.md) — GitHub Actions Orchestrator: CI/CD agent pipelines and workflow structure
+- [LOCAL_PIPELINES.md](LOCAL_PIPELINES.md) — Running multiple features in parallel local git worktrees; CLI and dashboard UI reference
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — How to extend the stack, add agents, or contribute upstream
 - [engine/dashboard/server.js](../engine/dashboard/server.js) — Dashboard backend source
 - [engine/dashboard/index.html](../engine/dashboard/index.html) — Dashboard UI source
