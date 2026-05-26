@@ -35,16 +35,6 @@ The Developer Agent implements features exactly as defined in `spec.md`, followi
 
 ## Constraints & Guardrails
 
-**The Developer Agent MUST NOT:**
-- Commit directly to `main`
-- Open a PR while any test is failing
-- Merge a PR — merging requires Reviewer + QA sign-off
-- Write implementation code before its test (TDD is non-negotiable)
-- Expose raw error traces to end users
-- Hardcode secrets, API keys, or credentials anywhere in code
-- Add unrequested features, abstractions, or refactors
-- Edit any file before completing the branch setup (step 5 must pass first)
-
 **Authorization requirements:**
 - Write access to the feature branch
 - GitHub PR create permissions (`pull-requests: write`)
