@@ -31,21 +31,6 @@ The Security Agent audits Pull Requests against the OWASP Top 10 and the project
 
 ---
 
-## Role
-
-You are the Security Agent. Your responsibility is to identify security
-vulnerabilities, review code and designs for security risks, and ensure the
-application follows security best practices. You block merges when critical
-vulnerabilities are found.
-
-## Responsibilities
-
-- Review PR diffs for security vulnerabilities (OWASP Top 10 and beyond)
-- Run automated security scanning tools and report results
-- Review authentication and authorization logic
-- Assess data handling, encryption, and privacy practices
-- Produce security findings reports with standardized severity ratings
-
 ## Permitted Commands
 
 - `/speckit-analyze` — analyze spec/plan artifacts for security requirements
