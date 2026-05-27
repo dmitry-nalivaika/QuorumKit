@@ -512,7 +512,8 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 #invoke-confirm-btn { background: var(--blue) !important; }
 
 /* ─── Real invoke controls on detail panel ────────────────────────────────── */
-.d-action-row { display: flex; gap: 8px; margin-top: 20px; }
+.d-footer { flex-shrink: 0; border-top: 1px solid var(--border); padding: 12px 22px; background: var(--surface); }
+.d-action-row { display: flex; gap: 8px; }
 .d-invoke      { flex: 1; padding: 11px; border: none; border-radius: var(--r-sm); font-size: 13px; font-weight: 700; cursor: pointer; background: var(--dc, var(--blue)); color: #000; transition: opacity 0.15s; }
 .d-invoke:hover { opacity: 0.88; }
 .d-term-btn {
@@ -559,7 +560,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .k-agent-item .ka-name  { color: var(--text3); }
 
 /* ─── US-3: Agent suggestions (FR-005..FR-007) ───────────────────────────── */
-.suggestions-list { display: flex; flex-direction: column; gap: 5px; max-height: 300px; overflow-y: auto; }
+.suggestions-list { display: flex; flex-direction: column; gap: 5px; }
 .suggestion-card {
   background: var(--surface); border: 1px solid var(--border);
   border-left: 3px solid var(--blue); border-radius: var(--r-xs);
@@ -752,6 +753,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
       </div>
     </div>
     <div class="d-body" id="d-body"></div>
+    <div class="d-footer" id="d-footer"></div>
   </div>
 </div>
 
@@ -1729,7 +1731,9 @@ function openDetail(a, issueCtx) {
     <div class="d-sec">Slash Commands</div>
     <div class="cchips">${a.commands.map(c=>`<button class="cchip" onclick="sendCmd('${esc(c)}')">${esc(c)}</button>`).join('')}</div>
     <div class="d-sec">Fun Fact</div>
-    <div class="ffbox">💡 ${esc(a.funFact)}</div>
+    <div class="ffbox">💡 ${esc(a.funFact)}</div>`;
+
+  document.getElementById('d-footer').innerHTML = `
     <div class="d-action-row">
       <button class="d-invoke" style="background:${a.color}" onclick="invokeAgent('${a.id}')">⚡ Invoke ${esc(a.name)}</button>
       <button class="d-term-btn" onclick="openTerminal('${a.id}','${esc(a.name)}')">⬜ Terminal</button>
