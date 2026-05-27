@@ -2526,6 +2526,7 @@ async function loadLocalPipelines() {
       }
 
       const chevron = document.createElement('span');
+      chevron.className = 'pipe-chevron';
       chevron.style.cssText = 'margin-left:auto;color:var(--textMute);font-size:10px';
       chevron.textContent = '▶';
       card.dataset.chevron = 'chevron'; // placeholder, set in expand
@@ -2576,7 +2577,7 @@ async function loadLocalPipelines() {
 
 function togglePipelineExpand(card, p) {
   const body = card.querySelector('div:last-child');
-  const chevron = card.querySelector('span[style*="margin-left:auto"]');
+  const chevron = card.querySelector('.pipe-chevron');
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'flex';
   chevron.textContent = isOpen ? '▶' : '▼';
