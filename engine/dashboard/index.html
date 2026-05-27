@@ -34,7 +34,7 @@
   --r-xs:       4px;
   --ticker-h:   28px;
   --topbar-h:   58px;
-  --drawer-h:   360px;
+  --drawer-w:   420px;
   --detail-w:   500px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -97,11 +97,11 @@ button { cursor: pointer; font-family: var(--font); }
 #workspace {
   position: fixed;
   top: calc(var(--ticker-h) + var(--topbar-h));
-  left: 0; right: 0; bottom: var(--drawer-h);
+  left: 0; right: var(--drawer-w); bottom: 0;
   display: flex; flex-direction: column; overflow: hidden;
-  transition: bottom 0.3s cubic-bezier(.4,0,.2,1);
+  transition: right 0.3s cubic-bezier(.4,0,.2,1);
 }
-#workspace.drawer-closed { bottom: 38px; }
+#workspace.drawer-closed { right: 0; }
 
 /* ─── Toolbar ─────────────────────────────────────────────────────────────── */
 #toolbar {
@@ -220,7 +220,7 @@ button { cursor: pointer; font-family: var(--font); }
 #detail {
   position: fixed;
   top: calc(var(--ticker-h) + var(--topbar-h));
-  right: 0; bottom: var(--drawer-h);
+  right: var(--drawer-w); bottom: 0;
   width: var(--detail-w);
   background: var(--surface); border-left: 1px solid var(--border);
   z-index: 110; display: flex; flex-direction: column;
@@ -229,7 +229,7 @@ button { cursor: pointer; font-family: var(--font); }
   box-shadow: -8px 0 40px rgba(0,0,0,.6);
 }
 #detail.open { transform: translateX(0); }
-#workspace.drawer-closed #detail { bottom: 38px; }
+#workspace.drawer-closed #detail { right: 0; }
 
 .d-header { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .d-top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -277,13 +277,14 @@ button { cursor: pointer; font-family: var(--font); }
 
 /* ─── Drawer ──────────────────────────────────────────────────────────────── */
 #drawer {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  height: var(--drawer-h); background: #090d13;
-  border-top: 1px solid var(--border); z-index: 150;
+  position: fixed;
+  top: calc(var(--ticker-h) + var(--topbar-h)); right: 0; bottom: 0;
+  width: var(--drawer-w); background: #090d13;
+  border-left: 1px solid var(--border); z-index: 150;
   display: flex; flex-direction: column;
   transition: transform 0.3s cubic-bezier(.4,0,.2,1);
 }
-#drawer.closed { transform: translateY(calc(var(--drawer-h) - 38px)); }
+#drawer.closed { transform: translateX(var(--drawer-w)); }
 
 .drw-hd {
   flex-shrink: 0; display: flex; align-items: center;
@@ -723,7 +724,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
       <button class="dtab"    data-dt="about">ℹ️ Stack</button>
     </div>
     <div class="drw-ctrls">
-      <button class="dctrl" id="drw-tog">▼</button>
+      <button class="dctrl" id="drw-tog">▶</button>
     </div>
   </div>
 
@@ -736,7 +737,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     </div>
   </div>
 
-  <div class="dpanel" id="kanban-panel" style="display:flex;flex-direction:column;overflow:hidden">
+  <div class="dpanel" id="kanban-panel">
     <!-- US-4: Per-agent status strip (FR-008..FR-011) -->
     <div id="k-agent-strip"></div>
     <div id="kpanel" style="flex:1;overflow:hidden">
@@ -1763,7 +1764,7 @@ function setDrawer(open) {
   d.classList.toggle('closed', !open);
   ws.classList.toggle('drawer-closed', !open);
   btn.classList.toggle('on', open);
-  tb.textContent = open ? '▼' : '▲';
+  tb.textContent = open ? '▶' : '◀';
 }
 
 function switchTab(id) {
