@@ -2503,11 +2503,18 @@ async function loadLocalPipelines() {
       listEl.innerHTML = '<span class="lp-empty">No local feature worktrees found.</span>';
       return;
     }
+    // Remember which pipeline cards are currently expanded so we can restore them
+    const openIssues = new Set(
+      [...listEl.querySelectorAll('.lp-row[data-issue]')]
+        .filter(c => c.children[1]?.style.display !== 'none')
+        .map(c => Number(c.dataset.issue))
+    );
     listEl.innerHTML = '';
     for (const p of data) {
       // ── Pipeline card (collapsible) ──────────────────────────────────────
       const card = document.createElement('div');
       card.className = 'lp-row';
+      card.dataset.issue = p.issueNumber;
       card.style.cssText = 'flex-direction:column;gap:0;padding:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden';
 
       // Header row (always visible, click to expand)
@@ -2576,6 +2583,8 @@ async function loadLocalPipelines() {
 
       card.appendChild(body);
       listEl.appendChild(card);
+      // Restore expanded state if this card was open before the reload
+      if (openIssues.has(p.issueNumber)) togglePipelineExpand(card, p);
     }
   } catch {
     listEl.innerHTML = '<span class="lp-empty">Cannot reach server.</span>';
