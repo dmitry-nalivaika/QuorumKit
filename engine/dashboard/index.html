@@ -559,7 +559,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .k-agent-item .ka-name  { color: var(--text3); }
 
 /* ─── US-3: Agent suggestions (FR-005..FR-007) ───────────────────────────── */
-.suggestions-list { display: flex; flex-direction: column; gap: 5px; }
+.suggestions-list { display: flex; flex-direction: column; gap: 5px; max-height: 300px; overflow-y: auto; }
 .suggestion-card {
   background: var(--surface); border: 1px solid var(--border);
   border-left: 3px solid var(--blue); border-radius: var(--r-xs);
