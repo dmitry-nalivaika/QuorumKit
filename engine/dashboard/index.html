@@ -35,6 +35,7 @@
   --ticker-h:   28px;
   --topbar-h:   58px;
   --drawer-w:   420px;
+  --console-h:  220px;
   --detail-w:   500px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -97,11 +98,12 @@ button { cursor: pointer; font-family: var(--font); }
 #workspace {
   position: fixed;
   top: calc(var(--ticker-h) + var(--topbar-h));
-  left: 0; right: var(--drawer-w); bottom: 0;
+  left: 0; right: var(--drawer-w); bottom: var(--console-h);
   display: flex; flex-direction: column; overflow: hidden;
-  transition: right 0.3s cubic-bezier(.4,0,.2,1);
+  transition: right 0.3s cubic-bezier(.4,0,.2,1), bottom 0.3s cubic-bezier(.4,0,.2,1);
 }
 #workspace.drawer-closed { right: 0; }
+#workspace.console-closed { bottom: 0; }
 
 /* ─── Toolbar ─────────────────────────────────────────────────────────────── */
 #toolbar {
@@ -144,7 +146,8 @@ button { cursor: pointer; font-family: var(--font); }
 .zone-hd .title { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); }
 .zone-hd .cnt { font-size: 11px; color: var(--textMute); background: var(--surface); border: 1px solid var(--border); padding: 1px 8px; border-radius: 20px; }
 .zone-hd .line { flex: 1; height: 1px; background: var(--borderMute); }
-.zone-hd.univ .title { color: var(--cyan); }
+.zone-hd.sdlc .title { color: var(--cyan); }
+.zone-hd.auto .title { color: var(--green); }
 .zone-hd.ind  .title { color: var(--amber); }
 
 .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
@@ -275,7 +278,36 @@ button { cursor: pointer; font-family: var(--font); }
 }
 .d-invoke:hover { opacity: 0.88; }
 
+/* ─── Console bar (bottom) ─────────────────────────────────────────────── */
+#console-bar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: var(--console-h); background: #090d13;
+  border-top: 1px solid var(--border); z-index: 149;
+  display: flex; flex-direction: column;
+  transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+}
+#console-bar.closed { transform: translateY(var(--console-h)); }
+#console-bar-hd {
+  flex-shrink: 0; display: flex; align-items: center;
+  border-bottom: 1px solid var(--borderMute); background: #0d1117; height: 32px;
+  padding: 0 14px; gap: 8px;
+}
+#console-bar-title { font-size: 12px; color: var(--textMute); font-weight: 500; }
+#console-close-btn {
+  margin-left: auto; background: none; border: none;
+  color: var(--textMute); font-size: 13px; width: 24px; height: 24px;
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+}
+#console-close-btn:hover { color: var(--text3); background: var(--surface2); }
+
 /* ─── Drawer ──────────────────────────────────────────────────────────────── */
+/* ── Resize handle ────────────────────────────────────────────────── */
+#drw-resize {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+  cursor: ew-resize; z-index: 10;
+  transition: background 0.15s;
+}
+#drw-resize:hover { background: rgba(88,166,255,.35); }
 #drawer {
   position: fixed;
   top: calc(var(--ticker-h) + var(--topbar-h)); right: 0; bottom: 0;
@@ -715,29 +747,19 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 </div>
 
 <div id="drawer">
+  <div id="drw-resize"></div>
   <div class="drw-hd">
     <div class="dtabs">
-      <button class="dtab on" data-dt="console">💻 Console</button>
-      <button class="dtab"    data-dt="kanban">📋 Board</button>
+      <button class="dtab on" data-dt="kanban">📋 Board</button>
       <button class="dtab"    data-dt="pipelines">🌿 Pipelines</button>
       <button class="dtab"    data-dt="timeline">📊 Timeline</button>
-      <button class="dtab"    data-dt="about">ℹ️ Stack</button>
     </div>
     <div class="drw-ctrls">
       <button class="dctrl" id="drw-tog">▶</button>
     </div>
   </div>
 
-  <div class="dpanel on" id="console-panel">
-    <div id="cout"></div>
-    <div id="cinrow">
-      <span class="cprompt">❯</span>
-      <input id="cin" placeholder="Type /help for commands…" autocomplete="off" spellcheck="false" />
-      <button id="runbtn">↵ RUN</button>
-    </div>
-  </div>
-
-  <div class="dpanel" id="kanban-panel">
+  <div class="dpanel on" id="kanban-panel">
     <!-- US-4: Per-agent status strip (FR-008..FR-011) -->
     <div id="k-agent-strip"></div>
     <div id="kpanel" style="flex:1;overflow:hidden">
@@ -747,24 +769,12 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     </div>
   </div>
 
-  <!-- ── Pipelines panel (local worktrees + suggestions) ── -->
+  <!-- ── Pipelines panel (local worktrees) ── -->
   <div class="dpanel" id="pipelines-panel">
     <div id="lpanel">
-      <!-- US-3: Agent Suggestions (FR-005..FR-007) -->
-      <div class="lp-suggestions-wrap">
-        <div class="lp-toolbar">
-          <span class="lp-title">💡 Next Agent</span>
-          <div class="lp-ctx-row">
-            <input id="lp-ctx-issue" type="number" placeholder="Issue #" min="1" />
-            <button class="pipe-btn" id="lp-ctx-btn" style="padding:3px 9px;font-size:11px">Set</button>
-          </div>
-        </div>
-        <div id="lp-suggestions" class="suggestions-list"></div>
-      </div>
-      <div style="border-top:1px solid var(--borderMute);margin:6px 0 4px"></div>
-      <!-- Local feature worktrees -->
+      <!-- Worktrees toolbar -->
       <div class="lp-toolbar">
-        <span class="lp-title">Local feature worktrees</span>
+        <span class="lp-title">🌿 Local Pipelines</span>
         <button class="pipe-btn" id="lp-start-btn">＋ Start</button>
         <button class="pipe-btn pipe-btn-ghost" id="lp-refresh-btn" title="Refresh list">↺</button>
       </div>
@@ -788,40 +798,6 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     </div>
   </div>
 
-  <div class="dpanel" id="about-panel">
-    <div id="apanel">
-      <div class="asec full">
-        <div class="ahd">🔄 Closed-Loop SDLC</div>
-        <div class="sdlc-flow" id="sdlc-flow"></div>
-      </div>
-      <div class="asec full">
-        <div class="ahd">📊 Stack Stats</div>
-        <div class="stats-row">
-          <div class="mstat"><div class="v" id="a-agents">15</div><div class="l">Agents</div></div>
-          <div class="mstat"><div class="v">25</div><div class="l">Workflows</div></div>
-          <div class="mstat"><div class="v" id="a-univ">11</div><div class="l">Universal</div></div>
-          <div class="mstat"><div class="v" id="a-dom">4</div><div class="l">Industrial</div></div>
-          <div class="mstat"><div class="v">13/13</div><div class="l">Gates ✓</div></div>
-        </div>
-      </div>
-      <div class="asec half">
-        <div class="ahd">🎮 Shortcuts</div>
-        <div class="srows">
-          <div class="srow"><kbd>`</kbd> toggle console</div>
-          <div class="srow"><kbd>Esc</kbd> close detail panel</div>
-          <div class="srow"><kbd>↑↓</kbd> console history</div>
-          <div class="srow"><kbd>/invoke all</kbd> full SDLC sim</div>
-        </div>
-      </div>
-      <div class="asec half">
-        <div class="ahd">☕ Fun Fact <span style="font-size:10px;color:var(--textMute)">(click for more)</span></div>
-        <div id="ff">Loading…</div>
-      </div>
-      <div class="asec half">
-        <div class="ahd">🏭 About</div>
-        <div style="font-size:12px;color:var(--text3);line-height:1.7">A fully autonomous SDLC loop — 15 AI agents, lights-out execution from Triage to Monitor. Industrial/OT is a domain extension pack. Works with Claude Code + GitHub Copilot.</div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -1643,22 +1619,28 @@ function renderGrid() {
     return;
   }
 
-  ['universal','industrial'].forEach(domain => {
-    const list = sdlcSort(vis.filter(a => a.domain === domain));  // FR-001/FR-002
+  const SDLC_IDS = new Set(['ba','architect','developer','qa','reviewer','security','devops','docs','release']);
+  const AUTO_IDS = new Set(['triage','techdebt']);
+  const GROUPS = [
+    { key: 'sdlc', cls: 'sdlc', icon: '🔄', label: 'SDLC Pipeline',       filter: a => a.domain === 'universal' && SDLC_IDS.has(a.id) },
+    { key: 'auto', cls: 'auto', icon: '⚡',   label: 'Automation & Support', filter: a => a.domain === 'universal' && AUTO_IDS.has(a.id) },
+    { key: 'ind',  cls: 'ind',  icon: '🏭',  label: 'Industrial',           filter: a => a.domain === 'industrial' },
+  ];
+  GROUPS.forEach(g => {
+    const list = sdlcSort(vis.filter(g.filter));  // FR-001/FR-002
     if (!list.length) return;
     const sec = document.createElement('div');
     sec.className = 'zone-wrap';
-    const isU = domain === 'universal';
     sec.innerHTML = `
-      <div class="zone-hd ${isU?'univ':'ind'}">
-        <span class="icon">${isU?'🌐':'🏭'}</span>
-        <span class="title">${isU?'Universal Core':'Industrial Domain Pack'}</span>
+      <div class="zone-hd ${g.cls}">
+        <span class="icon">${g.icon}</span>
+        <span class="title">${g.label}</span>
         <span class="cnt">${list.length} agents</span>
         <span class="line"></span>
       </div>
-      <div class="agent-grid" id="grid-${domain}"></div>`;
+      <div class="agent-grid" id="grid-${g.key}"></div>`;
     office.appendChild(sec);
-    list.forEach(a => document.getElementById(`grid-${domain}`).appendChild(mkCard(a)));
+    list.forEach(a => document.getElementById(`grid-${g.key}`).appendChild(mkCard(a)));
   });
 }
 
@@ -1754,17 +1736,29 @@ function closeDetail() {
   document.getElementById('backdrop').classList.remove('vis');
 }
 
+// ─── Console bar ───────────────────────────────────────────────────────────────
+let consoleOpen = true;
+
+function setConsole(open) {
+  consoleOpen = open;
+  const bar = document.getElementById('console-bar');
+  const ws  = document.getElementById('workspace');
+  const btn = document.getElementById('console-btn');
+  bar.classList.toggle('closed', !open);
+  ws.classList.toggle('console-closed', !open);
+  btn.classList.toggle('on', open);
+  document.getElementById('console-close-btn').textContent = open ? '▾' : '▴';
+  if (open) setTimeout(() => document.getElementById('cin').focus(), 80);
+}
+
 // ─── Drawer ───────────────────────────────────────────────────────────────────
 function setDrawer(open) {
   drawerOpen = open;
-  const d = document.getElementById('drawer');
+  const d  = document.getElementById('drawer');
   const ws = document.getElementById('workspace');
-  const btn = document.getElementById('console-btn');
-  const tb = document.getElementById('drw-tog');
   d.classList.toggle('closed', !open);
   ws.classList.toggle('drawer-closed', !open);
-  btn.classList.toggle('on', open);
-  tb.textContent = open ? '▶' : '◀';
+  document.getElementById('drw-tog').textContent = open ? '▶' : '◀';
 }
 
 function switchTab(id) {
@@ -1781,7 +1775,8 @@ let _pendingInvoke = null;
 function showInvokeModal(id, agent) {
   _pendingInvoke = { id, agent };
   document.getElementById('invoke-modal-title').textContent = `▶ Invoke ${agent.name}`;
-  document.getElementById('invoke-issue-input').value = '';
+  // Pre-populate from active issue context (FR-006 auto-populate)
+  document.getElementById('invoke-issue-input').value = _activeIssueCtx ? String(_activeIssueCtx) : '';
   document.getElementById('invoke-modal-status').textContent = '';
   // FR-176-012: populate pipeline selector from live list
   const sel = document.getElementById('invoke-pipeline-select');
@@ -1792,12 +1787,14 @@ function showInvokeModal(id, agent) {
         const opt = document.createElement('option');
         opt.value = String(p.issueNumber);
         opt.textContent = `#${p.issueNumber} ${p.branch}`;
+        if (_activeIssueCtx && p.issueNumber === _activeIssueCtx) opt.selected = true;
         sel.appendChild(opt);
       });
     }).catch(() => {});
   }
   document.getElementById('invoke-backdrop').classList.add('vis');
-  setTimeout(() => document.getElementById('invoke-issue-input').focus(), 80);
+  if (!document.getElementById('invoke-issue-input').value)
+    setTimeout(() => document.getElementById('invoke-issue-input').focus(), 80);
 }
 
 function hideInvokeModal() {
@@ -1808,7 +1805,7 @@ function hideInvokeModal() {
 function invokeAgent(id) {
   const a = AGENTS.find(x => x.id===id);
   if (!a) return;
-  switchTab('console');
+  switchTab('kanban');
 
   // If server is connected → show invoke modal to capture optional issue number
   if (isServerMode()) {
@@ -1862,7 +1859,7 @@ function esc(s) {
 }
 
 function sendCmd(cmd) {
-  switchTab('console');
+  setConsole(true);
   const inp = document.getElementById('cin');
   inp.value = cmd; inp.focus();
 }
@@ -2041,6 +2038,7 @@ function seedKanban() {
 // ─── SDLC Flow ────────────────────────────────────────────────────────────────
 function buildSdlc() {
   const c=document.getElementById('sdlc-flow');
+  if (!c) return; // element removed with about-panel
   SDLC.forEach((s,i)=>{
     const el=document.createElement('span'); el.className='sstep'; el.textContent=`${s.e} ${s.s}`; c.appendChild(el);
     if(i<SDLC.length-1){const a=document.createElement('span');a.className='sarr';a.textContent='→';c.appendChild(a);}
@@ -2150,7 +2148,7 @@ function handleServerMsg(msg) {
       const lvl = msg.level || 'info';
       clog(lvl, msg.msg, a ? a.name : (msg.agentId || 'SERVER'));
       // Auto-open console when live output arrives
-      if (!drawerOpen) { setDrawer(true); switchTab('console'); }
+      if (!consoleOpen) setConsole(true);
       break;
     }
 
@@ -2493,61 +2491,108 @@ async function loadLocalPipelines() {
       return;
     }
     listEl.innerHTML = '';
-    // Rebuild agent-filter for timeline if timeline is loaded
     for (const p of data) {
-      const row = document.createElement('div');
-      row.className = 'lp-row';
-      // SEC: values from server (validated branch names + paths), rendered via textContent
+      // ── Pipeline card (collapsible) ──────────────────────────────────────
+      const card = document.createElement('div');
+      card.className = 'lp-row';
+      card.style.cssText = 'flex-direction:column;gap:0;padding:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden';
+
+      // Header row (always visible, click to expand)
+      const hdr = document.createElement('div');
+      hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;background:var(--surface2)';
+      hdr.addEventListener('click', () => togglePipelineExpand(card, p));
+
       const num = document.createElement('span');
-      num.className = 'lp-num';
-      num.textContent = `#${p.issueNumber}`;
+      num.className = 'lp-num'; num.textContent = `#${p.issueNumber}`;
+
       const branch = document.createElement('span');
-      branch.className = 'lp-branch';
-      branch.textContent = p.branch;
-      // Mode badge
+      branch.className = 'lp-branch'; branch.textContent = p.branch;
+
       const modeBadge = document.createElement('span');
       modeBadge.style.cssText = 'font-size:9px;padding:1px 5px;border-radius:3px;background:var(--surface3);color:var(--text3);font-weight:600';
       modeBadge.textContent = p.mode || 'isolated';
-      // Running-agent indicator (FR-176-007)
+
       if (p.runningAgent) {
         const dot = document.createElement('span');
-        dot.title = 'Agent currently running in this worktree';
-        dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.4s infinite';
-        row.appendChild(dot);
+        dot.title = 'Agent running';
+        dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.4s infinite;flex-shrink:0';
+        hdr.appendChild(dot);
       }
-      const path = document.createElement('span');
-      path.className = 'lp-path';
-      path.textContent = p.path;
-      // Creation time (FR-176-007)
-      if (p.createdAt) {
-        const age = document.createElement('span');
-        age.style.cssText = 'font-size:10px;color:var(--textMute);flex-basis:100%';
-        age.textContent = `Created ${relativeTime(p.createdAt)}`;
-        row.appendChild(age);
-      }
+
+      const chevron = document.createElement('span');
+      chevron.style.cssText = 'margin-left:auto;color:var(--textMute);font-size:10px';
+      chevron.textContent = '▶';
+      card.dataset.chevron = 'chevron'; // placeholder, set in expand
+
+      hdr.appendChild(num);
+      hdr.appendChild(branch);
+      hdr.appendChild(modeBadge);
+      hdr.appendChild(chevron);
+      card.appendChild(hdr);
+
+      // Collapsible body (hidden by default)
+      const body = document.createElement('div');
+      body.style.cssText = 'display:none;flex-direction:column;gap:6px;padding:8px 10px;background:var(--surface);border-top:1px solid var(--borderMute)';
+
+      // Path + age
+      const meta = document.createElement('div');
+      meta.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;font-size:10px;color:var(--text3)';
+      meta.textContent = p.path;
+      if (p.createdAt) meta.textContent += `  ·  Created ${relativeTime(p.createdAt)}`;
+      body.appendChild(meta);
+
+      // Agent suggestions for this pipeline's issue
+      const sugDiv = document.createElement('div');
+      sugDiv.className = 'suggestions-list';
+      sugDiv.dataset.issueNum = p.issueNumber;
+      body.appendChild(sugDiv);
+
+      // Actions
       const actions = document.createElement('div');
       actions.className = 'lp-actions';
       const stopBtn = document.createElement('button');
-      stopBtn.className = 'lp-btn lp-btn-stop';
-      stopBtn.textContent = '■ Stop';
-      stopBtn.title = `Stop pipeline for issue #${p.issueNumber}`;
-      stopBtn.addEventListener('click', () => stopLocalPipeline(p.issueNumber, p.runningAgent, stopBtn));
+      stopBtn.className = 'lp-btn lp-btn-stop'; stopBtn.textContent = '■ Stop';
+      stopBtn.addEventListener('click', e => { e.stopPropagation(); stopLocalPipeline(p.issueNumber, p.runningAgent, stopBtn); });
       const joinBtn = document.createElement('button');
-      joinBtn.className = 'lp-btn lp-btn-join';
-      joinBtn.textContent = '⎇ Join';
-      joinBtn.title = `Show worktree info for issue #${p.issueNumber}`;
-      joinBtn.addEventListener('click', () => joinLocalPipeline(p.issueNumber, joinBtn));
+      joinBtn.className = 'lp-btn lp-btn-join'; joinBtn.textContent = '⎇ Join';
+      joinBtn.addEventListener('click', e => { e.stopPropagation(); joinLocalPipeline(p.issueNumber, joinBtn); });
       actions.appendChild(stopBtn);
       actions.appendChild(joinBtn);
-      row.appendChild(num);
-      row.appendChild(branch);
-      row.appendChild(modeBadge);
-      row.appendChild(actions);
-      row.appendChild(path);
-      listEl.appendChild(row);
+      body.appendChild(actions);
+
+      card.appendChild(body);
+      listEl.appendChild(card);
     }
   } catch {
     listEl.innerHTML = '<span class="lp-empty">Cannot reach server.</span>';
+  }
+}
+
+function togglePipelineExpand(card, p) {
+  const body = card.querySelector('div:last-child');
+  const chevron = card.querySelector('span[style*="margin-left:auto"]');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'flex';
+  chevron.textContent = isOpen ? '▶' : '▼';
+  if (!isOpen) {
+    // Set active issue context and render suggestions
+    setIssueContext(p.issueNumber);
+    const sugDiv = body.querySelector('.suggestions-list');
+    if (sugDiv) {
+      const suggestions = computeAgentSuggestions(AGENTS, { issueNumber: p.issueNumber });
+      if (suggestions) {
+        sugDiv.innerHTML = '';
+        suggestions.forEach(s => {
+          const c = document.createElement('div');
+          c.className = 'suggestion-card';
+          c.innerHTML = `<span class="suggestion-name">${s.agent.emoji} ${s.agent.name}</span><span class="suggestion-role">${s.agent.role}</span><span class="suggestion-reason">${s.reason}</span>`;
+          c.addEventListener('click', () => openDetail(s.agent, p.issueNumber));
+          sugDiv.appendChild(c);
+        });
+      } else {
+        sugDiv.innerHTML = '<span class="suggestion-no-ctx" style="font-size:11px;color:var(--textMute)">No agent suggestions available.</span>';
+      }
+    }
   }
 }
 
@@ -2651,19 +2696,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('lp-start-modal-backdrop')?.addEventListener('click', e => {
     if (e.target === document.getElementById('lp-start-modal-backdrop')) hideStartPipelineModal();
   });
-
-  // US-3: issue context for agent suggestions (FR-005..FR-007)
-  const ctxBtn = document.getElementById('lp-ctx-btn');
-  const ctxInput = document.getElementById('lp-ctx-issue');
-  if (ctxBtn && ctxInput) {
-    ctxBtn.addEventListener('click', () => {
-      const n = parseInt(ctxInput.value, 10);
-      setIssueContext(n > 0 ? n : null);
-    });
-    ctxInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { const n = parseInt(ctxInput.value, 10); setIssueContext(n > 0 ? n : null); }
-    });
-  }
 
   // FR-176-011: Join modal wiring
   const hideJoin = () => { document.getElementById('lp-join-modal-backdrop').style.display = 'none'; };
@@ -2998,18 +3030,8 @@ function init() {
   AGENTS.forEach(a => { agentStatuses[a.id] = 'idle'; });
   renderBoardAgentStrip();
 
-  // US-3: render suggestions in no-context fallback mode
-  renderSuggestions();
-
-  document.getElementById('ver').textContent       = `v${QUORUMKIT_VERSION}`;
+  document.getElementById('ver').textContent         = `v${QUORUMKIT_VERSION}`;
   document.getElementById('stat-agents').textContent = AGENTS.length;
-  document.getElementById('a-agents').textContent  = AGENTS.length;
-  document.getElementById('a-univ').textContent    = AGENTS.filter(a=>a.domain==='universal').length;
-  document.getElementById('a-dom').textContent     = AGENTS.filter(a=>a.domain==='industrial').length;
-
-  const ff=document.getElementById('ff');
-  ff.textContent=FUN_FACTS[ffIdx++%FUN_FACTS.length];
-  ff.addEventListener('click',()=>{ff.textContent=FUN_FACTS[ffIdx++%FUN_FACTS.length];});
 
   // Settings modal
   document.getElementById('settings-btn').addEventListener('click', openSettings);
@@ -3056,17 +3078,36 @@ function init() {
   // Drawer
   document.querySelectorAll('.dtab').forEach(b=>b.addEventListener('click',()=>{
     switchTab(b.dataset.dt);
-    // US-4: refresh board strip when switching to Board tab
     if (b.dataset.dt === 'kanban') renderBoardAgentStrip();
-    // US-3: refresh suggestions when switching to Pipelines tab
-    if (b.dataset.dt === 'pipelines') renderSuggestions();
+    if (b.dataset.dt === 'pipelines') loadLocalPipelines();
   }));
   document.getElementById('drw-tog').addEventListener('click',()=>setDrawer(!drawerOpen));
-  document.getElementById('console-btn').addEventListener('click',()=>{
-    if(!drawerOpen){setDrawer(true);switchTab('console');}
-    else if(document.querySelector('.dtab.on')?.dataset.dt==='console') setDrawer(false);
-    else switchTab('console');
-  });
+  document.getElementById('console-btn').addEventListener('click',()=>setConsole(!consoleOpen));
+  document.getElementById('console-close-btn').addEventListener('click',()=>setConsole(false));
+
+  // Right-panel resize handle
+  (function(){
+    const handle = document.getElementById('drw-resize');
+    let startX, startW;
+    handle.addEventListener('mousedown', e => {
+      startX = e.clientX;
+      startW = document.getElementById('drawer').offsetWidth;
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      const onMove = ev => {
+        const newW = Math.max(280, Math.min(800, startW + (startX - ev.clientX)));
+        document.documentElement.style.setProperty('--drawer-w', newW + 'px');
+      };
+      const onUp = () => {
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  })();
 
   // Detail
   document.getElementById('d-close').addEventListener('click',closeDetail);
@@ -3086,7 +3127,7 @@ function init() {
     if(e.key==='Escape') closeDetail();
     if(e.key==='`'&&document.activeElement!==cin){
       e.preventDefault();
-      setDrawer(true); switchTab('console'); cin.focus();
+      setConsole(!consoleOpen);
     }
   });
 
@@ -3105,5 +3146,19 @@ function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
+
+<!-- ─── Console bar (bottom) ────────────────────────────────────────────── -->
+<div id="console-bar">
+  <div id="console-bar-hd">
+    <span id="console-bar-title">💻 Console</span>
+    <button id="console-close-btn">▾</button>
+  </div>
+  <div id="cout"></div>
+  <div id="cinrow">
+    <span class="cprompt">❯</span>
+    <input id="cin" placeholder="Type /help for commands…" autocomplete="off" spellcheck="false" />
+    <button id="runbtn">↵ RUN</button>
+  </div>
+</div>
 </body>
 </html>
