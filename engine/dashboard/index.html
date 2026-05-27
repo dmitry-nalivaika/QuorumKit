@@ -225,7 +225,7 @@ button { cursor: pointer; font-family: var(--font); }
 #detail {
   position: fixed;
   top: calc(var(--ticker-h) + var(--topbar-h));
-  right: var(--drawer-w); bottom: 0;
+  right: var(--drawer-w); bottom: var(--console-h);
   width: var(--detail-w);
   background: var(--surface); border-left: 1px solid var(--border);
   z-index: 110; display: flex; flex-direction: column;
@@ -235,6 +235,7 @@ button { cursor: pointer; font-family: var(--font); }
 }
 #detail.open { transform: translateX(0); }
 #workspace.drawer-closed #detail { right: 0; }
+#workspace.console-closed #detail { bottom: 0; }
 
 .d-header { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .d-top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
