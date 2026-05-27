@@ -1,8 +1,8 @@
 {
-  "issue": 155,
-  "slug": "comprehensive-documentation-review",
-  "spec_dir": "specs/155-comprehensive-documentation-review",
-  "branch": "155-comprehensive-documentation-review",
+  "issue": 259,
+  "slug": "dashboard-functionality-ux-and-ui-enhanc",
+  "spec_dir": "specs/259-dashboard-functionality-ux-and-ui-enhanc",
+  "branch": "259-dashboard-functionality-ux-and-ui-enhanc",
   "status": "spec-ready",
-  "updated": "2026-05-26"
+  "updated": "2026-05-27"
 }
