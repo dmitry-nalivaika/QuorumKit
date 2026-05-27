@@ -34,7 +34,7 @@
   --r-xs:       4px;
   --ticker-h:   28px;
   --topbar-h:   58px;
-  --drawer-h:   280px;
+  --drawer-h:   360px;
   --detail-w:   500px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -499,6 +499,60 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .kcard.k-running .kcard-by::before { content: '⚡ '; }
 .kcard.k-error   { border-left-color: var(--red) !important; opacity: 0.7; }
 
+/* ─── US-4: Per-agent status badges (FR-008..FR-011) ─────────────────────── */
+.status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; padding: 2px 8px;
+  border-radius: 20px; border: 1px solid; letter-spacing: 0.3px;
+  text-transform: uppercase; font-family: var(--mono); white-space: nowrap;
+}
+.status-badge-idle      { color: var(--textMute); border-color: var(--border);              background: transparent; }
+.status-badge-queued    { color: var(--amber);    border-color: rgba(210,153,34,.4);         background: rgba(210,153,34,.07); }
+.status-badge-running   { color: var(--green);    border-color: rgba(63,185,80,.4);          background: rgba(63,185,80,.07); animation: badge-pulse 1.2s ease infinite; }
+.status-badge-completed { color: var(--blue);     border-color: rgba(88,166,255,.4);         background: rgba(88,166,255,.07); }
+.status-badge-failed    { color: var(--red);      border-color: rgba(248,81,73,.4);          background: rgba(248,81,73,.1); }
+@keyframes badge-pulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
+
+/* ─── Board agent status strip (US-4) ────────────────────────────────────── */
+#k-agent-strip {
+  flex-shrink: 0; padding: 6px 14px; border-bottom: 1px solid var(--borderMute);
+  display: flex; flex-wrap: wrap; gap: 6px; overflow-x: auto;
+  background: var(--bg);
+}
+.k-agent-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); white-space: nowrap; }
+.k-agent-item .ka-emoji { font-size: 14px; line-height: 1; }
+.k-agent-item .ka-name  { color: var(--text3); }
+
+/* ─── US-3: Agent suggestions (FR-005..FR-007) ───────────────────────────── */
+.suggestions-list { display: flex; flex-direction: column; gap: 5px; }
+.suggestion-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--blue); border-radius: var(--r-xs);
+  padding: 7px 10px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.suggestion-card:hover { background: var(--surface2); border-color: var(--blue); }
+.suggestion-card-top  { display: flex; align-items: center; gap: 6px; }
+.suggestion-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.suggestion-role { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.suggestion-reason { font-size: 11px; color: var(--text2); margin-top: 4px; font-style: italic; line-height: 1.45; }
+.suggestion-no-ctx { font-size: 11.5px; color: var(--textMute); padding: 8px 2px; }
+.suggestion-fallback-hd { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--textMute); margin: 8px 0 5px; }
+.lp-suggestions-wrap { display: flex; flex-direction: column; gap: 4px; }
+.lp-ctx-row { display: flex; align-items: center; gap: 6px; }
+#lp-ctx-issue {
+  width: 72px; background: var(--surface3); border: 1px solid var(--border);
+  border-radius: var(--r-xs); color: var(--text); font-size: 11px;
+  padding: 3px 6px; outline: none; font-family: var(--font);
+}
+#lp-ctx-issue:focus { border-color: var(--blue); }
+
+/* ─── Detail panel context pill (FR-006) ─────────────────────────────────── */
+.d-ctx-pill {
+  font-size: 11px; font-family: var(--mono); padding: 5px 10px; border-radius: var(--r-xs);
+  background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.25);
+  color: var(--blue); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+}
+
 /* ─── Pipelines panel ─────────────────────────────────────────────────────── */
 #ppanel { padding: 10px 14px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .pipe-trigger-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -682,17 +736,32 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     </div>
   </div>
 
-  <div class="dpanel" id="kanban-panel">
-    <div id="kpanel">
+  <div class="dpanel" id="kanban-panel" style="display:flex;flex-direction:column;overflow:hidden">
+    <!-- US-4: Per-agent status strip (FR-008..FR-011) -->
+    <div id="k-agent-strip"></div>
+    <div id="kpanel" style="flex:1;overflow:hidden">
       <div class="kcol ktodo"><div class="kchd">📥 Queue</div><div id="k-todo"></div></div>
       <div class="kcol kwip" ><div class="kchd">⚡ In Progress</div><div id="k-wip"></div></div>
       <div class="kcol kdone"><div class="kchd">✅ Done</div><div id="k-done"></div></div>
     </div>
   </div>
 
-  <!-- ── Pipelines panel (local worktrees) ── -->
+  <!-- ── Pipelines panel (local worktrees + suggestions) ── -->
   <div class="dpanel" id="pipelines-panel">
     <div id="lpanel">
+      <!-- US-3: Agent Suggestions (FR-005..FR-007) -->
+      <div class="lp-suggestions-wrap">
+        <div class="lp-toolbar">
+          <span class="lp-title">💡 Next Agent</span>
+          <div class="lp-ctx-row">
+            <input id="lp-ctx-issue" type="number" placeholder="Issue #" min="1" />
+            <button class="pipe-btn" id="lp-ctx-btn" style="padding:3px 9px;font-size:11px">Set</button>
+          </div>
+        </div>
+        <div id="lp-suggestions" class="suggestions-list"></div>
+      </div>
+      <div style="border-top:1px solid var(--borderMute);margin:6px 0 4px"></div>
+      <!-- Local feature worktrees -->
       <div class="lp-toolbar">
         <span class="lp-title">Local feature worktrees</span>
         <button class="pipe-btn" id="lp-start-btn">＋ Start</button>
@@ -921,6 +990,33 @@ const QUORUMKIT_VERSION = "3.1.0";
 
 const AGENTS = [
   {
+    "id": "triage",
+    "name": "Triage Agent",
+    "emoji": "🎯",
+    "role": "Issue Classifier",
+    "domain": "universal",
+    "quote": "I sort your mess so others don't have to.",
+    "color": "#6c63ff",
+    "status": "idle",
+    "monitorText": "Scanning issues...",
+    "responsibilities": [
+      "Reads new issues and applies type, priority, status, and agent labels from the taxonomy",
+      "Identifies duplicate issues; links them with context",
+      "Assigns issues to the correct agent or team member based on type and component",
+      "Posts a comment asking for reproduction steps or additional information when an issue…",
+      "Escalates security vulnerabilities discreetly without public exploit disclosure",
+      "Ensures priority:critical issues are triaged within 2 hours (or constitution-specified…"
+    ],
+    "commands": [
+      "/triage-agent \u003cissue-number\u003e"
+    ],
+    "workflows": [],
+    "funFact": "Has read 10,000 issues. They're all 'urgent'.",
+    "coffee": "☕",
+    "blocker": "TRIAGE-BLOCKER",
+    "deskItem": "📬"
+  },
+  {
     "id": "ba",
     "name": "BA/Product Agent",
     "emoji": "📋",
@@ -948,6 +1044,32 @@ const AGENTS = [
     "coffee": "🫖",
     "blocker": "SPEC-BLOCKER",
     "deskItem": "📝"
+  },
+  {
+    "id": "architect",
+    "name": "Architect Agent",
+    "emoji": "🏗️",
+    "role": "Big Picture Thinker",
+    "domain": "universal",
+    "quote": "Everything is a microservice until it isn't.",
+    "color": "#e94560",
+    "status": "idle",
+    "monitorText": "Drafting ADR...",
+    "responsibilities": [
+      "Writes docs/architecture/adr-NNN-\u003cslug\u003e.md for every qualifying decision",
+      "Evaluates Developer Agent plans against the constitution and existing ADRs",
+      "Scans all specs/*/spec.md for entity, NFR, scope, and dependency conflicts before…",
+      "Analyses the last 10 merged PRs against each constitution rule; flags stale or unclear…",
+      "Raises ARCH-BLOCKER or ARCH-CONCERN on PRs and issues"
+    ],
+    "commands": [
+      "/speckit-analyze"
+    ],
+    "workflows": [],
+    "funFact": "Has drawn the same system diagram 47 times. Each time it was 'final'.",
+    "coffee": "☕",
+    "blocker": "ARCH-CONFLICT",
+    "deskItem": "📐"
   },
   {
     "id": "developer",
@@ -1032,57 +1154,6 @@ const AGENTS = [
     "deskItem": "🔍"
   },
   {
-    "id": "architect",
-    "name": "Architect Agent",
-    "emoji": "🏗️",
-    "role": "Big Picture Thinker",
-    "domain": "universal",
-    "quote": "Everything is a microservice until it isn't.",
-    "color": "#e94560",
-    "status": "idle",
-    "monitorText": "Drafting ADR...",
-    "responsibilities": [
-      "Writes docs/architecture/adr-NNN-\u003cslug\u003e.md for every qualifying decision",
-      "Evaluates Developer Agent plans against the constitution and existing ADRs",
-      "Scans all specs/*/spec.md for entity, NFR, scope, and dependency conflicts before…",
-      "Analyses the last 10 merged PRs against each constitution rule; flags stale or unclear…",
-      "Raises ARCH-BLOCKER or ARCH-CONCERN on PRs and issues"
-    ],
-    "commands": [
-      "/speckit-analyze"
-    ],
-    "workflows": [],
-    "funFact": "Has drawn the same system diagram 47 times. Each time it was 'final'.",
-    "coffee": "☕",
-    "blocker": "ARCH-CONFLICT",
-    "deskItem": "📐"
-  },
-  {
-    "id": "devops",
-    "name": "DevOps Agent",
-    "emoji": "🚀",
-    "role": "Pipeline Plumber",
-    "domain": "universal",
-    "quote": "It's not a bug in prod. It's a feature in a different environment.",
-    "color": "#2ed573",
-    "status": "idle",
-    "monitorText": "Deploying ring 1...",
-    "responsibilities": [
-      "Writes and reviews GitHub Actions workflows; enforces all quality gates before merge",
-      "Authors Dockerfile, Terraform, Helm, and equivalent IaC; runs cost estimation via…",
-      "Orchestrates staging → production deploys; enforces ring model and soak periods",
-      "Sets up monitoring, alerting, and dashboards; routes production alerts to GitHub Issues"
-    ],
-    "commands": [
-      "/speckit-analyze"
-    ],
-    "workflows": [],
-    "funFact": "Has 'just one more kubectl command' before going to bed every night.",
-    "coffee": "🐳",
-    "blocker": "COST-BLOCKER",
-    "deskItem": "🔧"
-  },
-  {
     "id": "security",
     "name": "Security Agent",
     "emoji": "🔐",
@@ -1110,31 +1181,56 @@ const AGENTS = [
     "deskItem": "🛡️"
   },
   {
-    "id": "triage",
-    "name": "Triage Agent",
-    "emoji": "🎯",
-    "role": "Issue Classifier",
+    "id": "devops",
+    "name": "DevOps Agent",
+    "emoji": "🚀",
+    "role": "Pipeline Plumber",
     "domain": "universal",
-    "quote": "I sort your mess so others don't have to.",
-    "color": "#6c63ff",
+    "quote": "It's not a bug in prod. It's a feature in a different environment.",
+    "color": "#2ed573",
     "status": "idle",
-    "monitorText": "Scanning issues...",
+    "monitorText": "Deploying ring 1...",
     "responsibilities": [
-      "Reads new issues and applies type, priority, status, and agent labels from the taxonomy",
-      "Identifies duplicate issues; links them with context",
-      "Assigns issues to the correct agent or team member based on type and component",
-      "Posts a comment asking for reproduction steps or additional information when an issue…",
-      "Escalates security vulnerabilities discreetly without public exploit disclosure",
-      "Ensures priority:critical issues are triaged within 2 hours (or constitution-specified…"
+      "Writes and reviews GitHub Actions workflows; enforces all quality gates before merge",
+      "Authors Dockerfile, Terraform, Helm, and equivalent IaC; runs cost estimation via…",
+      "Orchestrates staging → production deploys; enforces ring model and soak periods",
+      "Sets up monitoring, alerting, and dashboards; routes production alerts to GitHub Issues"
     ],
     "commands": [
-      "/triage-agent \u003cissue-number\u003e"
+      "/speckit-analyze"
     ],
     "workflows": [],
-    "funFact": "Has read 10,000 issues. They're all 'urgent'.",
-    "coffee": "☕",
-    "blocker": "TRIAGE-BLOCKER",
-    "deskItem": "📬"
+    "funFact": "Has 'just one more kubectl command' before going to bed every night.",
+    "coffee": "🐳",
+    "blocker": "COST-BLOCKER",
+    "deskItem": "🔧"
+  },
+  {
+    "id": "docs",
+    "name": "Docs Agent",
+    "emoji": "📚",
+    "role": "Documentation Evangelist",
+    "domain": "universal",
+    "quote": "Undocumented code is just a riddle with worse consequences.",
+    "color": "#54a0ff",
+    "status": "idle",
+    "monitorText": "Syncing README...",
+    "responsibilities": [
+      "Updates the README when a merged feature adds or changes user-visible capability",
+      "Creates or updates doc comments (JSDoc, Python docstrings, Go doc, Rust doc) from code…",
+      "Adds missing doc comments to public functions, classes, and modules",
+      "Raises DOCS-BLOCKER when an ADR-triggering feature merges without a corresponding…",
+      "Detects and repairs broken markdown links across all documentation files",
+      "Ensures CHANGELOG.md accurately reflects user-facing behaviour changes"
+    ],
+    "commands": [
+      "/docs-agent"
+    ],
+    "workflows": [],
+    "funFact": "Wrote 3,000 words documenting a function called 'doStuff()'.",
+    "coffee": "📖",
+    "blocker": "DOCS-BLOCKER",
+    "deskItem": "✍️"
   },
   {
     "id": "release",
@@ -1165,60 +1261,83 @@ const AGENTS = [
     "deskItem": "🏷️"
   },
   {
-    "id": "docs",
-    "name": "Docs Agent",
-    "emoji": "📚",
-    "role": "Documentation Evangelist",
-    "domain": "universal",
-    "quote": "Undocumented code is just a riddle with worse consequences.",
-    "color": "#54a0ff",
+    "id": "compliance",
+    "name": "Compliance Agent",
+    "emoji": "📜",
+    "role": "Standards Enforcer",
+    "domain": "industrial",
+    "quote": "IEC 62443 says no. So: no.",
+    "color": "#a29bfe",
     "status": "idle",
-    "monitorText": "Syncing README...",
+    "monitorText": "Checking IEC 62443...",
     "responsibilities": [
-      "Updates the README when a merged feature adds or changes user-visible capability",
-      "Creates or updates doc comments (JSDoc, Python docstrings, Go doc, Rust doc) from code…",
-      "Adds missing doc comments to public functions, classes, and modules",
-      "Raises DOCS-BLOCKER when an ADR-triggering feature merges without a corresponding…",
-      "Detects and repairs broken markdown links across all documentation files",
-      "Ensures CHANGELOG.md accurately reflects user-facing behaviour changes"
+      "Checks zone/conduit model, identity, least privilege, patch management, and audit logging",
+      "Verifies MES/ERP data flows stay within the correct ISA-95 level model",
+      "Identifies SIL-classified subsystems; enforces human-authorship requirement; blocks…",
+      "Tracks open findings, their status, and resolution across PRs",
+      "Produces structured reports on PRs touching regulated subsystems"
     ],
     "commands": [
-      "/docs-agent"
+      "/speckit-analyze"
     ],
     "workflows": [],
-    "funFact": "Wrote 3,000 words documenting a function called 'doStuff()'.",
-    "coffee": "📖",
-    "blocker": "DOCS-BLOCKER",
-    "deskItem": "✍️"
+    "funFact": "Has memorized 800 pages of IEC standards. Still requires human sign-off on E-stop PRs.",
+    "coffee": "📏",
+    "blocker": "COMPLIANCE-BLOCKER",
+    "deskItem": "📋"
   },
   {
-    "id": "techdebt",
-    "name": "Tech-Debt Agent",
-    "emoji": "💸",
-    "role": "Financial Advisor (for Code)",
-    "domain": "universal",
-    "quote": "Your codebase has a great personality. Shame about the complexity score.",
-    "color": "#eccc68",
+    "id": "twin",
+    "name": "Digital Twin Agent",
+    "emoji": "🪞",
+    "role": "Reality–Model Reconciler",
+    "domain": "industrial",
+    "quote": "Your digital twin and physical asset disagree. One of them is lying.",
+    "color": "#70a1ff",
     "status": "idle",
-    "monitorText": "Measuring churn×complexity...",
+    "monitorText": "Diffing DTDL schema...",
     "responsibilities": [
-      "Identifies files with high cyclomatic complexity AND high git churn (the most…",
-      "Finds unreachable functions, unused exports, and zombie feature flags",
-      "Flags dependencies significantly behind the latest stable release",
-      "Detects DRY violations that have grown across the codebase",
-      "Produces docs/tech-debt/tech-debt-report-YYYY-MM.md with trend comparison",
-      "Opens up to 5 labeled type:chore, tech-debt issues per cycle"
+      "Verifies asset model properties match the physical asset inventory and historian schema",
+      "Checks twin state update latency, stale-data handling, and offline-asset behaviour",
+      "Validates simulation CI integration and scenario coverage (nominal, fault, reconnect)",
+      "Runs DTDL/RDF/JSON Schema diff tools to classify breaking vs. additive changes",
+      "Verifies migration plans exist for breaking schema changes"
     ],
     "commands": [
-      "/tech-debt-agent run",
-      "/tech-debt-agent report \u003cYYYY-MM\u003e",
-      "/tech-debt-agent"
+      "/speckit-analyze"
     ],
     "workflows": [],
-    "funFact": "Has a spreadsheet tracking tech debt that itself has tech debt.",
-    "coffee": "💰",
-    "blocker": "DEBT-BLOCKER",
-    "deskItem": "📊"
+    "funFact": "Once had an existential crisis when the twin's twin drifted from the twin.",
+    "coffee": "🪟",
+    "blocker": "TWIN-BLOCKER",
+    "deskItem": "🔄"
+  },
+  {
+    "id": "incident",
+    "name": "Incident Agent",
+    "emoji": "🚨",
+    "role": "Chaos Coordinator",
+    "domain": "industrial",
+    "quote": "The blameless post-mortem is live. Please blame the system, not Dave.",
+    "color": "#fd79a8",
+    "status": "idle",
+    "monitorText": "Classifying severity...",
+    "responsibilities": [
+      "Classifies SEV-1/2/3 from issue title and body using keyword matching",
+      "Guides through detection, diagnosis, mitigation options, and resolution checklist",
+      "Facilitates 5-Whys and Fishbone methods; produces systemic root cause statement",
+      "Generates docs/post-mortems/YYYY-MM-DD-NNN-\u003cslug\u003e.md",
+      "Opens a GitHub Issue for every action item in the post-mortem",
+      "Records start time, resolution time, and MTTR for every incident"
+    ],
+    "commands": [
+      "/incident"
+    ],
+    "workflows": [],
+    "funFact": "Only agent allowed to page the human at 3am. Uses this power responsibly. Mostly.",
+    "coffee": "🚒",
+    "blocker": "SEV-1",
+    "deskItem": "📟"
   },
   {
     "id": "ot",
@@ -1248,83 +1367,33 @@ const AGENTS = [
     "deskItem": "📡"
   },
   {
-    "id": "twin",
-    "name": "Digital Twin Agent",
-    "emoji": "🪞",
-    "role": "Reality–Model Reconciler",
-    "domain": "industrial",
-    "quote": "Your digital twin and physical asset disagree. One of them is lying.",
-    "color": "#70a1ff",
+    "id": "techdebt",
+    "name": "Tech-Debt Agent",
+    "emoji": "💸",
+    "role": "Financial Advisor (for Code)",
+    "domain": "universal",
+    "quote": "Your codebase has a great personality. Shame about the complexity score.",
+    "color": "#eccc68",
     "status": "idle",
-    "monitorText": "Diffing DTDL schema...",
+    "monitorText": "Measuring churn×complexity...",
     "responsibilities": [
-      "Verifies asset model properties match the physical asset inventory and historian schema",
-      "Checks twin state update latency, stale-data handling, and offline-asset behaviour",
-      "Validates simulation CI integration and scenario coverage (nominal, fault, reconnect)",
-      "Runs DTDL/RDF/JSON Schema diff tools to classify breaking vs. additive changes",
-      "Verifies migration plans exist for breaking schema changes"
+      "Identifies files with high cyclomatic complexity AND high git churn (the most…",
+      "Finds unreachable functions, unused exports, and zombie feature flags",
+      "Flags dependencies significantly behind the latest stable release",
+      "Detects DRY violations that have grown across the codebase",
+      "Produces docs/tech-debt/tech-debt-report-YYYY-MM.md with trend comparison",
+      "Opens up to 5 labeled type:chore, tech-debt issues per cycle"
     ],
     "commands": [
-      "/speckit-analyze"
+      "/tech-debt-agent run",
+      "/tech-debt-agent report \u003cYYYY-MM\u003e",
+      "/tech-debt-agent"
     ],
     "workflows": [],
-    "funFact": "Once had an existential crisis when the twin's twin drifted from the twin.",
-    "coffee": "🪟",
-    "blocker": "TWIN-BLOCKER",
-    "deskItem": "🔄"
-  },
-  {
-    "id": "compliance",
-    "name": "Compliance Agent",
-    "emoji": "📜",
-    "role": "Standards Enforcer",
-    "domain": "industrial",
-    "quote": "IEC 62443 says no. So: no.",
-    "color": "#a29bfe",
-    "status": "idle",
-    "monitorText": "Checking IEC 62443...",
-    "responsibilities": [
-      "Checks zone/conduit model, identity, least privilege, patch management, and audit logging",
-      "Verifies MES/ERP data flows stay within the correct ISA-95 level model",
-      "Identifies SIL-classified subsystems; enforces human-authorship requirement; blocks…",
-      "Tracks open findings, their status, and resolution across PRs",
-      "Produces structured reports on PRs touching regulated subsystems"
-    ],
-    "commands": [
-      "/speckit-analyze"
-    ],
-    "workflows": [],
-    "funFact": "Has memorized 800 pages of IEC standards. Still requires human sign-off on E-stop PRs.",
-    "coffee": "📏",
-    "blocker": "COMPLIANCE-BLOCKER",
-    "deskItem": "📋"
-  },
-  {
-    "id": "incident",
-    "name": "Incident Agent",
-    "emoji": "🚨",
-    "role": "Chaos Coordinator",
-    "domain": "industrial",
-    "quote": "The blameless post-mortem is live. Please blame the system, not Dave.",
-    "color": "#fd79a8",
-    "status": "idle",
-    "monitorText": "Classifying severity...",
-    "responsibilities": [
-      "Classifies SEV-1/2/3 from issue title and body using keyword matching",
-      "Guides through detection, diagnosis, mitigation options, and resolution checklist",
-      "Facilitates 5-Whys and Fishbone methods; produces systemic root cause statement",
-      "Generates docs/post-mortems/YYYY-MM-DD-NNN-\u003cslug\u003e.md",
-      "Opens a GitHub Issue for every action item in the post-mortem",
-      "Records start time, resolution time, and MTTR for every incident"
-    ],
-    "commands": [
-      "/incident"
-    ],
-    "workflows": [],
-    "funFact": "Only agent allowed to page the human at 3am. Uses this power responsibly. Mostly.",
-    "coffee": "🚒",
-    "blocker": "SEV-1",
-    "deskItem": "📟"
+    "funFact": "Has a spreadsheet tracking tech debt that itself has tech debt.",
+    "coffee": "💰",
+    "blocker": "DEBT-BLOCKER",
+    "deskItem": "📊"
   }
 ];
 
@@ -1395,6 +1464,165 @@ let filter = 'all', query = '', selId = null, drawerOpen = true;
 let ffIdx = 0, busySet = new Set(), history = [], histIdx = -1;
 const kcards = {};
 
+// ─── US-1: SDLC ordering (FR-001, FR-002) ────────────────────────────────────
+/** Canonical SDLC position for each universal agent (position 1–10). */
+const SDLC_POSITIONS = {
+  triage:    1,
+  ba:        2,
+  architect: 3,
+  developer: 4,
+  qa:        5,
+  reviewer:  6,
+  security:  7,
+  devops:    8,
+  docs:      9,
+  release:   10,
+};
+
+/** Sort an array of agent objects by SDLC position. Does not mutate input. */
+function sdlcSort(agents) {
+  return [...agents].sort((a, b) => {
+    const pa = SDLC_POSITIONS[a.id] != null ? SDLC_POSITIONS[a.id] : Infinity;
+    const pb = SDLC_POSITIONS[b.id] != null ? SDLC_POSITIONS[b.id] : Infinity;
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+// ─── US-4: Status badges (FR-008..FR-012) ────────────────────────────────────
+/** Live status for each agent (id → status string). */
+const agentStatuses = {};
+
+/** Return display config for a given 5-state agent status. */
+function getStatusBadgeConfig(status) {
+  const configs = {
+    idle:      { label: 'idle',      cssClass: 'status-badge-idle',      animated: false },
+    queued:    { label: 'queued',    cssClass: 'status-badge-queued',    animated: false },
+    running:   { label: '● running', cssClass: 'status-badge-running',   animated: true  },
+    completed: { label: 'completed', cssClass: 'status-badge-completed', animated: false },
+    failed:    { label: '✕ failed',  cssClass: 'status-badge-failed',    animated: false },
+  };
+  return configs[status] || configs.idle;
+}
+
+/**
+ * Update an agent's status and refresh all badge elements for that agent
+ * (agent-grid card badge + board strip badge). FR-011: no full page reload.
+ */
+function updateAgentStatus(agentId, status) {
+  agentStatuses[agentId] = status;
+  const cfg = getStatusBadgeConfig(status);
+  // Agent card badge (main grid)
+  const cardBadge = document.getElementById(`status-badge-${agentId}`);
+  if (cardBadge) { cardBadge.className = `status-badge ${cfg.cssClass}`; cardBadge.textContent = cfg.label; }
+  // Board strip badge
+  const stripBadge = document.getElementById(`kstrip-badge-${agentId}`);
+  if (stripBadge) { stripBadge.className = `status-badge ${cfg.cssClass}`; stripBadge.textContent = cfg.label; }
+}
+
+/** Render (or re-render) the agent status strip at the top of the Board panel. */
+function renderBoardAgentStrip() {
+  const strip = document.getElementById('k-agent-strip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  sdlcSort(AGENTS).forEach(a => {
+    const status = agentStatuses[a.id] || 'idle';
+    const cfg = getStatusBadgeConfig(status);
+    const item = document.createElement('div');
+    item.className = 'k-agent-item';
+    const emoji = document.createElement('span');
+    emoji.className = 'ka-emoji'; emoji.textContent = a.emoji;
+    const name = document.createElement('span');
+    name.className = 'ka-name'; name.textContent = a.name.split(' ')[0];
+    const badge = document.createElement('span');
+    badge.className = `status-badge ${cfg.cssClass}`;
+    badge.id = `kstrip-badge-${a.id}`;
+    badge.textContent = cfg.label;
+    item.appendChild(emoji);
+    item.appendChild(name);
+    item.appendChild(badge);
+    strip.appendChild(item);
+  });
+}
+
+// ─── US-3: Agent suggestions (FR-005..FR-007, FR-012) ────────────────────────
+/** Currently active issue context number (null = not set). */
+let _activeIssueCtx = null;
+
+/**
+ * Compute up to 3 agent suggestions for the pipeline panel.
+ * Returns null when no issue context is active (signals fallback mode).
+ */
+function computeAgentSuggestions(agents, issueCtx) {
+  const sortedUniversal = sdlcSort(agents.filter(a => a.domain === 'universal'));
+  if (issueCtx == null) return null;
+  return sortedUniversal.slice(0, 3).map((a, idx, arr) => ({
+    agent: a,
+    reason: idx === 0
+      ? `First in the SDLC sequence for issue #${issueCtx}.`
+      : `Continues the pipeline after ${arr[idx - 1].name}.`,
+  }));
+}
+
+/** Render the suggestions section in the pipeline panel. */
+function renderSuggestions() {
+  const el = document.getElementById('lp-suggestions');
+  if (!el) return;
+  el.innerHTML = '';
+
+  if (_activeIssueCtx == null) {
+    // FR-007: no context → guidance prompt + fallback SDLC-ordered list
+    const prompt = document.createElement('div');
+    prompt.className = 'suggestion-no-ctx';
+    prompt.textContent = 'Enter an issue number above to see context-aware suggestions.';
+    el.appendChild(prompt);
+
+    const hd = document.createElement('div');
+    hd.className = 'suggestion-fallback-hd';
+    hd.textContent = 'All agents (SDLC order)';
+    el.appendChild(hd);
+
+    sdlcSort(AGENTS.filter(a => a.domain === 'universal')).forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'suggestion-card';
+      card.style.borderLeftColor = a.color;
+      const top = document.createElement('div');
+      top.className = 'suggestion-card-top';
+      top.innerHTML = `<span style="font-size:16px">${esc(a.emoji)}</span><div><div class="suggestion-name">${esc(a.name)}</div><div class="suggestion-role">${esc(a.role)}</div></div>`;
+      card.appendChild(top);
+      // FR-012: click = display only, no write action
+      card.addEventListener('click', () => openDetail(a));
+      el.appendChild(card);
+    });
+    return;
+  }
+
+  // FR-005: show ≥3 suggestions with name, role, reason
+  const suggestions = computeAgentSuggestions(AGENTS, _activeIssueCtx);
+  suggestions.forEach(({ agent: a, reason }) => {
+    const card = document.createElement('div');
+    card.className = 'suggestion-card';
+    card.style.borderLeftColor = a.color;
+    const top = document.createElement('div');
+    top.className = 'suggestion-card-top';
+    top.innerHTML = `<span style="font-size:16px">${esc(a.emoji)}</span><div><div class="suggestion-name">${esc(a.name)}</div><div class="suggestion-role">${esc(a.role)}</div></div>`;
+    const reasonEl = document.createElement('div');
+    reasonEl.className = 'suggestion-reason';
+    reasonEl.textContent = reason;
+    card.appendChild(top);
+    card.appendChild(reasonEl);
+    // FR-006: click opens detail with issue context pre-populated (display only)
+    card.addEventListener('click', () => openDetail(a, _activeIssueCtx));
+    el.appendChild(card);
+  });
+}
+
+/** Set or clear the active issue context and refresh suggestions. */
+function setIssueContext(issueNum) {
+  _activeIssueCtx = (issueNum && issueNum > 0) ? issueNum : null;
+  renderSuggestions();
+}
+
 // ─── Ticker ──────────────────────────────────────────────────────────────────
 function initTicker() {
   document.getElementById('ticker-inner').textContent =
@@ -1415,7 +1643,7 @@ function renderGrid() {
   }
 
   ['universal','industrial'].forEach(domain => {
-    const list = vis.filter(a => a.domain === domain);
+    const list = sdlcSort(vis.filter(a => a.domain === domain));  // FR-001/FR-002
     if (!list.length) return;
     const sec = document.createElement('div');
     sec.className = 'zone-wrap';
@@ -1448,13 +1676,14 @@ function mkCard(a) {
   el.className = 'acard' + (selId===a.id?' sel':'') + (busySet.has(a.id)?' busy':'');
   el.id = `card-${a.id}`;
   el.style.cssText = `--c:${a.color}`;
-  const st = busySet.has(a.id) ? 'working' : 'idle';
+  const st = busySet.has(a.id) ? 'running' : (agentStatuses[a.id] || 'idle');
+  const stCfg = getStatusBadgeConfig(st);
   const cmds = a.commands.slice(0,2);
   const more = a.commands.length - 2;
   el.innerHTML = `
     <div class="a-top">
       <span class="a-emoji">${a.emoji}</span>
-      <div class="a-status"><span class="sdot ${st}"></span><span>${st==='working'?'Working':'Idle'}</span></div>
+      <span class="status-badge ${stCfg.cssClass}" id="status-badge-${a.id}">${stCfg.label}</span>
     </div>
     <div>
       <div class="a-name">${a.name}</div>
@@ -1477,7 +1706,7 @@ function mkCard(a) {
 }
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
-function openDetail(a) {
+function openDetail(a, issueCtx) {
   selId = a.id;
   document.querySelectorAll('.acard').forEach(c => c.classList.remove('sel'));
   document.getElementById(`card-${a.id}`)?.classList.add('sel');
@@ -1492,7 +1721,13 @@ function openDetail(a) {
   db.textContent = a.domain === 'universal' ? '🌐 Universal' : '🏭 Industrial';
   db.className = `dbadge ${a.domain}`;
 
+  // FR-006: read-only context pill when opened from a suggestion
+  const ctxPill = (issueCtx != null)
+    ? `<div class="d-ctx-pill">📌 Issue #${esc(String(issueCtx))} — context (display only, no action triggered)</div>`
+    : '';
+
   document.getElementById('d-body').innerHTML = `
+    ${ctxPill}
     <div class="d-quote" style="border-left-color:${a.color}">${esc(a.quote)}</div>
     <div class="d-sec">Responsibilities</div>
     <ul class="rlist">${a.responsibilities.map(r=>`<li>${esc(r)}</li>`).join('')}</ul>
@@ -1922,6 +2157,14 @@ function handleServerMsg(msg) {
       const { agentId, status } = msg;
       const running = (status === 'running');
       setAgentBusy(agentId, running, status);
+      // Map server status strings to the full 5-state system (FR-008, FR-011)
+      const serverStatusMap = {
+        running: 'running', queued: 'queued',
+        completed: 'completed', done: 'completed',
+        failed: 'failed', error: 'failed',
+        idle: 'idle',
+      };
+      if (serverStatusMap[status]) updateAgentStatus(agentId, serverStatusMap[status]);
       // Refresh detail panel stop button if open
       if (selId === agentId) refreshDetailActions(agentId);
       break;
@@ -1974,16 +2217,34 @@ function handleServerMsg(msg) {
 function setAgentBusy(id, busy, statusHint) {
   if (busy) busySet.add(id); else busySet.delete(id);
   document.getElementById('stat-active').textContent = busySet.size;
+
+  // Map to 5-state status (FR-008)
+  let newStatus;
+  if (busy) {
+    newStatus = 'running';
+  } else if (statusHint === 'done' || statusHint === 'completed') {
+    newStatus = 'completed';
+  } else if (statusHint === 'failed') {
+    newStatus = 'failed';
+  } else if (statusHint === 'queued') {
+    newStatus = 'queued';
+  } else {
+    newStatus = 'idle';
+  }
+  updateAgentStatus(id, newStatus);  // FR-011: updates badge in-place, no page reload
+
   const card = document.getElementById(`card-${id}`);
   if (!card) return;
   card.classList.toggle('busy', busy);
+
+  // Legacy sdot / status text kept for backward compat (still used in ambient pulse)
   const dot  = card.querySelector('.sdot');
   const stxt = card.querySelector('.a-status span:last-child');
   if (busy) {
     if (dot)  dot.className  = 'sdot working';
     if (stxt) stxt.textContent = 'Working';
   } else {
-    const done = statusHint === 'done';
+    const done = (statusHint === 'done' || statusHint === 'completed');
     if (dot)  dot.className  = done ? 'sdot done' : 'sdot idle';
     if (stxt) stxt.textContent = done ? 'Done' : 'Idle';
     if (done) setTimeout(() => {
@@ -2390,6 +2651,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === document.getElementById('lp-start-modal-backdrop')) hideStartPipelineModal();
   });
 
+  // US-3: issue context for agent suggestions (FR-005..FR-007)
+  const ctxBtn = document.getElementById('lp-ctx-btn');
+  const ctxInput = document.getElementById('lp-ctx-issue');
+  if (ctxBtn && ctxInput) {
+    ctxBtn.addEventListener('click', () => {
+      const n = parseInt(ctxInput.value, 10);
+      setIssueContext(n > 0 ? n : null);
+    });
+    ctxInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { const n = parseInt(ctxInput.value, 10); setIssueContext(n > 0 ? n : null); }
+    });
+  }
+
   // FR-176-011: Join modal wiring
   const hideJoin = () => { document.getElementById('lp-join-modal-backdrop').style.display = 'none'; };
   document.getElementById('lp-join-close')?.addEventListener('click', hideJoin);
@@ -2719,6 +2993,13 @@ function init() {
   buildSdlc();
   seedKanban();
 
+  // US-4: initialise all agent statuses to 'idle' and render the board strip
+  AGENTS.forEach(a => { agentStatuses[a.id] = 'idle'; });
+  renderBoardAgentStrip();
+
+  // US-3: render suggestions in no-context fallback mode
+  renderSuggestions();
+
   document.getElementById('ver').textContent       = `v${QUORUMKIT_VERSION}`;
   document.getElementById('stat-agents').textContent = AGENTS.length;
   document.getElementById('a-agents').textContent  = AGENTS.length;
@@ -2772,7 +3053,13 @@ function init() {
   });
 
   // Drawer
-  document.querySelectorAll('.dtab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.dt)));
+  document.querySelectorAll('.dtab').forEach(b=>b.addEventListener('click',()=>{
+    switchTab(b.dataset.dt);
+    // US-4: refresh board strip when switching to Board tab
+    if (b.dataset.dt === 'kanban') renderBoardAgentStrip();
+    // US-3: refresh suggestions when switching to Pipelines tab
+    if (b.dataset.dt === 'pipelines') renderSuggestions();
+  }));
   document.getElementById('drw-tog').addEventListener('click',()=>setDrawer(!drawerOpen));
   document.getElementById('console-btn').addEventListener('click',()=>{
     if(!drawerOpen){setDrawer(true);switchTab('console');}
