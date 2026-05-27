@@ -131,7 +131,9 @@ button { cursor: pointer; font-family: var(--font); }
 }
 .fbtn:hover { color: var(--text); border-color: var(--text3); }
 .fbtn.on { background: var(--surface2); border-color: var(--blue); color: var(--blue); }
-.fbtn.on.ind { border-color: var(--amber); color: var(--amber); }
+.fbtn.on.ind  { border-color: var(--amber); color: var(--amber); }
+.fbtn.on.sdlc { border-color: var(--cyan);  color: var(--cyan);  }
+.fbtn.on.auto { border-color: var(--green); color: var(--green); }
 
 #count-lbl { margin-left: auto; font-size: 12px; color: var(--textMute); }
 
@@ -719,9 +721,10 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
   <div id="toolbar">
     <input id="search" type="text" placeholder="Search agents…" autocomplete="off" />
     <div class="filters">
-      <button class="fbtn on"  data-f="all">All agents</button>
-      <button class="fbtn"     data-f="universal">🌐 Universal</button>
-      <button class="fbtn ind" data-f="industrial">🏭 Industrial</button>
+      <button class="fbtn on"   data-f="all" >All</button>
+      <button class="fbtn sdlc" data-f="sdlc">🔄 SDLC</button>
+      <button class="fbtn auto" data-f="auto">⚡ Automation</button>
+      <button class="fbtn ind"  data-f="ind" >🏭 Industrial</button>
     </div>
     <span id="count-lbl"></span>
   </div>
@@ -1597,7 +1600,6 @@ function renderSuggestions() {
 /** Set or clear the active issue context and refresh suggestions. */
 function setIssueContext(issueNum) {
   _activeIssueCtx = (issueNum && issueNum > 0) ? issueNum : null;
-  renderSuggestions();
 }
 
 // ─── Ticker ──────────────────────────────────────────────────────────────────
@@ -1619,11 +1621,9 @@ function renderGrid() {
     return;
   }
 
-  const SDLC_IDS = new Set(['ba','architect','developer','qa','reviewer','security','devops','docs','release']);
-  const AUTO_IDS = new Set(['triage','techdebt']);
   const GROUPS = [
-    { key: 'sdlc', cls: 'sdlc', icon: '🔄', label: 'SDLC Pipeline',       filter: a => a.domain === 'universal' && SDLC_IDS.has(a.id) },
-    { key: 'auto', cls: 'auto', icon: '⚡',   label: 'Automation & Support', filter: a => a.domain === 'universal' && AUTO_IDS.has(a.id) },
+    { key: 'sdlc', cls: 'sdlc', icon: '🔄', label: 'SDLC Pipeline',       filter: a => a.domain === 'universal' && _SDLC_IDS.has(a.id) },
+    { key: 'auto', cls: 'auto', icon: '⚡',   label: 'Automation & Support', filter: a => a.domain === 'universal' && _AUTO_IDS.has(a.id) },
     { key: 'ind',  cls: 'ind',  icon: '🏭',  label: 'Industrial',           filter: a => a.domain === 'industrial' },
   ];
   GROUPS.forEach(g => {
@@ -1644,8 +1644,14 @@ function renderGrid() {
   });
 }
 
+const _SDLC_IDS = new Set(['ba','architect','developer','qa','reviewer','security','devops','docs','release']);
+const _AUTO_IDS = new Set(['triage','techdebt']);
 function matchFilter(a) {
-  if (filter !== 'all' && a.domain !== filter) return false;
+  if (filter !== 'all') {
+    if (filter === 'sdlc' && !(a.domain === 'universal' && _SDLC_IDS.has(a.id))) return false;
+    if (filter === 'auto' && !(a.domain === 'universal' && _AUTO_IDS.has(a.id)))  return false;
+    if (filter === 'ind'  && a.domain !== 'industrial')                           return false;
+  }
   if (query) {
     const q = query.toLowerCase();
     return a.name.toLowerCase().includes(q) || a.role.toLowerCase().includes(q) ||
@@ -2575,22 +2581,34 @@ function togglePipelineExpand(card, p) {
   body.style.display = isOpen ? 'none' : 'flex';
   chevron.textContent = isOpen ? '▶' : '▼';
   if (!isOpen) {
-    // Set active issue context and render suggestions
     setIssueContext(p.issueNumber);
     const sugDiv = body.querySelector('.suggestions-list');
-    if (sugDiv) {
-      const suggestions = computeAgentSuggestions(AGENTS, { issueNumber: p.issueNumber });
-      if (suggestions) {
-        sugDiv.innerHTML = '';
+    if (sugDiv && !sugDiv.dataset.rendered) {
+      sugDiv.dataset.rendered = '1';
+      const suggestions = computeAgentSuggestions(AGENTS, p.issueNumber);
+      if (suggestions && suggestions.length) {
+        const hd = document.createElement('div');
+        hd.style.cssText = 'font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--textMute);margin-bottom:4px';
+        hd.textContent = 'Suggested next agents';
+        sugDiv.appendChild(hd);
         suggestions.forEach(s => {
           const c = document.createElement('div');
           c.className = 'suggestion-card';
-          c.innerHTML = `<span class="suggestion-name">${s.agent.emoji} ${s.agent.name}</span><span class="suggestion-role">${s.agent.role}</span><span class="suggestion-reason">${s.reason}</span>`;
-          c.addEventListener('click', () => openDetail(s.agent, p.issueNumber));
+          c.style.cssText = 'display:flex;align-items:flex-start;gap:8px;justify-content:space-between';
+          const info = document.createElement('div');
+          info.style.cssText = 'flex:1;min-width:0';
+          info.innerHTML = `<div class="suggestion-name">${s.agent.emoji} ${s.agent.name}</div><div class="suggestion-role">${s.agent.role}</div><div class="suggestion-reason">${s.reason}</div>`;
+          const btn = document.createElement('button');
+          btn.className = 'lp-btn lp-btn-join';
+          btn.style.cssText = 'flex-shrink:0;margin-top:2px';
+          btn.textContent = '▶ Invoke';
+          btn.addEventListener('click', e => { e.stopPropagation(); setIssueContext(p.issueNumber); invokeAgent(s.agent.id); });
+          c.appendChild(info);
+          c.appendChild(btn);
           sugDiv.appendChild(c);
         });
       } else {
-        sugDiv.innerHTML = '<span class="suggestion-no-ctx" style="font-size:11px;color:var(--textMute)">No agent suggestions available.</span>';
+        sugDiv.innerHTML = '<div class="suggestion-no-ctx">No agent suggestions available.</div>';
       }
     }
   }
