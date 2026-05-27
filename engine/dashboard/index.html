@@ -580,7 +580,6 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .lp-agent-chip:hover { background:var(--surface3);border-color:var(--blue); }
 .lp-agent-chip .chip-emoji { font-size:13px; }
 .lp-agent-chip .chip-name { font-size:10px;color:var(--text2); }
-.lp-agent-chip .chip-invoke { font-size:9px;color:var(--blue);margin-left:2px; }
 #lp-ctx-issue {
   width: 72px; background: var(--surface3); border: 1px solid var(--border);
   border-radius: var(--r-xs); color: var(--text); font-size: 11px;
@@ -2611,17 +2610,11 @@ function togglePipelineExpand(card, p) {
         suggestions.forEach(s => {
           const c = document.createElement('div');
           c.className = 'suggestion-card';
-          c.style.cssText = 'display:flex;align-items:flex-start;gap:8px;justify-content:space-between';
+          c.addEventListener('click', e => { e.stopPropagation(); openDetail(s.agent, p.issueNumber); });
           const info = document.createElement('div');
           info.style.cssText = 'flex:1;min-width:0';
-          info.innerHTML = `<div class="suggestion-name">${s.agent.emoji} ${s.agent.name}</div><div class="suggestion-role">${s.agent.role}</div><div class="suggestion-reason">${s.reason}</div>`;
-          const btn = document.createElement('button');
-          btn.className = 'lp-btn lp-btn-join';
-          btn.style.cssText = 'flex-shrink:0;margin-top:2px';
-          btn.textContent = '▶ Invoke';
-          btn.addEventListener('click', e => { e.stopPropagation(); setIssueContext(p.issueNumber); invokeAgent(s.agent.id); });
+          info.innerHTML = `<div class="suggestion-name">${esc(s.agent.emoji)} ${esc(s.agent.name)}</div><div class="suggestion-role">${esc(s.agent.role)}</div><div class="suggestion-reason">${esc(s.reason)}</div>`;
           c.appendChild(info);
-          c.appendChild(btn);
           sugDiv.appendChild(c);
         });
       } else {
@@ -2638,8 +2631,8 @@ function togglePipelineExpand(card, p) {
         const chip = document.createElement('div');
         chip.className = 'lp-agent-chip';
         chip.title = a.role;
-        chip.innerHTML = `<span class="chip-emoji">${a.emoji}</span><span class="chip-name">${a.name}</span><span class="chip-invoke">▶</span>`;
-        chip.addEventListener('click', e => { e.stopPropagation(); setIssueContext(p.issueNumber); invokeAgent(a.id); });
+        chip.innerHTML = `<span class="chip-emoji">${esc(a.emoji)}</span><span class="chip-name">${esc(a.name)}</span>`;
+        chip.addEventListener('click', e => { e.stopPropagation(); openDetail(a, p.issueNumber); });
         chips.appendChild(chip);
       });
       sugDiv.appendChild(chips);
