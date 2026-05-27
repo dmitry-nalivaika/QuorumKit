@@ -574,6 +574,13 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .suggestion-fallback-hd { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--textMute); margin: 8px 0 5px; }
 .lp-suggestions-wrap { display: flex; flex-direction: column; gap: 4px; }
 .lp-ctx-row { display: flex; align-items: center; gap: 6px; }
+.lp-all-agents-hd { font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--textMute);margin:8px 0 4px;padding-top:8px;border-top:1px solid var(--borderMute); }
+.lp-agent-chips { display:flex;flex-wrap:wrap;gap:4px; }
+.lp-agent-chip { display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-xs);padding:3px 8px;cursor:pointer;transition:border-color .15s,background .15s; }
+.lp-agent-chip:hover { background:var(--surface3);border-color:var(--blue); }
+.lp-agent-chip .chip-emoji { font-size:13px; }
+.lp-agent-chip .chip-name { font-size:10px;color:var(--text2); }
+.lp-agent-chip .chip-invoke { font-size:9px;color:var(--blue);margin-left:2px; }
 #lp-ctx-issue {
   width: 72px; background: var(--surface3); border: 1px solid var(--border);
   border-radius: var(--r-xs); color: var(--text); font-size: 11px;
@@ -2611,6 +2618,22 @@ function togglePipelineExpand(card, p) {
       } else {
         sugDiv.innerHTML = '<div class="suggestion-no-ctx">No agent suggestions available.</div>';
       }
+      // ── All agents (compact chips) ──────────────────────────────────────
+      const allHd = document.createElement('div');
+      allHd.className = 'lp-all-agents-hd';
+      allHd.textContent = 'All agents';
+      sugDiv.appendChild(allHd);
+      const chips = document.createElement('div');
+      chips.className = 'lp-agent-chips';
+      AGENTS.forEach(a => {
+        const chip = document.createElement('div');
+        chip.className = 'lp-agent-chip';
+        chip.title = a.role;
+        chip.innerHTML = `<span class="chip-emoji">${a.emoji}</span><span class="chip-name">${a.name}</span><span class="chip-invoke">▶</span>`;
+        chip.addEventListener('click', e => { e.stopPropagation(); setIssueContext(p.issueNumber); invokeAgent(a.id); });
+        chips.appendChild(chip);
+      });
+      sugDiv.appendChild(chips);
     }
   }
 }
