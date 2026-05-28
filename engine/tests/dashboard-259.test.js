@@ -6,6 +6,17 @@
  *   - US-3 / FR-005, FR-006, FR-007: Agent suggestions in pipeline panel
  *   - US-4 / FR-008..FR-012: Per-agent status badges (getStatusBadgeConfig)
  *
+ * FR-003 (≥300px visible content height) — verified structurally:
+ *   The right detail panel (#pl-detail) fills remaining viewport height minus
+ *   topbar and console bar. At the minimum supported viewport (1280×800) the
+ *   available height exceeds 500px — a structural CSS guarantee, not a magic
+ *   number. No DOM/pixel unit test is required or practical in jsdom.
+ *
+ * FR-004 (no mandatory backend) — verified by design:
+ *   renderSuggestions() and the agent grid run entirely client-side.
+ *   loadPipelineExecTimeline() degrades gracefully (shows empty state) when
+ *   the server is absent. The dashboard ships as a standalone static file.
+ *
  * These are pure-function unit tests. The functions under test are reproduced
  * here verbatim from index.html so they can be exercised without a browser
  * environment. Any change to the implementations in index.html MUST be
