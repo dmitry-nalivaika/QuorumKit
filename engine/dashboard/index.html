@@ -103,6 +103,35 @@ button { cursor: pointer; font-family: var(--font); }
   transition: right 0.3s cubic-bezier(.4,0,.2,1), bottom 0.3s cubic-bezier(.4,0,.2,1);
 }
 #workspace.drawer-closed { right: 0; }
+
+/* ─── Main view navigation (US-1 FR-001, US-4 FR-009) ─────────────────────── */
+#main-nav {
+  display: flex; gap: 0; padding: 0 16px; border-bottom: 1px solid var(--borderMute);
+  background: var(--bg); flex-shrink: 0;
+}
+.mnav-tab {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--text3); font-size: 12px; font-weight: 600;
+  padding: 8px 14px; cursor: pointer; margin-bottom: -1px;
+  transition: color .15s, border-color .15s; font-family: var(--font);
+  display: flex; align-items: center; gap: 5px;
+}
+.mnav-tab:hover { color: var(--text); }
+.mnav-tab.on { color: var(--blue); border-bottom-color: var(--blue); }
+
+/* ─── Pipelines main view (US-1) ─────────────────────────────────────────── */
+#pm-view {
+  display: flex; flex-direction: column; flex: 1; overflow: hidden;
+}
+
+/* Default state: Pipelines view active — show pm-view, hide agents toolbar/grid */
+#toolbar { display: none; }
+#office  { display: none; }
+
+/* Agents view active */
+#workspace.view-agents #pm-view  { display: none; }
+#workspace.view-agents #toolbar  { display: flex; }
+#workspace.view-agents #office   { display: block; }
 #workspace.console-closed { bottom: 0; }
 
 /* ─── Toolbar ─────────────────────────────────────────────────────────────── */
@@ -726,6 +755,34 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 </header>
 
 <div id="workspace">
+  <!-- ── Main view navigation (FR-001, FR-009) ── -->
+  <div id="main-nav">
+    <button class="mnav-tab on" data-mv="pipelines">🌿 Pipelines</button>
+    <button class="mnav-tab"    data-mv="agents">🤖 Agents</button>
+  </div>
+
+  <!-- ── Pipelines main view (US-1, US-3) ── -->
+  <div id="pm-view">
+    <div id="lpanel">
+      <!-- Issue context + next-agent suggestions (US-3 FR-005..FR-008) -->
+      <div class="lp-toolbar">
+        <span class="lp-title">🌿 Local Pipelines</span>
+        <button class="pipe-btn" id="lp-start-btn">＋ Start</button>
+        <button class="pipe-btn pipe-btn-ghost" id="lp-refresh-btn" title="Refresh list">↺</button>
+      </div>
+      <div class="lp-suggestions-wrap">
+        <div class="lp-ctx-row">
+          <span style="font-size:11px;color:var(--text3);font-weight:600">Issue context:</span>
+          <input id="lp-ctx-issue" type="number" placeholder="e.g. 42" min="1" autocomplete="off" />
+          <button class="pipe-btn" id="lp-ctx-btn">Set</button>
+        </div>
+        <div id="lp-suggestions"></div>
+      </div>
+      <div id="lp-list" class="lp-list"><span class="lp-empty">Loading…</span></div>
+    </div>
+  </div>
+
+  <!-- ── Agents main view (US-4) — toolbar + grid ── -->
   <div id="toolbar">
     <input id="search" type="text" placeholder="Search agents…" autocomplete="off" />
     <div class="filters">
@@ -763,7 +820,6 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
   <div class="drw-hd">
     <div class="dtabs">
       <button class="dtab on" data-dt="kanban">📋 Board</button>
-      <button class="dtab"    data-dt="pipelines">🌿 Pipelines</button>
       <button class="dtab"    data-dt="timeline">📊 Timeline</button>
     </div>
     <div class="drw-ctrls">
@@ -778,19 +834,6 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
       <div class="kcol ktodo"><div class="kchd">📥 Queue</div><div id="k-todo"></div></div>
       <div class="kcol kwip" ><div class="kchd">⚡ In Progress</div><div id="k-wip"></div></div>
       <div class="kcol kdone"><div class="kchd">✅ Done</div><div id="k-done"></div></div>
-    </div>
-  </div>
-
-  <!-- ── Pipelines panel (local worktrees) ── -->
-  <div class="dpanel" id="pipelines-panel">
-    <div id="lpanel">
-      <!-- Worktrees toolbar -->
-      <div class="lp-toolbar">
-        <span class="lp-title">🌿 Local Pipelines</span>
-        <button class="pipe-btn" id="lp-start-btn">＋ Start</button>
-        <button class="pipe-btn pipe-btn-ghost" id="lp-refresh-btn" title="Refresh list">↺</button>
-      </div>
-      <div id="lp-list" class="lp-list"><span class="lp-empty">Loading…</span></div>
     </div>
   </div>
 
@@ -1786,6 +1829,27 @@ function switchTab(id) {
   if (!drawerOpen) setDrawer(true);
 }
 
+// ─── Main view switching (US-1 FR-001, US-4 FR-009) ──────────────────────────
+/**
+ * Switch between the two primary views: 'pipelines' (default) and 'agents'.
+ * Pipelines view shows the local-pipeline list + next-agent suggestions.
+ * Agents view shows the full agent card grid with SDLC ordering.
+ */
+function switchMainView(view) {
+  const ws = document.getElementById('workspace');
+  ws.classList.toggle('view-agents', view === 'agents');
+  document.querySelectorAll('.mnav-tab').forEach(b =>
+    b.classList.toggle('on', b.dataset.mv === view));
+  if (view === 'pipelines') {
+    loadLocalPipelines();
+    renderSuggestions();
+  }
+  if (view === 'agents') {
+    renderGrid();
+    renderBoardAgentStrip();
+  }
+}
+
 // ─── Invocation ───────────────────────────────────────────────────────────────
 let _pendingInvoke = null;
 
@@ -2336,9 +2400,9 @@ function upsertPipelineRun(payload) {
   const { runId, pipeline, status, step, currentStepIndex, steps, updatedAt } = payload;
   if (!runId) return;
 
-  // Switch to pipelines tab automatically on first live event
-  const panel = document.getElementById('pipelines-panel');
-  if (panel && !panel.classList.contains('on')) switchTab('pipelines');
+  // Switch to pipelines main view automatically on first live event (FR-001)
+  const ws = document.getElementById('workspace');
+  if (ws && ws.classList.contains('view-agents')) switchMainView('pipelines');
 
   const total  = Array.isArray(steps) ? steps.length : 0;
   const idx    = typeof currentStepIndex === 'number' ? currentStepIndex + 1 : (total ? 1 : 0);
@@ -2581,8 +2645,20 @@ async function loadLocalPipelines() {
       const joinBtn = document.createElement('button');
       joinBtn.className = 'lp-btn lp-btn-join'; joinBtn.textContent = '⎇ Join';
       joinBtn.addEventListener('click', e => { e.stopPropagation(); joinLocalPipeline(p.issueNumber, joinBtn); });
+      // US-2 FR-003: Timeline sub-view — opens Timeline drawer tab for this pipeline
+      const tlBtn = document.createElement('button');
+      tlBtn.className = 'lp-btn lp-btn-join'; tlBtn.textContent = '📊 Timeline';
+      tlBtn.title = `View execution timeline for issue #${p.issueNumber}`;
+      tlBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const tlInput = document.getElementById('tl-issue-input');
+        if (tlInput) { tlInput.value = String(p.issueNumber); }
+        switchTab('timeline');
+        document.getElementById('tl-load-btn')?.click();
+      });
       actions.appendChild(stopBtn);
       actions.appendChild(joinBtn);
+      actions.appendChild(tlBtn);
       body.appendChild(actions);
 
       card.appendChild(body);
@@ -3113,7 +3189,7 @@ function init() {
   });
   document.getElementById('cfg-tool').addEventListener('change', toggleCustomRow);
 
-  // Search + filter
+  // Search + filter (Agents view)
   document.getElementById('search').addEventListener('input',e=>{query=e.target.value;renderGrid();});
   document.querySelectorAll('.fbtn').forEach(b=>{
     b.addEventListener('click',()=>{
@@ -3124,11 +3200,24 @@ function init() {
     });
   });
 
+  // Main view tabs (US-1 FR-001, US-4 FR-009)
+  document.querySelectorAll('.mnav-tab').forEach(b =>
+    b.addEventListener('click', () => switchMainView(b.dataset.mv)));
+
+  // US-3: issue context input wiring (FR-005..FR-008)
+  document.getElementById('lp-ctx-btn')?.addEventListener('click', () => {
+    const raw = parseInt(document.getElementById('lp-ctx-issue').value.trim(), 10);
+    setIssueContext(raw || null);
+    renderSuggestions();
+  });
+  document.getElementById('lp-ctx-issue')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('lp-ctx-btn')?.click();
+  });
+
   // Drawer
   document.querySelectorAll('.dtab').forEach(b=>b.addEventListener('click',()=>{
     switchTab(b.dataset.dt);
     if (b.dataset.dt === 'kanban') renderBoardAgentStrip();
-    if (b.dataset.dt === 'pipelines') loadLocalPipelines();
   }));
   document.getElementById('drw-tog').addEventListener('click',()=>setDrawer(!drawerOpen));
   document.getElementById('console-btn').addEventListener('click',()=>setConsole(!consoleOpen));
@@ -3180,7 +3269,10 @@ function init() {
     }
   });
 
-  // Boot
+  // Boot: default to Pipelines view (FR-001)
+  loadLocalPipelines();
+  renderSuggestions();
+
   clog('system','🏭  QuorumKit Dark Factory — Agent Orchestrator');
   clog('system',`v${QUORUMKIT_VERSION}  —  ${AGENTS.length} agents`);
   clog('success','✓  All 13 quality gates passing');
