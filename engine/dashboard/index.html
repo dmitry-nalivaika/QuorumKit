@@ -2682,63 +2682,27 @@ async function loadLocalPipelines() {
       }
 
       const chevron = document.createElement('span');
-      chevron.className = 'pipe-chevron';
-      chevron.style.cssText = 'margin-left:auto;color:var(--textMute);font-size:10px';
-      chevron.textContent = '▶';
-      card.dataset.chevron = 'chevron'; // placeholder, set in expand
+      // Action buttons in header (always visible in split-panel layout)
+      const hdrActions = document.createElement('div');
+      hdrActions.className = 'lp-actions';
+      hdrActions.style.cssText = 'margin-left:auto;display:flex;gap:4px;align-items:center';
+      const stopBtn = document.createElement('button');
+      stopBtn.className = 'lp-btn lp-btn-stop'; stopBtn.textContent = '■ Stop';
+      stopBtn.title = `Stop pipeline #${p.issueNumber}`;
+      stopBtn.addEventListener('click', e => { e.stopPropagation(); stopLocalPipeline(p.issueNumber, p.runningAgent, stopBtn); });
+      const joinBtn = document.createElement('button');
+      joinBtn.className = 'lp-btn lp-btn-join'; joinBtn.textContent = '⎇ Join';
+      joinBtn.title = `Open worktree for pipeline #${p.issueNumber}`;
+      joinBtn.addEventListener('click', e => { e.stopPropagation(); joinLocalPipeline(p.issueNumber, joinBtn); });
+      hdrActions.appendChild(stopBtn);
+      hdrActions.appendChild(joinBtn);
 
       hdr.appendChild(num);
       hdr.appendChild(branch);
       hdr.appendChild(modeBadge);
-      hdr.appendChild(chevron);
+      hdr.appendChild(hdrActions);
       card.appendChild(hdr);
-
-      // Collapsible body (hidden by default)
-      const body = document.createElement('div');
-      body.style.cssText = 'display:none;flex-direction:column;gap:6px;padding:8px 10px;background:var(--surface);border-top:1px solid var(--borderMute)';
-
-      // Path + age
-      const meta = document.createElement('div');
-      meta.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;font-size:10px;color:var(--text3)';
-      meta.textContent = p.path;
-      if (p.createdAt) meta.textContent += `  ·  Created ${relativeTime(p.createdAt)}`;
-      body.appendChild(meta);
-
-      // Agent suggestions for this pipeline's issue
-      const sugDiv = document.createElement('div');
-      sugDiv.className = 'suggestions-list';
-      sugDiv.dataset.issueNum = p.issueNumber;
-      body.appendChild(sugDiv);
-
-      // Actions
-      const actions = document.createElement('div');
-      actions.className = 'lp-actions';
-      const stopBtn = document.createElement('button');
-      stopBtn.className = 'lp-btn lp-btn-stop'; stopBtn.textContent = '■ Stop';
-      stopBtn.addEventListener('click', e => { e.stopPropagation(); stopLocalPipeline(p.issueNumber, p.runningAgent, stopBtn); });
-      const joinBtn = document.createElement('button');
-      joinBtn.className = 'lp-btn lp-btn-join'; joinBtn.textContent = '⎇ Join';
-      joinBtn.addEventListener('click', e => { e.stopPropagation(); joinLocalPipeline(p.issueNumber, joinBtn); });
-      // US-2 FR-003: Timeline sub-view — opens Timeline drawer tab for this pipeline
-      const tlBtn = document.createElement('button');
-      tlBtn.className = 'lp-btn lp-btn-join'; tlBtn.textContent = '📊 Timeline';
-      tlBtn.title = `View execution timeline for issue #${p.issueNumber}`;
-      tlBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        const tlInput = document.getElementById('tl-issue-input');
-        if (tlInput) { tlInput.value = String(p.issueNumber); }
-        switchTab('timeline');
-        document.getElementById('tl-load-btn')?.click();
-      });
-      actions.appendChild(stopBtn);
-      actions.appendChild(joinBtn);
-      actions.appendChild(tlBtn);
-      body.appendChild(actions);
-
-      card.appendChild(body);
       listEl.appendChild(card);
-      // Restore expanded state: use openPipelineDetail so the right panel re-opens
-      if (openIssues.has(p.issueNumber)) togglePipelineExpand(card, p);
       // Restore right-panel selection after reload
       if (restoredSelected === p.issueNumber) openPipelineDetail(card, p);
     }
