@@ -2867,19 +2867,28 @@ async function loadPipelineExecTimeline(issueNumber) {
     const res  = await fetch(`${SERVER}/api/timeline/${issueNumber}`);
     const data = await res.json().catch(() => null);
     if (!res.ok || !data || !data.events?.length) {
-      el.innerHTML = '<span class="lp-empty">No agents have run yet for this pipeline.</span>';
+      const total = data?.meta?.totalComments;
+      const hint  = total
+        ? `${total} comment${total !== 1 ? 's' : ''} exist but contain no agent-footprint markers yet.`
+        : 'No agents have run yet for this pipeline.';
+      el.innerHTML = `<span class="lp-empty">${hint}</span>`;
       return;
     }
     el.innerHTML = '';
     for (const ev of data.events) {
       const row = document.createElement('div');
-      const statusCls = ev.eventType === 'agent-complete' ? 'pee-complete'
-        : ev.eventType === 'agent-fail' ? 'pee-failed'
-        : ev.eventType === 'agent-start' ? 'pee-running' : '';
+      const statusCls = ev.eventType === 'agent-complete' || ev.eventType === 'complete' ? 'pee-complete'
+        : ev.eventType === 'agent-fail'    || ev.eventType === 'fail'     ? 'pee-failed'
+        : ev.eventType === 'agent-start'   || ev.eventType === 'start'    ? 'pee-running'
+        : ev.eventType === 'pipeline-start'  ? 'pee-running'
+        : ev.eventType === 'pipeline-stop'   ? 'pee-complete'
+        : ev.eventType === 'pipeline-fail'   ? 'pee-failed'
+        : '';
       row.className = `pl-exec-event ${statusCls}`;
       const name = document.createElement('div');
       name.className = 'pl-exec-event-name';
-      name.textContent = agentLabel(ev.agent || '—');
+      const agentDisplay = ev.source === 'pipeline' ? '🔧 Pipeline' : agentLabel(ev.agent || '—');
+      name.textContent = agentDisplay;
       const meta = document.createElement('div');
       meta.className = 'pl-exec-event-meta';
       meta.textContent = [ev.eventType, relativeTime(ev.timestamp)].filter(Boolean).join(' · ');

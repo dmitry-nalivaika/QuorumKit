@@ -75,6 +75,14 @@ const PLAIN_COMMENT = {
   user: { login: 'human-user' },
 };
 
+const PIPELINE_START_COMMENT = {
+  id: 4,
+  html_url: 'https://github.com/test-owner/test-repo/issues/42#issuecomment-4',
+  body: `<!-- pipeline: started -->\n**Pipeline started** for issue #42\n\n- **Mode:** isolated\n- **Branch:** \`42-my-feature\`\n- **Timestamp:** \`2026-05-25T09:00:00Z\``,
+  created_at: '2026-05-25T09:00:00Z',
+  user: { login: 'dmitry-nalivaika' },
+};
+
 // ─── Server lifecycle ─────────────────────────────────────────────────────────
 let serverProcess;
 let port;
@@ -82,7 +90,7 @@ let ghStubDir;
 
 beforeAll(async () => {
   port = await getFreePort();
-  ghStubDir = makeGhStub([APM_MSG_COMMENT, FOOTPRINT_START_COMMENT, PLAIN_COMMENT]);
+  ghStubDir = makeGhStub([APM_MSG_COMMENT, FOOTPRINT_START_COMMENT, PLAIN_COMMENT, PIPELINE_START_COMMENT]);
 
   serverProcess = spawn(
     process.execPath,
@@ -161,17 +169,28 @@ describe('GET /api/timeline/:issueNumber — success path', () => {
     expect(footprintEvent.agent).toBe('reviewer-agent');
   });
 
+  it('includes the pipeline-start event from <!-- pipeline: started --> comment', async () => {
+    const { body } = await httpGet(port, '/api/timeline/42');
+    const pipelineEvent = body.events.find(e => e.source === 'pipeline');
+    expect(pipelineEvent).toBeTruthy();
+    expect(pipelineEvent.eventType).toBe('pipeline-start');
+    expect(pipelineEvent.agent).toBe('pipeline');
+    expect(pipelineEvent.summary).toBe('Branch: 42-my-feature');
+    expect(pipelineEvent.timestamp).toBe('2026-05-25T09:00:00Z');
+    expect(typeof pipelineEvent.commentUrl).toBe('string');
+  });
+
   it('does NOT include unstructured plain comments as events', async () => {
     const { body } = await httpGet(port, '/api/timeline/42');
-    // events count should be 2 (apm-msg + footprint), not 3
-    expect(body.events.length).toBe(2);
+    // events count should be 3 (apm-msg + footprint + pipeline-start), not 4
+    expect(body.events.length).toBe(3);
   });
 
   it('includes meta with total comment count', async () => {
     const { body } = await httpGet(port, '/api/timeline/42');
     expect(typeof body.meta).toBe('object');
-    expect(body.meta.totalComments).toBe(3);
-    expect(body.meta.structuredEvents).toBe(2);
+    expect(body.meta.totalComments).toBe(4);
+    expect(body.meta.structuredEvents).toBe(3);
   });
 
   it('includes commentUrl on structured events (FR-177 BLOCKER 1)', async () => {
