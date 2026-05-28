@@ -124,6 +124,25 @@ cmd_start() {
   local issue_raw="${1:-}"
   shift || true
 
+  # ── Resolve main repo root ──────────────────────────────────────────────────
+  # If invoked from a linked git worktree (e.g. a feature-branch worktree),
+  # cd to the main repo root so that:
+  #   • default_worktree_path() uses the correct repo name
+  #   • 'git checkout main' succeeds (main is locked in the main worktree)
+  #   • 'git worktree add' can reference the branch without conflict
+  # Detection: --git-common-dir returns ".git" (relative) in the main repo
+  # and an absolute path like "/main/.git" in a linked worktree.
+  local _git_common_dir
+  _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || echo ".git")"
+  if [[ "$_git_common_dir" != ".git" ]]; then
+    local _main_root
+    _main_root="$(dirname "$_git_common_dir")"
+    if [[ -d "$_main_root" ]]; then
+      log "Detected linked worktree; switching to main repo root: ${_main_root}"
+      cd "$_main_root"
+    fi
+  fi
+
   # Validate issue number
   if ! [[ "$issue_raw" =~ ^[0-9]+$ ]]; then
     err "Invalid issue number: '${issue_raw}' — must be a positive integer"

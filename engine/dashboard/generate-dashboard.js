@@ -266,6 +266,27 @@ function main() {
 
   console.log(`\n   Total agents parsed: ${agents.length}`);
 
+  // FR-001: sort AGENTS array in canonical SDLC order so the generated constant
+  // is already ordered; unknown agents are appended alphabetically.
+  const SDLC_ORDER = {
+    'triage-agent': 1, 'ba-product-agent': 2, 'architect-agent': 3,
+    'developer-agent': 4, 'qa-test-agent': 5, 'reviewer-agent': 6,
+    'security-agent': 7, 'devops-agent': 8, 'docs-agent': 9, 'release-agent': 10,
+  };
+  // Re-derive original agent-id from the short id by looking up AGENT_ID_MAP reverse
+  const idToFilename = Object.fromEntries(
+    Object.entries(AGENT_ID_MAP).map(([k, v]) => [v, k])
+  );
+  agents.sort((a, b) => {
+    const fa = idToFilename[a.id];
+    const fb = idToFilename[b.id];
+    const pa = fa != null && SDLC_ORDER[fa] != null ? SDLC_ORDER[fa] : Infinity;
+    const pb = fb != null && SDLC_ORDER[fb] != null ? SDLC_ORDER[fb] : Infinity;
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+  console.log(`   SDLC-sorted (first 3): ${agents.slice(0,3).map(a=>a.id).join(', ')}`);
+
   // Read dashboard HTML
   let html = fs.readFileSync(DASHBOARD, 'utf8');
 

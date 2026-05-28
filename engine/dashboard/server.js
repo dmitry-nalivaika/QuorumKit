@@ -615,6 +615,30 @@ function parseCommentToEvent(comment) {
     };
   }
 
+  // ── 3. pipeline lifecycle marker (<!-- pipeline: started|stopped|failed -->) ─
+  const pipelineMatch = body.match(/<!--\s*pipeline:\s*(started|stopped|failed|updated)\s*-->/i);
+  if (pipelineMatch) {
+    const action    = pipelineMatch[1].toLowerCase();
+    const eventType = action === 'started' ? 'pipeline-start'
+      : action === 'stopped' ? 'pipeline-stop'
+      : action === 'failed'  ? 'pipeline-fail'
+      : 'pipeline-update';
+    const branchMatch = body.match(/\*\*Branch:\*\*\s*`([^`]+)`/i);
+    const branch      = branchMatch?.[1] || '';
+    const tsMatch     = body.match(/\*\*Timestamp:\*\*\s*`([^`]+)`/i);
+    const safeBody    = body.replace(/<[^>]+>/g, '').slice(0, 2000);
+    return {
+      source:    'pipeline',
+      eventType,
+      agent:     'pipeline',
+      summary:   branch ? `Branch: ${branch}` : '',
+      timestamp: tsMatch?.[1] || comment.created_at,
+      commentId: comment.id,
+      commentUrl: comment.html_url || '',
+      body:      safeBody,
+    };
+  }
+
   return null;
 }
 

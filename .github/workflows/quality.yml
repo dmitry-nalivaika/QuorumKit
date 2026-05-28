@@ -55,6 +55,9 @@ jobs:
       - name: Install orchestrator deps
         run: npm ci
         working-directory: engine/orchestrator
+      - name: Install dashboard deps (ws required by server.js in tests)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: engine/dashboard
       - name: Run vitest suite
         run: npm test
         working-directory: engine/orchestrator
