@@ -119,19 +119,52 @@ button { cursor: pointer; font-family: var(--font); }
 .mnav-tab:hover { color: var(--text); }
 .mnav-tab.on { color: var(--blue); border-bottom-color: var(--blue); }
 
-/* ─── Pipelines main view (US-1) ─────────────────────────────────────────── */
+/* ─── Pipelines main view (US-1, US-2, FR-001..FR-003) ─────────────────── */
 #pm-view {
-  display: flex; flex-direction: column; flex: 1; overflow: hidden;
+  display: flex; flex-direction: row; flex: 1; overflow: hidden;
 }
+/* Left column: pipeline list + start button (FR-002) */
+#pl-col  { flex: 0 0 280px; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--borderMute); }
+/* Right detail panel: visible when a pipeline row is selected (FR-003) */
+#pl-detail { display: none; flex: 1; flex-direction: column; overflow-y: auto; background: var(--bg); }
+#pm-view.detail-open #pl-detail { display: flex; }
+.pl-detail-hd { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid var(--borderMute); flex-shrink: 0; background: var(--surface); }
+.pl-section   { padding: 12px 14px; border-bottom: 1px solid var(--borderMute); }
+.pl-section-hd { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--textMute); margin-bottom: 8px; }
+/* Agent execution timeline rows (Section 1) */
+.pl-exec-timeline { display: flex; flex-direction: column; gap: 4px; }
+.pl-exec-event { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--r-xs); padding: 6px 10px; }
+.pl-exec-event.pee-complete { border-left-color: var(--green); }
+.pl-exec-event.pee-failed   { border-left-color: var(--red); }
+.pl-exec-event.pee-running  { border-left-color: var(--amber); animation: badge-pulse 1.2s ease infinite; }
+.pl-exec-event-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.pl-exec-event-meta { font-size: 10px; color: var(--textMute); margin-top: 2px; }
+/* Selected pipeline row highlight */
+.lp-row.pl-selected { border-left-color: var(--blue) !important; background: rgba(88,166,255,.05) !important; }
+/* Board placeholder */
+.board-soon { text-align: center; max-width: 340px; }
+.board-soon-icon  { font-size: 48px; margin-bottom: 16px; }
+.board-soon-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.board-soon-sub   { font-size: 13px; color: var(--text3); line-height: 1.6; }
 
 /* Default state: Pipelines view active — show pm-view, hide agents toolbar/grid */
 #toolbar { display: none; }
 #office  { display: none; }
 
+/* Timeline and Board standalone views */
+#timeline-view { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+#board-view    { display: none; flex: 1; overflow: hidden; align-items: center; justify-content: center; }
+
 /* Agents view active */
 #workspace.view-agents #pm-view  { display: none; }
 #workspace.view-agents #toolbar  { display: flex; }
 #workspace.view-agents #office   { display: block; }
+/* Timeline view active */
+#workspace.view-timeline #pm-view    { display: none; }
+#workspace.view-timeline #timeline-view { display: flex; }
+/* Board view active */
+#workspace.view-board #pm-view    { display: none; }
+#workspace.view-board #board-view { display: flex; }
 #workspace.console-closed { bottom: 0; }
 
 /* ─── Toolbar ─────────────────────────────────────────────────────────────── */
@@ -668,7 +701,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .prun-time { font-size: 10px; color: var(--textMute); margin-top: 3px; }
 
 /* ─── Local Pipelines panel (FR-176) ─────────────────────────────────────── */
-#lpanel { padding: 8px 12px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+#pl-col  { padding: 8px 12px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .lp-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lp-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; flex: 1; }
 .lp-list { display: flex; flex-direction: column; gap: 6px; }
@@ -754,31 +787,81 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
   </div>
 </header>
 
-<div id="workspace">
-  <!-- ── Main view navigation (FR-001, FR-009) ── -->
+<div id="workspace" class="drawer-closed">
+  <!-- ── Main view navigation (FR-001, US-6, US-7, FR-012, FR-018, FR-019) ── -->
   <div id="main-nav">
     <button class="mnav-tab on" data-mv="pipelines">🌿 Pipelines</button>
     <button class="mnav-tab"    data-mv="agents">🤖 Agents</button>
+    <button class="mnav-tab"    data-mv="timeline">📊 Timeline</button>
+    <button class="mnav-tab"    data-mv="board">📋 Board</button>
   </div>
 
-  <!-- ── Pipelines main view (US-1, US-3) ── -->
+  <!-- ── Pipelines main view (US-1, US-2, US-3, US-4, US-5, FR-001..FR-011) ── -->
   <div id="pm-view">
-    <div id="lpanel">
-      <!-- Issue context + next-agent suggestions (US-3 FR-005..FR-008) -->
+    <!-- Left column: pipeline list + "Start New Pipeline" button (FR-002) -->
+    <div id="pl-col">
       <div class="lp-toolbar">
-        <span class="lp-title">🌿 Local Pipelines</span>
-        <button class="pipe-btn" id="lp-start-btn">＋ Start</button>
+        <span class="lp-title">🌿 Pipelines</span>
+        <button class="pipe-btn" id="lp-start-btn">＋ Start New Pipeline</button>
         <button class="pipe-btn pipe-btn-ghost" id="lp-refresh-btn" title="Refresh list">↺</button>
       </div>
-      <div class="lp-suggestions-wrap">
-        <div class="lp-ctx-row">
-          <span style="font-size:11px;color:var(--text3);font-weight:600">Issue context:</span>
-          <input id="lp-ctx-issue" type="number" placeholder="e.g. 42" min="1" autocomplete="off" />
-          <button class="pipe-btn" id="lp-ctx-btn">Set</button>
-        </div>
-        <div id="lp-suggestions"></div>
-      </div>
       <div id="lp-list" class="lp-list"><span class="lp-empty">Loading…</span></div>
+    </div>
+    <!-- Right detail panel: opens when a pipeline row is selected (FR-003, FR-004) -->
+    <div id="pl-detail">
+      <div class="pl-detail-hd">
+        <span id="pl-detail-title" class="lp-title">Pipeline Detail</span>
+        <button class="pipe-btn pipe-btn-ghost" id="pl-detail-close" title="Close panel">✕</button>
+      </div>
+      <!-- Section 1: Agent Execution Timeline (FR-005, FR-006) -->
+      <div class="pl-section">
+        <div class="pl-section-hd">📊 Agent Execution Timeline</div>
+        <div id="pl-exec-timeline" class="pl-exec-timeline">
+          <span class="lp-empty">Select a pipeline to load its timeline.</span>
+        </div>
+      </div>
+      <!-- Section 2: Next-Agent Suggestions (FR-007, FR-008, FR-009, FR-010) -->
+      <div class="pl-section">
+        <div class="pl-section-hd">💡 Next-Agent Suggestions</div>
+        <div class="lp-suggestions-wrap">
+          <div class="lp-ctx-row">
+            <span style="font-size:11px;color:var(--text3);font-weight:600">Issue context:</span>
+            <input id="lp-ctx-issue" type="number" placeholder="e.g. 42" min="1" autocomplete="off" />
+            <button class="pipe-btn" id="lp-ctx-btn">Set</button>
+          </div>
+          <div id="lp-suggestions"></div>
+        </div>
+      </div>
+      <!-- Section 3: All Invocable Agents (FR-011) -->
+      <div class="pl-section">
+        <div class="lp-all-agents-hd">All Invocable Agents</div>
+        <div id="pl-all-agents" class="lp-agent-chips"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Timeline main view (US-7, FR-018) — standalone historic pipeline review ── -->
+  <div id="timeline-view">
+    <div id="tlpanel-main" style="padding:8px 12px;height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+      <div class="tl-toolbar">
+        <input id="tl-issue-input" type="number" placeholder="Issue #" min="1" />
+        <button class="pipe-btn" id="tl-load-btn">Load</button>
+        <span class="tl-status-badge" id="tl-status-badge" hidden></span>
+        <span class="tl-meta" id="tl-meta"></span>
+        <button class="pipe-btn pipe-btn-ghost" id="tl-refresh-btn" title="Refresh timeline" hidden>↺</button>
+        <select id="tl-agent-filter" hidden><option value="">All agents</option></select>
+        <span class="tl-new-badge" id="tl-new-badge" hidden></span>
+      </div>
+      <div id="tl-events" class="tl-events"><span class="lp-empty">Enter an issue number and click Load.</span></div>
+    </div>
+  </div>
+
+  <!-- ── Board main view (FR-019) — placeholder for this release ── -->
+  <div id="board-view">
+    <div class="board-soon">
+      <div class="board-soon-icon">📋</div>
+      <div class="board-soon-title">Board</div>
+      <div class="board-soon-sub">Full work board coming in a future release.<br>Use the Pipelines tab to track active runs.</div>
     </div>
   </div>
 
@@ -815,7 +898,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
   </div>
 </div>
 
-<div id="drawer">
+<div id="drawer" class="closed">
   <div id="drw-resize"></div>
   <div class="drw-hd">
     <div class="dtabs">
@@ -837,20 +920,9 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     </div>
   </div>
 
-  <!-- ── Timeline panel ── -->
+  <!-- ── Timeline panel (drawer, hidden — content promoted to #timeline-view in workspace) ── -->
   <div class="dpanel" id="timeline-panel">
-    <div id="tlpanel">
-      <div class="tl-toolbar">
-        <input id="tl-issue-input" type="number" placeholder="Issue #" min="1" />
-        <button class="pipe-btn" id="tl-load-btn">Load</button>
-        <span class="tl-status-badge" id="tl-status-badge" hidden></span>
-        <span class="tl-meta" id="tl-meta"></span>
-        <button class="pipe-btn pipe-btn-ghost" id="tl-refresh-btn" title="Refresh timeline" hidden>↺</button>
-        <select id="tl-agent-filter" hidden><option value="">All agents</option></select>
-        <span class="tl-new-badge" id="tl-new-badge" hidden></span>
-      </div>
-      <div id="tl-events" class="tl-events"><span class="lp-empty">Enter an issue number and click Load.</span></div>
-    </div>
+    <div style="padding:20px;color:var(--textMute);font-size:12px">Timeline is now available in the main Timeline tab above.</div>
   </div>
 
   </div>
@@ -1492,7 +1564,7 @@ const QUIPS = {
 };
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let filter = 'all', query = '', selId = null, drawerOpen = true;
+let filter = 'all', query = '', selId = null, drawerOpen = false;
 let ffIdx = 0, busySet = new Set(), history = [], histIdx = -1;
 const kcards = {};
 
@@ -1829,15 +1901,16 @@ function switchTab(id) {
   if (!drawerOpen) setDrawer(true);
 }
 
-// ─── Main view switching (US-1 FR-001, US-4 FR-009) ──────────────────────────
+// ─── Main view switching (FR-001, FR-012, FR-018, FR-019) ────────────────────
 /**
- * Switch between the two primary views: 'pipelines' (default) and 'agents'.
- * Pipelines view shows the local-pipeline list + next-agent suggestions.
- * Agents view shows the full agent card grid with SDLC ordering.
+ * Switch between the four primary views: 'pipelines' (default), 'agents',
+ * 'timeline', and 'board'.
  */
 function switchMainView(view) {
   const ws = document.getElementById('workspace');
-  ws.classList.toggle('view-agents', view === 'agents');
+  ws.classList.toggle('view-agents',   view === 'agents');
+  ws.classList.toggle('view-timeline', view === 'timeline');
+  ws.classList.toggle('view-board',    view === 'board');
   document.querySelectorAll('.mnav-tab').forEach(b =>
     b.classList.toggle('on', b.dataset.mv === view));
   if (view === 'pipelines') {
@@ -2577,6 +2650,7 @@ async function loadLocalPipelines() {
         .filter(c => c.children[1]?.style.display !== 'none')
         .map(c => Number(c.dataset.issue))
     );
+    const restoredSelected = _selectedPipelineIssue;
     listEl.innerHTML = '';
     for (const p of data) {
       // ── Pipeline card (collapsible) ──────────────────────────────────────
@@ -2588,7 +2662,7 @@ async function loadLocalPipelines() {
       // Header row (always visible, click to expand)
       const hdr = document.createElement('div');
       hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;background:var(--surface2)';
-      hdr.addEventListener('click', () => togglePipelineExpand(card, p));
+      hdr.addEventListener('click', () => openPipelineDetail(card, p));
 
       const num = document.createElement('span');
       num.className = 'lp-num'; num.textContent = `#${p.issueNumber}`;
@@ -2663,8 +2737,10 @@ async function loadLocalPipelines() {
 
       card.appendChild(body);
       listEl.appendChild(card);
-      // Restore expanded state if this card was open before the reload
+      // Restore expanded state: use openPipelineDetail so the right panel re-opens
       if (openIssues.has(p.issueNumber)) togglePipelineExpand(card, p);
+      // Restore right-panel selection after reload
+      if (restoredSelected === p.issueNumber) openPipelineDetail(card, p);
     }
   } catch {
     listEl.innerHTML = '<span class="lp-empty">Cannot reach server.</span>';
@@ -2718,6 +2794,101 @@ function togglePipelineExpand(card, p) {
       });
       sugDiv.appendChild(chips);
     }
+  }
+}
+
+// ─── Pipeline right-panel (US-2, US-3, US-4, US-5) ───────────────────────────
+/** Issue number of the currently selected pipeline, or null. */
+let _selectedPipelineIssue = null;
+
+/**
+ * Open the right detail panel for the selected pipeline row (FR-003, FR-004).
+ * Clicking the same row again collapses the panel (FR-003 toggle).
+ */
+function openPipelineDetail(card, p) {
+  const isSame = _selectedPipelineIssue === p.issueNumber;
+  // Deselect all rows
+  document.querySelectorAll('#lp-list .lp-row').forEach(r => r.classList.remove('pl-selected'));
+  if (isSame) {
+    _selectedPipelineIssue = null;
+    document.getElementById('pm-view').classList.remove('detail-open');
+    return;
+  }
+  _selectedPipelineIssue = p.issueNumber;
+  card.classList.add('pl-selected');
+  document.getElementById('pm-view').classList.add('detail-open');
+  document.getElementById('pl-detail-title').textContent = `#${p.issueNumber} — ${p.branch}`;
+  // Section 2: set issue context + render suggestions (FR-007, FR-008)
+  setIssueContext(p.issueNumber);
+  renderSuggestions();
+  // Section 3: All invocable agents (FR-011)
+  renderAllAgentsPanel(p);
+  // Section 1: Agent execution timeline (FR-005, FR-006)
+  loadPipelineExecTimeline(p.issueNumber);
+}
+
+/** Close the right detail panel without selecting a new pipeline. */
+function closePipelineDetail() {
+  _selectedPipelineIssue = null;
+  document.querySelectorAll('#lp-list .lp-row').forEach(r => r.classList.remove('pl-selected'));
+  document.getElementById('pm-view').classList.remove('detail-open');
+}
+
+/**
+ * Render the All Invocable Agents section (Section 3, FR-011).
+ * Agents already completed in the current pipeline run are visually
+ * distinguished (dimmed). No write action is triggered.
+ */
+function renderAllAgentsPanel(p) {
+  const el = document.getElementById('pl-all-agents');
+  if (!el) return;
+  el.innerHTML = '';
+  sdlcSort(AGENTS).forEach(a => {
+    const chip = document.createElement('div');
+    chip.className = 'lp-agent-chip';
+    chip.title = a.role;
+    // Mark agents that are known-completed in this pipeline (if tracked)
+    if (agentStatuses[a.id] === 'completed') chip.style.opacity = '0.45';
+    chip.innerHTML = `<span class="chip-emoji">${esc(a.emoji)}</span><span class="chip-name">${esc(a.name)}</span>`;
+    chip.addEventListener('click', () => openDetail(a, p.issueNumber));
+    el.appendChild(chip);
+  });
+}
+
+/**
+ * Fetch and render the agent execution timeline for the selected pipeline
+ * into Section 1 of the right detail panel (FR-005, FR-006).
+ */
+async function loadPipelineExecTimeline(issueNumber) {
+  const el = document.getElementById('pl-exec-timeline');
+  if (!el) return;
+  el.innerHTML = '<span class="lp-empty">Loading timeline…</span>';
+  try {
+    const res  = await fetch(`${SERVER}/api/timeline/${issueNumber}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.events?.length) {
+      el.innerHTML = '<span class="lp-empty">No agents have run yet for this pipeline.</span>';
+      return;
+    }
+    el.innerHTML = '';
+    for (const ev of data.events) {
+      const row = document.createElement('div');
+      const statusCls = ev.eventType === 'agent-complete' ? 'pee-complete'
+        : ev.eventType === 'agent-fail' ? 'pee-failed'
+        : ev.eventType === 'agent-start' ? 'pee-running' : '';
+      row.className = `pl-exec-event ${statusCls}`;
+      const name = document.createElement('div');
+      name.className = 'pl-exec-event-name';
+      name.textContent = agentLabel(ev.agent || '—');
+      const meta = document.createElement('div');
+      meta.className = 'pl-exec-event-meta';
+      meta.textContent = [ev.eventType, relativeTime(ev.timestamp)].filter(Boolean).join(' · ');
+      row.appendChild(name);
+      row.appendChild(meta);
+      el.appendChild(row);
+    }
+  } catch {
+    el.innerHTML = '<span class="lp-empty">Cannot reach server.</span>';
   }
 }
 
@@ -3052,11 +3223,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tl-agent-filter')?.addEventListener('change', () => {
     if (_tlIssue) loadTimeline(false);
   });
-  // Stop polling when leaving timeline tab
-  document.querySelectorAll('.dtab:not([data-dt="timeline"])').forEach(btn =>
+  // Stop polling when leaving timeline tab (via main nav)
+  document.querySelectorAll('.mnav-tab:not([data-mv="timeline"])').forEach(btn =>
     btn.addEventListener('click', () => clearInterval(_tlPollTimer))
   );
   // Resume polling when entering timeline tab (if issue loaded)
+  document.querySelectorAll('.mnav-tab[data-mv="timeline"]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      if (_tlIssue) {
+        clearInterval(_tlPollTimer);
+        _tlPollTimer = setInterval(() => loadTimeline(true), 30_000);
+      }
+    })
+  );
+  // Also stop/resume on drawer tab switches (legacy — drawer is now closed by default)
+  document.querySelectorAll('.dtab:not([data-dt="timeline"])').forEach(btn =>
+    btn.addEventListener('click', () => clearInterval(_tlPollTimer))
+  );
   document.querySelectorAll('.dtab[data-dt="timeline"]').forEach(btn =>
     btn.addEventListener('click', () => {
       if (_tlIssue) {
@@ -3213,6 +3396,9 @@ function init() {
   document.getElementById('lp-ctx-issue')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('lp-ctx-btn')?.click();
   });
+
+  // Right detail panel close button (FR-003 collapse)
+  document.getElementById('pl-detail-close')?.addEventListener('click', closePipelineDetail);
 
   // Drawer
   document.querySelectorAll('.dtab').forEach(b=>b.addEventListener('click',()=>{
