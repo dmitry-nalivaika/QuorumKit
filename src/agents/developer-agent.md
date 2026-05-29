@@ -6,6 +6,93 @@ The Developer Agent implements features exactly as defined in `spec.md`, followi
 
 ---
 
+## Mandatory Footprint Steps — REQUIRED
+
+> **Non-negotiable. Silent termination is prohibited (FR-013).**
+
+### Step 1 — Post `agent-start` BEFORE any work begins
+
+**Immediately when your session begins** — before reading any file, before branch setup, before any other action — run:
+
+```bash
+gh issue comment <ISSUE_NUMBER> --body "<!-- agent-footprint: start -->
+**Agent started:** \`developer-agent\`
+- **Event type:** \`agent-start\`
+- **Issue / PR:** #<ISSUE_NUMBER>
+- **Branch:** \`<NNN-slug>\`
+- **Timestamp:** \`<UTC timestamp ISO-8601>\`"
+```
+
+### Step 2 — Post `agent-complete` as the FINAL action on success
+
+**As the very last step of every successful session**, run `gh issue comment <ISSUE_NUMBER>` with this body (fill all `<placeholder>` values):
+
+```markdown
+<!-- agent-footprint: complete -->
+**Agent complete:** `developer-agent`
+- **Event type:** `agent-complete`
+- **Issue / PR:** #<ISSUE_NUMBER>
+- **Branch:** `<NNN-slug>`
+- **Timestamp:** `<UTC timestamp ISO-8601>`
+- **Summary:** <one-line outcome summary>
+- **Next recommended action:** QA Agent review requested
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "implement",
+  "agent": "developer-agent",
+  "iteration": 1,
+  "outcome": "success",
+  "summary": "<summary \u2264 280 chars>",
+  "event_type": "complete",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+### Step 3 — Post `agent-fail` instead of prose on any unrecoverable error
+
+**If an unrecoverable error occurs at any point**, do NOT post plain-text prose. Run `gh issue comment <ISSUE_NUMBER>` with this body instead (fill all `<placeholder>` values):
+
+```markdown
+<!-- agent-footprint: fail -->
+**Agent failed:** `developer-agent`
+- **Event type:** `agent-fail`
+- **Issue / PR:** #<ISSUE_NUMBER>
+- **Branch:** `<NNN-slug>`
+- **Timestamp:** `<UTC timestamp ISO-8601>`
+- **Error:** <error message — no raw stack trace>
+- **Recommended recovery:** Re-run the workflow; if problem persists, check Actions log.
+
+\`\`\`apm-msg
+{
+  "version": "2",
+  "runId": "<uuid>",
+  "step": "implement",
+  "agent": "developer-agent",
+  "iteration": 1,
+  "outcome": "fail",
+  "summary": "<error summary \u2264 280 chars>",
+  "event_type": "fail",
+  "pipeline_id": "<NNN or null>",
+  "issue": "<issue-number-string or null>",
+  "pr": "<pr-number-string or null>",
+  "branch": "<NNN-slug>",
+  "timestamp": "<ISO-8601>"
+}
+\`\`\`
+```
+
+If `gh` is unavailable (e.g., no network access), log the failure explicitly in the session output. Do NOT silently terminate.
+
+---
+
 ## Capabilities
 
 | Capability | Scope | Description |
