@@ -1,8 +1,9 @@
 {
-  "issue": 259,
-  "slug": "dashboard-functionality-ux-and-ui-enhanc",
-  "spec_dir": "specs/259-dashboard-functionality-ux-and-ui-enhanc",
-  "branch": "259-dashboard-functionality-ux-and-ui-enhanc",
+  "feature_directory": "specs/263-automatic-issue-refinement-by-ba-after-i",
+  "issue": 263,
+  "slug": "automatic-issue-refinement-by-ba-after-i",
+  "spec_dir": "specs/263-automatic-issue-refinement-by-ba-after-i",
+  "branch": "263-automatic-issue-refinement-by-ba-after-i",
   "status": "spec-ready",
-  "updated": "2026-05-27"
+  "updated": "2026-05-29"
 }
