@@ -1,8 +1,8 @@
 {
-  "issue": 259,
-  "slug": "dashboard-functionality-ux-and-ui-enhanc",
-  "spec_dir": "specs/259-dashboard-functionality-ux-and-ui-enhanc",
-  "branch": "259-dashboard-functionality-ux-and-ui-enhanc",
+  "issue": 268,
+  "slug": "agents-must-post-agent-footprint-comment",
+  "spec_dir": "specs/268-agents-must-post-agent-footprint-comment",
+  "branch": "268-agents-must-post-agent-footprint-comment",
   "status": "spec-ready",
-  "updated": "2026-05-27"
+  "updated": "2026-05-29"
 }
