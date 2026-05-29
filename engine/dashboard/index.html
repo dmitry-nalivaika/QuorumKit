@@ -2634,6 +2634,74 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─── Local Pipelines (FR-176) ─────────────────────────────────────────────────
 let _lpPollTimer = null;
 
+/**
+ * Build a single pipeline card element for the Local Pipelines panel.
+ * The card has exactly ONE child: the always-visible header row.
+ * No collapsible body is created (FR-006).
+ *
+ * @param {Object}   p            - Pipeline: { issueNumber, branch, mode, runningAgent }
+ * @param {Object}   opts
+ * @param {Function} opts.onStop   - Called with (btn) when ■ Stop is clicked
+ * @param {Function} opts.onJoin   - Called with (btn) when ⎇ Join is clicked
+ * @param {Function} opts.onDetail - Called with (card) when the header row is clicked
+ * @param {Document} [opts.doc]    - Document for element creation (default: global document)
+ * @returns {HTMLElement}
+ */
+function buildPipelineCard(p, { onStop, onJoin, onDetail, doc = document } = {}) {
+  const card = doc.createElement('div');
+  card.className = 'lp-row';
+  card.dataset.issue = p.issueNumber;
+  card.style.cssText = 'flex-direction:column;gap:0;padding:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden';
+
+  // Header row — always visible (split-panel layout; no collapsible body)
+  const hdr = doc.createElement('div');
+  hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;background:var(--surface2)';
+  hdr.addEventListener('click', () => onDetail(card));
+
+  const num = doc.createElement('span');
+  num.className = 'lp-num'; num.textContent = `#${p.issueNumber}`;
+
+  const branch = doc.createElement('span');
+  branch.className = 'lp-branch'; branch.textContent = p.branch;
+
+  const modeBadge = doc.createElement('span');
+  modeBadge.style.cssText = 'font-size:9px;padding:1px 5px;border-radius:3px;background:var(--surface3);color:var(--text3);font-weight:600';
+  modeBadge.textContent = p.mode || 'isolated';
+
+  if (p.runningAgent) {
+    const dot = doc.createElement('span');
+    dot.title = 'Agent running';
+    dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.4s infinite;flex-shrink:0';
+    hdr.appendChild(dot);
+  }
+
+  // Action buttons — always visible in header row (FR-001, FR-002)
+  const hdrActions = doc.createElement('div');
+  hdrActions.className = 'lp-actions';
+  hdrActions.style.cssText = 'margin-left:auto;display:flex;gap:4px;align-items:center';
+
+  const stopBtn = doc.createElement('button');
+  stopBtn.className = 'lp-btn lp-btn-stop'; stopBtn.textContent = '■ Stop';
+  stopBtn.title = `Stop pipeline #${p.issueNumber}`;
+  stopBtn.addEventListener('click', e => { e.stopPropagation(); onStop(stopBtn); });
+
+  const joinBtn = doc.createElement('button');
+  joinBtn.className = 'lp-btn lp-btn-join'; joinBtn.textContent = '⎇ Join';
+  joinBtn.title = `Open worktree for pipeline #${p.issueNumber}`;
+  joinBtn.addEventListener('click', e => { e.stopPropagation(); onJoin(joinBtn); });
+
+  hdrActions.appendChild(stopBtn);
+  hdrActions.appendChild(joinBtn);
+
+  hdr.appendChild(num);
+  hdr.appendChild(branch);
+  hdr.appendChild(modeBadge);
+  hdr.appendChild(hdrActions);
+  card.appendChild(hdr);
+
+  return card;
+}
+
 async function loadLocalPipelines() {
   const listEl = document.getElementById('lp-list');
   if (!listEl) return;
@@ -2644,120 +2712,20 @@ async function loadLocalPipelines() {
       listEl.innerHTML = '<span class="lp-empty">No local feature worktrees found.</span>';
       return;
     }
-    // Remember which pipeline cards are currently expanded so we can restore them
-    const openIssues = new Set(
-      [...listEl.querySelectorAll('.lp-row[data-issue]')]
-        .filter(c => c.children[1]?.style.display !== 'none')
-        .map(c => Number(c.dataset.issue))
-    );
     const restoredSelected = _selectedPipelineIssue;
     listEl.innerHTML = '';
     for (const p of data) {
-      // ── Pipeline card (collapsible) ──────────────────────────────────────
-      const card = document.createElement('div');
-      card.className = 'lp-row';
-      card.dataset.issue = p.issueNumber;
-      card.style.cssText = 'flex-direction:column;gap:0;padding:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden';
-
-      // Header row (always visible, click to expand)
-      const hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;background:var(--surface2)';
-      hdr.addEventListener('click', () => openPipelineDetail(card, p));
-
-      const num = document.createElement('span');
-      num.className = 'lp-num'; num.textContent = `#${p.issueNumber}`;
-
-      const branch = document.createElement('span');
-      branch.className = 'lp-branch'; branch.textContent = p.branch;
-
-      const modeBadge = document.createElement('span');
-      modeBadge.style.cssText = 'font-size:9px;padding:1px 5px;border-radius:3px;background:var(--surface3);color:var(--text3);font-weight:600';
-      modeBadge.textContent = p.mode || 'isolated';
-
-      if (p.runningAgent) {
-        const dot = document.createElement('span');
-        dot.title = 'Agent running';
-        dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.4s infinite;flex-shrink:0';
-        hdr.appendChild(dot);
-      }
-
-      const chevron = document.createElement('span');
-      // Action buttons in header (always visible in split-panel layout)
-      const hdrActions = document.createElement('div');
-      hdrActions.className = 'lp-actions';
-      hdrActions.style.cssText = 'margin-left:auto;display:flex;gap:4px;align-items:center';
-      const stopBtn = document.createElement('button');
-      stopBtn.className = 'lp-btn lp-btn-stop'; stopBtn.textContent = '■ Stop';
-      stopBtn.title = `Stop pipeline #${p.issueNumber}`;
-      stopBtn.addEventListener('click', e => { e.stopPropagation(); stopLocalPipeline(p.issueNumber, p.runningAgent, stopBtn); });
-      const joinBtn = document.createElement('button');
-      joinBtn.className = 'lp-btn lp-btn-join'; joinBtn.textContent = '⎇ Join';
-      joinBtn.title = `Open worktree for pipeline #${p.issueNumber}`;
-      joinBtn.addEventListener('click', e => { e.stopPropagation(); joinLocalPipeline(p.issueNumber, joinBtn); });
-      hdrActions.appendChild(stopBtn);
-      hdrActions.appendChild(joinBtn);
-
-      hdr.appendChild(num);
-      hdr.appendChild(branch);
-      hdr.appendChild(modeBadge);
-      hdr.appendChild(hdrActions);
-      card.appendChild(hdr);
+      const card = buildPipelineCard(p, {
+        onStop:   btn => stopLocalPipeline(p.issueNumber, p.runningAgent, btn),
+        onJoin:   btn => joinLocalPipeline(p.issueNumber, btn),
+        onDetail: card => openPipelineDetail(card, p),
+      });
       listEl.appendChild(card);
       // Restore right-panel selection after reload
       if (restoredSelected === p.issueNumber) openPipelineDetail(card, p);
     }
   } catch {
     listEl.innerHTML = '<span class="lp-empty">Cannot reach server.</span>';
-  }
-}
-
-function togglePipelineExpand(card, p) {
-  const body = card.querySelector('div:last-child');
-  const chevron = card.querySelector('.pipe-chevron');
-  const isOpen = body.style.display !== 'none';
-  body.style.display = isOpen ? 'none' : 'flex';
-  chevron.textContent = isOpen ? '▶' : '▼';
-  if (!isOpen) {
-    setIssueContext(p.issueNumber);
-    const sugDiv = body.querySelector('.suggestions-list');
-    if (sugDiv && !sugDiv.dataset.rendered) {
-      sugDiv.dataset.rendered = '1';
-      const suggestions = computeAgentSuggestions(AGENTS, p.issueNumber);
-      if (suggestions && suggestions.length) {
-        const hd = document.createElement('div');
-        hd.style.cssText = 'font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--textMute);margin-bottom:4px';
-        hd.textContent = 'Suggested next agents';
-        sugDiv.appendChild(hd);
-        suggestions.forEach(s => {
-          const c = document.createElement('div');
-          c.className = 'suggestion-card';
-          c.addEventListener('click', e => { e.stopPropagation(); openDetail(s.agent, p.issueNumber); });
-          const info = document.createElement('div');
-          info.style.cssText = 'flex:1;min-width:0';
-          info.innerHTML = `<div class="suggestion-name">${esc(s.agent.emoji)} ${esc(s.agent.name)}</div><div class="suggestion-role">${esc(s.agent.role)}</div><div class="suggestion-reason">${esc(s.reason)}</div>`;
-          c.appendChild(info);
-          sugDiv.appendChild(c);
-        });
-      } else {
-        sugDiv.innerHTML = '<div class="suggestion-no-ctx">No agent suggestions available.</div>';
-      }
-      // ── All agents (compact chips) ──────────────────────────────────────
-      const allHd = document.createElement('div');
-      allHd.className = 'lp-all-agents-hd';
-      allHd.textContent = 'All agents';
-      sugDiv.appendChild(allHd);
-      const chips = document.createElement('div');
-      chips.className = 'lp-agent-chips';
-      AGENTS.forEach(a => {
-        const chip = document.createElement('div');
-        chip.className = 'lp-agent-chip';
-        chip.title = a.role;
-        chip.innerHTML = `<span class="chip-emoji">${esc(a.emoji)}</span><span class="chip-name">${esc(a.name)}</span>`;
-        chip.addEventListener('click', e => { e.stopPropagation(); openDetail(a, p.issueNumber); });
-        chips.appendChild(chip);
-      });
-      sugDiv.appendChild(chips);
-    }
   }
 }
 
