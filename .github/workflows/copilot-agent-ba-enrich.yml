@@ -39,6 +39,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -49,9 +50,10 @@ jobs:
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             // ── 1. Validate and parse issue number ────────────────────────────
-            const issueNumber = parseInt('${{ github.event.inputs.issue_number }}', 10);
+            // Read from env to avoid expression injection (OWASP A03 / B1 fix).
+            const issueNumber = parseInt(process.env.INPUT_ISSUE_NUMBER, 10);
             if (!Number.isFinite(issueNumber) || issueNumber <= 0) {
-              core.setFailed(`Invalid issue_number: "${{ github.event.inputs.issue_number }}"`);
+              core.setFailed(`Invalid issue_number: "${process.env.INPUT_ISSUE_NUMBER}"`);
               return;
             }
 

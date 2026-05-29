@@ -41,3 +41,6 @@ identities:
     logins:
       - github-actions[bot]
       - apm-release-bot
+  - agent: ba-enrich-agent
+    logins:
+      - github-actions[bot]
