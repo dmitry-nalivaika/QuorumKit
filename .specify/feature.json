@@ -1,8 +1,8 @@
 {
-  "issue": 273,
-  "slug": "stop-button-for-pipeline-disappeared-fro",
-  "spec_dir": "specs/273-stop-button-for-pipeline-disappeared-fro",
-  "branch": "273-stop-button-for-pipeline-disappeared-fro",
+  "issue": 268,
+  "slug": "agents-must-post-agent-footprint-comment",
+  "spec_dir": "specs/268-agents-must-post-agent-footprint-comment",
+  "branch": "268-agents-must-post-agent-footprint-comment",
   "status": "spec-ready",
   "updated": "2026-05-29"
 }
