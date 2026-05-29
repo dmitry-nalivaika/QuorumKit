@@ -1,8 +1,9 @@
 {
-  "issue": 268,
-  "slug": "agents-must-post-agent-footprint-comment",
-  "spec_dir": "specs/268-agents-must-post-agent-footprint-comment",
-  "branch": "268-agents-must-post-agent-footprint-comment",
+  "feature_directory": "specs/263-automatic-issue-refinement-by-ba-after-i",
+  "issue": 263,
+  "slug": "automatic-issue-refinement-by-ba-after-i",
+  "spec_dir": "specs/263-automatic-issue-refinement-by-ba-after-i",
+  "branch": "263-automatic-issue-refinement-by-ba-after-i",
   "status": "spec-ready",
   "updated": "2026-05-29"
 }

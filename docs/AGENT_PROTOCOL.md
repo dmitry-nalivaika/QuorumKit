@@ -88,6 +88,15 @@ definition and reproduced here for completeness.
 | `type:security` | Triage Agent | Routes to the security pipeline. |
 | `type:spec` | BA Agent | Applied to spec-only PRs when a new `specs/NNN-slug/spec.md` is published. The Orchestrator uses it to route the Reviewer or Architect Agent to review the spec before implementation begins. |
 
+### 1.6 Pipeline step agent slugs
+
+Agent slugs referenced in `steps[*].agent` inside pipeline YAML files must be
+listed here. These slugs map to the identity entries in `src/agent-identities.yml`.
+
+| Slug | Pipeline | Description |
+|------|----------|-------------|
+| `ba-enrich-agent` | `ba-enrichment-pipeline` | BA Issue Enrichment Agent (Issue #263). Dispatched via `copilot-agent-ba-enrich.yml`; enriches issue body in-place. v1 protocol — no `apm-msg` required. |
+
 ---
 
 ## 2. `apm-msg` Message Schema (v2)

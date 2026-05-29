@@ -1,0 +1,33 @@
+# BA Issue Enrichment Pipeline
+#
+# Triggered immediately after the Triage Agent completes (triaged label applied)
+# on any issue routed to the BA / Product Agent (agent:ba label).
+#
+# Purpose: automatically enrich the sparse issue body with the four structured
+# sections (Proposed Solution, Acceptance Criteria, Out of Scope, Alternatives
+# Considered) before spec-writing begins.
+#
+# This pipeline is STANDALONE — it does not chain to any downstream agent.
+# Spec creation remains a separate, explicitly triggered step (Issue #263 §Out of Scope).
+#
+# Schema version 1 is intentional: the single enrichment step completes via
+# workflow_run.completed, requiring no apm-msg from the enrichment workflow.
+#
+# File is named ba-enrichment-pipeline.yml so it loads alphabetically before
+# bug-fix-pipeline.yml and feature-pipeline.yml. For agent:ba issues, this
+# pipeline matches first on the triaged event, which is correct — enrichment
+# runs before spec-writing, and spec-writing is triggered explicitly.
+#
+# FR-001 (Issue #263): dispatch BA enrichment when triaged AND agent:ba.
+name: ba-enrichment-pipeline
+version: "1"
+
+trigger:
+  event: issues.labeled
+  labels:
+    - triaged
+    - agent:ba
+
+steps:
+  - name: ba-enrich
+    agent: ba-enrich-agent

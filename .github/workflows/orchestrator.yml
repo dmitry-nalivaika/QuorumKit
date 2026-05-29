@@ -14,6 +14,7 @@ on:
     workflows:
       - "Triage Agent (Copilot)"
       - "BA / Product Agent (Copilot)"
+      - "BA Issue Enrichment Agent (Copilot)"
       - "Architect Agent (Copilot)"
       - "Developer Agent (Copilot)"
       - "QA/Test Agent (Copilot)"

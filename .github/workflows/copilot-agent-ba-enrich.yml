@@ -1,0 +1,287 @@
+name: BA Issue Enrichment Agent (Copilot)
+# Triggered automatically by the Orchestrator (ba-enrichment-pipeline, FR-001)
+# when the Triage Agent applies the `triaged` label to an issue that already
+# carries `agent:ba`.
+#
+# This workflow operates in ISSUE-REFINEMENT MODE only:
+#   - Reads the sparse issue body and the triage comment.
+#   - Uses GitHub Models to infer the four missing structured sections.
+#   - Updates the issue body in-place (gh issue edit) when all four sections
+#     can be confidently inferred.
+#   - Removes `status:needs-info` and adds `status:confirmed` on success.
+#   - Retains `status:needs-info` and posts clarification questions on failure.
+#   - Posts a human-readable comment after every attempt.
+#
+# CONSTRAINTS (FR-010):
+#   - Does NOT create any git branch, spec file, plan file, task file, or code.
+#   - Only modifies the body and labels of the specific issue being processed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to enrich (passed by the Orchestrator)'
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+  models: read
+
+jobs:
+  ba-enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Enrich Issue Body via GitHub Models
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const agentInstructions = readSafe('.github/agents/ba-product-agent.md');
+            const constitution      = readSafe('.specify/memory/constitution.md');
+
+            // ── 1. Validate and parse issue number ────────────────────────────
+            // Read from env to avoid expression injection (OWASP A03 / B1 fix).
+            const issueNumber = parseInt(process.env.INPUT_ISSUE_NUMBER, 10);
+            if (!Number.isFinite(issueNumber) || issueNumber <= 0) {
+              core.setFailed(`Invalid issue_number: "${process.env.INPUT_ISSUE_NUMBER}"`);
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // ── 2. Fetch issue data ───────────────────────────────────────────
+            let issueTitle = '';
+            let issueBody  = '';
+            let issueLabels = [];
+            try {
+              const issue = await github.rest.issues.get({
+                owner, repo, issue_number: issueNumber,
+              });
+              issueTitle  = issue.data.title  ?? '';
+              issueBody   = issue.data.body   ?? '';
+              issueLabels = (issue.data.labels ?? []).map(l => l.name ?? l);
+            } catch (e) {
+              core.setFailed(`Could not fetch issue #${issueNumber}: ${e.message}`);
+              return;
+            }
+
+            // ── 3. Fetch the most recent triage comment ───────────────────────
+            let triageComment = '';
+            try {
+              const comments = await github.rest.issues.listComments({
+                owner, repo, issue_number: issueNumber, per_page: 30,
+              });
+              // The triage comment is typically the first bot comment; take the
+              // earliest comment that looks like a triage summary.
+              const triage = comments.data.find(c =>
+                c.body && (
+                  c.body.includes('type:') ||
+                  c.body.includes('priority:') ||
+                  c.body.includes('Triage') ||
+                  c.body.includes('triage')
+                )
+              );
+              if (triage) triageComment = triage.body;
+            } catch {
+              // Non-fatal — enrichment can proceed without the triage comment
+            }
+
+            // ── 4. Detect whether all four sections are already populated ──────
+            // Section headings come from .github/ISSUE_TEMPLATE/feature_request.md
+            const REQUIRED_SECTIONS = [
+              '## Proposed Solution',
+              '## Acceptance Criteria',
+              '## Out of Scope',
+              '## Alternatives Considered',
+            ];
+
+            function sectionContent(body, heading) {
+              // Extract text between this heading and the next ## heading (or EOF)
+              const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const m = body.match(new RegExp(`${escaped}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`));
+              if (!m) return '';
+              // Strip HTML comments and whitespace — if only these remain, section is empty
+              return m[1]
+                .replace(/<!--[\s\S]*?-->/g, '')
+                .replace(/^[\s\-\*\[\]\(\)xX]*$/gm, '')  // empty checkboxes / bullets
+                .trim();
+            }
+
+            const alreadyFilled = REQUIRED_SECTIONS.every(h => sectionContent(issueBody, h).length > 0);
+
+            if (alreadyFilled) {
+              // Idempotency: all sections populated — no changes needed.
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issueNumber,
+                body: [
+                  '**BA Issue Enrichment Agent** — No changes needed.',
+                  '',
+                  `Issue #${issueNumber} already contains content in all four structured sections ` +
+                  '(Proposed Solution, Acceptance Criteria, Out of Scope, Alternatives Considered). ' +
+                  'No update was made to the issue body.',
+                ].join('\n'),
+              });
+              return;
+            }
+
+            // ── 5. Call GitHub Models to infer missing sections ───────────────
+            const systemContent = [
+              constitution      && `## Project Constitution\n${constitution}`,
+              agentInstructions && `## Agent Instructions\n${agentInstructions}`,
+            ].filter(Boolean).join('\n\n---\n\n')
+              || 'You are a helpful GitHub BA/product agent.';
+
+            const userContent = [
+              `You are the BA / Product Agent for issue #${issueNumber}, operating in ISSUE-REFINEMENT MODE.`,
+              '',
+              `## Issue Title`,
+              issueTitle,
+              '',
+              `## Current Issue Body`,
+              issueBody,
+              ...(triageComment ? ['', '## Triage Summary', triageComment] : []),
+              '',
+              '## Instructions',
+              'Your task is to enrich the issue body by inferring content for the four structured sections that are empty or missing.',
+              'The four sections and their exact headings (you MUST use these exact headings, same level) are:',
+              '  ## Proposed Solution',
+              '  ## Acceptance Criteria',
+              '  ## Out of Scope',
+              '  ## Alternatives Considered',
+              '',
+              'Rules:',
+              '1. Preserve ALL existing content verbatim — do not alter Problem / Motivation or any other non-empty section.',
+              '2. Only fill in sections that are currently empty (contain only HTML comments, empty checkboxes, or whitespace).',
+              '3. For Acceptance Criteria, use a Markdown checklist (- [ ] items).',
+              '4. For Alternatives Considered, list at least one alternative even if the issue does not mention any — reason from the problem statement.',
+              '5. If you CANNOT confidently infer a section (the issue is too ambiguous), respond with a JSON object {"canEnrich": false, "missingInfo": ["<question 1>", "<question 2>"]} only.',
+              '6. If you CAN infer all sections, respond with a JSON object {"canEnrich": true, "enrichedBody": "<complete updated issue body>"} only.',
+              '   - enrichedBody must be the COMPLETE issue body (not just the new sections) with all four sections filled in.',
+              '7. Respond with ONLY a JSON object — no markdown fences, no prose.',
+            ].join('\n');
+
+            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user',   content: userContent },
+                ],
+                max_tokens: 4096,
+                response_format: { type: 'json_object' },
+              }),
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              return;
+            }
+
+            const data = await res.json();
+            const rawContent = data.choices?.[0]?.message?.content?.trim() ?? '{}';
+
+            let parsed;
+            try {
+              parsed = JSON.parse(rawContent);
+            } catch (parseErr) {
+              core.setFailed(`BA enrichment agent returned non-JSON response: ${parseErr.message}`);
+              return;
+            }
+
+            // ── 6a. Success path: update body and swap labels ─────────────────
+            if (parsed.canEnrich === true && typeof parsed.enrichedBody === 'string') {
+              const newBody = parsed.enrichedBody.trim();
+              if (!newBody) {
+                core.setFailed('BA enrichment agent returned canEnrich:true but empty enrichedBody.');
+                return;
+              }
+
+              // Update issue body in-place (FR-005)
+              await github.rest.issues.update({
+                owner, repo, issue_number: issueNumber,
+                body: newBody,
+              });
+
+              // Swap labels: remove status:needs-info, add status:confirmed (FR-007)
+              if (issueLabels.includes('status:needs-info')) {
+                await github.rest.issues.removeLabel({
+                  owner, repo, issue_number: issueNumber,
+                  name: 'status:needs-info',
+                }).catch(() => { /* label may already be gone — non-fatal */ });
+              }
+              // Ensure status:confirmed label exists
+              try {
+                await github.rest.issues.createLabel({
+                  owner, repo,
+                  name: 'status:confirmed',
+                  color: '0e8a16',
+                  description: 'Issue reproduced and confirmed',
+                });
+              } catch { /* label already exists — ignore */ }
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number: issueNumber,
+                labels: ['status:confirmed'],
+              });
+
+              // Post confirmation comment (FR-009)
+              const filledSections = REQUIRED_SECTIONS.filter(h =>
+                sectionContent(newBody, h).length > 0
+              );
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issueNumber,
+                body: [
+                  '**BA Issue Enrichment Agent** — Issue enriched successfully.',
+                  '',
+                  `Issue #${issueNumber} has been automatically enriched with inferred content in the following sections:`,
+                  ...filledSections.map(h => `- ${h.replace('## ', '')}`),
+                  '',
+                  '`status:needs-info` has been removed. The issue is now `status:confirmed` and ready for spec-writing.',
+                  '',
+                  '_To write a formal spec, trigger the BA Agent manually via `/ba-agent`._',
+                ].join('\n'),
+              });
+
+              return;
+            }
+
+            // ── 6b. Degradation path: cannot infer — retain needs-info (FR-008) ─
+            const missingInfo = Array.isArray(parsed.missingInfo) ? parsed.missingInfo : [];
+
+            const questionList = missingInfo.length > 0
+              ? missingInfo.map((q, i) => `${i + 1}. ${q}`).join('\n')
+              : '1. The issue context is insufficient to infer the required sections.';
+
+            // Post clarification comment (FR-009)
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issueNumber,
+              body: [
+                '**BA Issue Enrichment Agent** — Cannot complete enrichment automatically.',
+                '',
+                `Issue #${issueNumber} does not contain enough context to confidently infer all four required sections.`,
+                'No changes have been made to the issue body. `status:needs-info` is retained.',
+                '',
+                'The following information is required before enrichment can proceed:',
+                '',
+                questionList,
+                '',
+                'Please reply to this comment with the requested information, then re-trigger the BA agent via `/ba-agent`.',
+              ].join('\n'),
+            });
+            // status:needs-info is NOT touched (FR-008)

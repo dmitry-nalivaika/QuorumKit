@@ -101,6 +101,7 @@ If `gh` is unavailable (e.g., no network access), log the failure explicitly in 
 | Clarify and refine specs | [CORE] | Resolves ambiguities using `/speckit-clarify`; targets zero open questions before handoff |
 | Write user stories | [CORE] | Produces Given/When/Then acceptance scenarios for every user story |
 | Handle `status:needs-info` issues | [CORE] | Infers missing information from context; updates issue body and labels |
+| **Issue-refinement mode** | [CORE] | Automatically triggered by the Orchestrator after triage on `agent:ba` issues; infers the four structured sections (Proposed Solution, Acceptance Criteria, Out of Scope, Alternatives Considered); updates issue body, swaps status label, posts confirmation comment — no branch or spec file created |
 | Update `.specify/feature.json` | [CORE] | Keeps the active feature pointer in sync after every spec create/update |
 | Open and update spec PRs | [CORE] | Creates `docs(spec): #NNN` PRs and posts PR URL to the originating issue |
 | Run spec quality check | [CORE] | Executes `/speckit-checklist` before handoff; zero failures required |
@@ -187,6 +188,62 @@ If the issue carries `status:needs-info`, take these steps **before** writing th
    2. <specific question 2>
    Please reply to this comment, then re-trigger the BA agent.
    ```
+
+---
+
+## Issue-Refinement Mode (Automatic Enrichment)
+
+The BA Agent operates in **issue-refinement mode** when dispatched automatically
+by the Orchestrator immediately after the Triage Agent applies the `triaged` label
+to an issue that carries `agent:ba`. This mode is distinct from the spec-writing
+mode invoked by a human via `/ba-agent`.
+
+### Trigger conditions
+
+- Orchestrator receives `issues.labeled` event
+- The labeled issue carries BOTH `triaged` AND `agent:ba`
+- Dispatch is automatic — no human action required
+
+### Inputs
+
+- Issue number (passed by the Orchestrator as `issue_number` workflow input)
+- Full issue body (fetched via GitHub API)
+- Most recent triage comment (fetched via GitHub API)
+- Codebase context (loaded from `.github/agents/` and `.specify/memory/`)
+
+### Outputs
+
+| Outcome | Issue body | Labels | Comment |
+|---------|-----------|--------|--------|
+| All four sections inferred | Updated in-place | `status:needs-info` removed, `status:confirmed` added | Confirmation comment listing filled sections |
+| Cannot infer one or more sections | **Unchanged** | `status:needs-info` retained | Clarification comment listing specific questions |
+| All sections already populated | **Unchanged** | No change | Short confirmation that no changes were needed |
+
+### The four required sections
+
+Headings MUST exactly match the repository issue template (same text, same level):
+
+```
+## Proposed Solution
+## Acceptance Criteria
+## Out of Scope
+## Alternatives Considered
+```
+
+### Hard constraints in issue-refinement mode
+
+The BA Agent in issue-refinement mode **MUST NOT**:
+- Create any git branch
+- Create or modify any `specs/NNN-slug/spec.md` file
+- Create any plan file, task file, or code file
+- Partially update the issue body — either all four sections are filled (atomic update) or the body is left completely unmodified
+- Apply any label other than swapping `status:needs-info` → `status:confirmed`
+
+### Idempotency
+
+If the issue already contains non-empty content in all four sections, the BA Agent
+posts a short confirmation comment and exits without modifying anything. This
+ensures safe re-dispatch (e.g. if the `triaged` label is removed and re-applied).
 
 ---
 
