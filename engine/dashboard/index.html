@@ -708,7 +708,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .lp-empty { font-size: 12px; color: var(--textMute); font-style: italic; }
 .lp-row { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--blue); border-radius: var(--r-xs); padding: 6px 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lp-num  { background: var(--blue); color: #0d1117; border-radius: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; white-space: nowrap; }
-.lp-branch { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-branch { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp-path { font-size: 10px; color: var(--text3); flex-basis: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp-actions { display: flex; gap: 4px; }
 .lp-btn { border: none; border-radius: var(--r-xs); font-size: 10px; font-weight: 600; cursor: pointer; padding: 2px 8px; transition: opacity .15s; }
@@ -2651,11 +2651,11 @@ function buildPipelineCard(p, { onStop, onJoin, onDetail, doc = document } = {})
   const card = doc.createElement('div');
   card.className = 'lp-row';
   card.dataset.issue = p.issueNumber;
-  card.style.cssText = 'flex-direction:column;gap:0;padding:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden';
+  card.style.cssText = 'flex-direction:column;align-items:stretch;gap:0;padding:0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden';
 
   // Header row — always visible (split-panel layout; no collapsible body)
   const hdr = doc.createElement('div');
-  hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;background:var(--surface2)';
+  hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;background:var(--surface2);width:100%;box-sizing:border-box;min-width:0';
   hdr.addEventListener('click', () => onDetail(card));
 
   const num = doc.createElement('span');
