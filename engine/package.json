@@ -20,6 +20,6 @@
     "ci:install": "npm ci --ignore-scripts && (cd orchestrator && npm ci --ignore-scripts) && (cd dashboard && npm ci --ignore-scripts)"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.38.1"
+    "@vercel/ncc": "^0.44.0"
   }
 }
