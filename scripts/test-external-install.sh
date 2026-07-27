@@ -70,8 +70,10 @@ run_mode_test() {
   # ── Run init.sh ───────────────────────────────────────────────────────────
   h1 "Running src/scripts/init.sh --ai=$ai_mode${domain:+ --domain=$domain}"
   cd "$tmpdir"
-  QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
-    bash "$REPO_ROOT/src/scripts/init.sh" "--ai=$ai_mode" ${domain:+"--domain=$domain"}
+  local init_output
+  init_output="$(QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
+    bash "$REPO_ROOT/src/scripts/init.sh" "--ai=$ai_mode" ${domain:+"--domain=$domain"} 2>&1)"
+  echo "$init_output"
   cd "$REPO_ROOT"
 
   # ── Verify helpers ────────────────────────────────────────────────────────
@@ -179,6 +181,47 @@ run_mode_test() {
   check_absent ".github/workflows/agent-dev.yml"
   check_absent "engine/"
   check_absent "src/scripts/"
+
+  # ── Verify: epilogue documents the npm-based dashboard install (AD-5) ────
+  h1 "Epilogue: npm-based dashboard instructions"
+  if echo "$init_output" | grep -q "npm install --no-save quorumkit-engine"; then
+    ok "epilogue mentions 'npm install --no-save quorumkit-engine'"
+  else
+    fail "epilogue MISSING 'npm install --no-save quorumkit-engine'"
+  fi
+  if echo "$init_output" | grep -q "npx quorumkit-engine dashboard"; then
+    ok "epilogue mentions 'npx quorumkit-engine dashboard'"
+  else
+    fail "epilogue MISSING 'npx quorumkit-engine dashboard'"
+  fi
+  if echo "$init_output" | grep -q "engine/dashboard/start.sh"; then
+    fail "epilogue SHOULD NOT reference source-clone path 'engine/dashboard/start.sh' as primary instruction"
+  else
+    ok "epilogue does not reference source-clone 'engine/dashboard/start.sh' path"
+  fi
+
+  # ── Verify: upgrade-safety — hand-edited files survive a re-run (FR-005) ──
+  h1 "Upgrade safety: hand-edited files are never overwritten"
+  local custom_pipeline_sentinel="# hand-edited sentinel $(date +%s)"
+  local custom_script_sentinel="# hand-edited script sentinel $(date +%s)"
+  echo "$custom_pipeline_sentinel" >> "$tmpdir/src/pipelines/feature-pipeline.yml"
+  echo "$custom_script_sentinel" >> "$tmpdir/scripts/pipeline.sh"
+
+  cd "$tmpdir"
+  QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
+    bash "$REPO_ROOT/src/scripts/init.sh" "--ai=$ai_mode" ${domain:+"--domain=$domain"} > /dev/null 2>&1
+  cd "$REPO_ROOT"
+
+  if grep -qF "$custom_pipeline_sentinel" "$tmpdir/src/pipelines/feature-pipeline.yml"; then
+    ok "hand-edited src/pipelines/feature-pipeline.yml survives re-run (byte-identical)"
+  else
+    fail "hand-edited src/pipelines/feature-pipeline.yml was OVERWRITTEN by re-run"
+  fi
+  if grep -qF "$custom_script_sentinel" "$tmpdir/scripts/pipeline.sh"; then
+    ok "hand-edited scripts/pipeline.sh survives re-run (byte-identical)"
+  else
+    fail "hand-edited scripts/pipeline.sh was OVERWRITTEN by re-run"
+  fi
 
   # ── Summary ───────────────────────────────────────────────────────────────
   echo ""

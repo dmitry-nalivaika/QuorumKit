@@ -20,8 +20,12 @@ skip() { echo "SKIP $1" >> "$RESULTS_FILE"; echo "  SKIP  $1"; }
 # ─── Locate scripts under test ────────────────────────────────────────────────
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PIPELINE_SCRIPT="$REPO_ROOT/scripts/pipeline.sh"
-BRANCH_GUARD_SCRIPT="$REPO_ROOT/scripts/branch-guard.sh"
+# Issue #283 (AD-4): the canonical source moved to src/scripts/; scripts/pipeline.sh
+# is now a backward-compat shim delegating to it. Test against the canonical
+# script directly so in-place patching (e.g. Bug B / FR-003 below) operates on
+# real script content rather than the 3-line shim.
+PIPELINE_SCRIPT="$REPO_ROOT/src/scripts/pipeline.sh"
+BRANCH_GUARD_SCRIPT="$REPO_ROOT/src/scripts/branch-guard.sh"
 
 # ─── gh CLI and branch-guard stubs ───────────────────────────────────────────
 

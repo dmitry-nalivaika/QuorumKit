@@ -54,7 +54,7 @@ assert_output_contains() {
 # ─── Setup — locate script under test ────────────────────────────────────────
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$REPO_ROOT/scripts/branch-guard.sh"
+SCRIPT="$REPO_ROOT/src/scripts/branch-guard.sh"
 
 # ─── gh CLI stub ─────────────────────────────────────────────────────────────
 # Placed in a temp stub dir prepended to PATH so real gh is not required.

@@ -11,6 +11,21 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [3.2.0] — Issue #283
+
+### ✨ Added
+
+- **`quorumkit-engine` npm package now ships the dashboard server and UI** (FR-001, AD-1, AD-3): `engine/package.json` `files` extended to include `dashboard/`, published tarball excludes `dashboard/node_modules/`, `*.log`, and local config artefacts via `engine/dashboard/.npmignore`.
+- **New `bin` entry points** (FR-002, FR-003, AD-2): `npx quorumkit-engine dashboard` starts a project-scoped dashboard server from any consumer project with `quorumkit-engine` installed — no source checkout required. Resolves the consumer project's own `.git` root, supports `--port <N>`, and exits cleanly with a clear error on `EADDRINUSE`. `engine/dashboard/start.sh` (self-host path) now delegates to the same bin wrapper.
+- **`init.sh` epilogue updated** (FR-001, FR-008, AD-5): consumers are now told to `npm install --no-save quorumkit-engine && npx quorumkit-engine dashboard` instead of referencing a QuorumKit source-clone path. `docs/DASHBOARD.md` updated accordingly, with the source-clone self-host path documented as an alternative.
+- **Local pipeline scripts now ship automatically** (FR-004, AD-4): `pipeline.sh` and `branch-guard.sh` moved to `src/scripts/` as the canonical source (with backward-compatible shims left at their old `scripts/` locations) and are now copied into every consumer project's own `scripts/` directory by `init.sh` via a new `install_local_pipelines()` function — idempotent, skip-with-warning on re-run. `docs/LOCAL_PIPELINES.md` updated.
+
+### 🔧 Changed
+
+- Package version bumped to `3.2.0` in `engine/package.json` and `quorumkit.yml` — additive MINOR release, no breaking file-layout change.
+
+---
+
 ## [3.1.0] — 2026-05-25 · Issue #175
 
 ### ✨ Added

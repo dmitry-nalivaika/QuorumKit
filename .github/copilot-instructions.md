@@ -57,5 +57,6 @@ Spec artifacts live in `specs/NNN-feature/`:
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan at
+`specs/283-orchestrator-with-server-and-ui-to-be-di/plan.md`
 <!-- SPECKIT END -->

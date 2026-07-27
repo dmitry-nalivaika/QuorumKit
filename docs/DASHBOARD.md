@@ -212,14 +212,25 @@ If the directories contain `.md` and `.yml` files, you're ready to launch the da
 
 The dashboard picks up project context **automatically** when you launch it from inside the project directory.
 
-### 5.1 — Recommended: run `start.sh` from your project root
+### 5.1 — Recommended: `npx quorumkit-engine dashboard`
 
 ```zsh
 cd ~/work/legacy-billing-service
-bash ~/.quorumkit/engine/dashboard/start.sh
+npm install --no-save quorumkit-engine
+npx quorumkit-engine dashboard
 ```
 
-`start.sh` captures `$PWD` into `QUORUMKIT_PROJECT_DIR` *before* `cd`-ing into the dashboard folder, then passes it to the server. The server uses that path as the default `localPath`, runs `git config --get remote.origin.url` and `git rev-parse --abbrev-ref HEAD` to populate **GitHub Repository URL** and **Default Branch**, and derives the **Project Name** for the topbar pill and browser tab title.
+`quorumkit-engine`'s `dashboard` subcommand resolves `process.cwd()` into
+`QUORUMKIT_PROJECT_DIR` and starts the same server described below — no source
+checkout of QuorumKit required. The server uses that path as the default
+`localPath`, runs `git config --get remote.origin.url` and `git rev-parse
+--abbrev-ref HEAD` to populate **GitHub Repository URL** and **Default
+Branch**, and derives the **Project Name** for the topbar pill and browser tab
+title.
+
+> **Self-hosting from a QuorumKit source checkout?** Run `bash
+> ~/.quorumkit/engine/dashboard/start.sh` from your project root instead —
+> functionally identical, but useful when developing QuorumKit itself.
 
 The terminal echoes the detected context before the server starts:
 
@@ -242,7 +253,7 @@ If you orchestrate several projects, a shell alias saves typing:
 
 ```zsh
 # Add to ~/.zshrc or ~/.bashrc
-alias qk='bash ~/.quorumkit/engine/dashboard/start.sh'
+alias qk='npx quorumkit-engine dashboard'
 ```
 
 Then from any project: `cd ~/work/foo && qk`.
@@ -250,7 +261,7 @@ Then from any project: `cd ~/work/foo && qk`.
 ### 5.3 — Custom port
 
 ```zsh
-QUORUMKIT_PORT=4000 bash ~/.quorumkit/engine/dashboard/start.sh
+QUORUMKIT_PORT=4000 npx quorumkit-engine dashboard
 ```
 
 ### 5.4 — Override the auto-detected project
@@ -258,7 +269,7 @@ QUORUMKIT_PORT=4000 bash ~/.quorumkit/engine/dashboard/start.sh
 The auto-detected values are always editable from **⚙ Settings** in the UI, or by passing `QUORUMKIT_PROJECT_DIR` explicitly at launch:
 
 ```zsh
-QUORUMKIT_PROJECT_DIR=~/work/some-other-repo bash ~/.quorumkit/engine/dashboard/start.sh
+QUORUMKIT_PROJECT_DIR=~/work/some-other-repo npx quorumkit-engine dashboard
 ```
 
 ### 5.5 — Verify the server is up

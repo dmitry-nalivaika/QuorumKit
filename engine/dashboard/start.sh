@@ -51,4 +51,4 @@ open_browser() {
 
 open_browser
 
-node server.js "$@"
+node "$DIR/../bin/quorumkit-dashboard.js" "$@"

@@ -1,17 +1,23 @@
 {
   "name": "quorumkit-engine",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "QuorumKit autonomous-agent orchestrator — distributed as a GitHub Action (Issue #47, ADR-047 amendment).",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dmitry-nalivaika/QuorumKit.git"
   },
   "type": "module",
+  "bin": {
+    "quorumkit-engine": "bin/quorumkit-engine.js",
+    "quorumkit-dashboard": "bin/quorumkit-dashboard.js"
+  },
   "files": [
     "dist/",
     "action.yml",
     "RELEASING.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "dashboard/",
+    "bin/"
   ],
   "scripts": {
     "build": "ncc build orchestrator/index.js -o dist --minify --source-map --license licenses.txt",
