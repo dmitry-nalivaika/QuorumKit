@@ -84,12 +84,20 @@ the same wrapper to avoid drift.
 `*.log`/config artefacts via a **`dashboard/.npmignore`** — per npm's own `files`
 documentation, a root-level `.npmignore` does *not* override the `files` allowlist,
 only a subdirectory `.npmignore` does, so the ignore file must live inside
-`dashboard/` itself, not at `engine/`). `dashboard/package.json`'s single dependency
-(`ws`) is hoisted so
-`npm install quorumkit-engine` pulls it transitively — no separate `npm install` step
-required inside `node_modules/quorumkit-engine/dashboard` at runtime (this removes the
-current self-host-only "install deps if needed" step in `start.sh` for the packaged
-case, while leaving it as a harmless no-op fallback for self-host).
+`dashboard/` itself, not at `engine/`). `dashboard/package.json`'s single runtime
+dependency (`ws`) is declared explicitly in `engine/package.json`'s own
+`"dependencies"` field (pinned identically, `^8.21.0`), since `engine/`,
+`dashboard/`, and `orchestrator/` are three independent npm packages (not an npm
+workspace) and there is no implicit hoisting between them. This is what actually
+makes `npm install quorumkit-engine` pull `ws` in transitively — no separate `npm
+install` step required inside `node_modules/quorumkit-engine/dashboard` at runtime
+(this removes the current self-host-only "install deps if needed" step in
+`start.sh` for the packaged case, while leaving it as a harmless no-op fallback for
+self-host). **Verified end-to-end** by `engine/tests/dashboard-isolated-npm-install.test.js`,
+which does a real `npm pack` → `npm install` into an isolated temp directory with no
+shared `node_modules` → runs the installed `quorumkit-dashboard` bin → confirms it
+serves `/api/config` (catches the class of bug where a dependency only resolves
+because it happens to already be present in this repo's own dev checkout).
 
 ### AD-4 — Local pipeline scripts become a distributed template, not just self-host tooling
 

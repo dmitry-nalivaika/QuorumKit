@@ -25,6 +25,9 @@
     "test": "cd orchestrator && npm test",
     "ci:install": "npm ci --ignore-scripts && (cd orchestrator && npm ci --ignore-scripts) && (cd dashboard && npm ci --ignore-scripts)"
   },
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
   "devDependencies": {
     "@vercel/ncc": "^0.38.1"
   }

@@ -24,6 +24,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 - Package version bumped to `3.2.0` in `engine/package.json` and `quorumkit.yml` — additive MINOR release, no breaking file-layout change.
 
+### 🐛 Fixed
+
+- **`npx quorumkit-engine dashboard` crashed with `Cannot find module 'ws'` on every real consumer install** (Reviewer Agent finding on PR #324, FR-002/FR-003/FR-006): `engine/package.json` declared no `dependencies`, so `ws` — a hard runtime dependency of `dashboard/server.js` — was never installed for consumers, even though `dashboard/node_modules/` is (correctly) excluded from the published tarball. Fixed by adding `"dependencies": { "ws": "^8.21.0" }` to `engine/package.json`. Guarded against regression by `engine/tests/dashboard-isolated-npm-install.test.js`, which does a real `npm pack` → `npm install` into an isolated directory with no shared `node_modules` before exercising the installed bin.
+
 ---
 
 ## [3.1.0] — 2026-05-25 · Issue #175

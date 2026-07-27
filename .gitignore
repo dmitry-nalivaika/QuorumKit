@@ -49,4 +49,7 @@ engine/dashboard/.apm-project.json
 engine/orchestrator/node_modules/
 engine/node_modules/
 
+# npm pack artifacts (e.g. from engine/tests/dashboard-isolated-npm-install.test.js)
+*.tgz
+
 engine/tests/.vite/
