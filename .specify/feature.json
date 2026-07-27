@@ -1,9 +1,9 @@
 {
-  "feature_directory": "specs/263-automatic-issue-refinement-by-ba-after-i",
-  "issue": 263,
-  "slug": "automatic-issue-refinement-by-ba-after-i",
-  "spec_dir": "specs/263-automatic-issue-refinement-by-ba-after-i",
-  "branch": "263-automatic-issue-refinement-by-ba-after-i",
+  "feature_directory": "specs/283-orchestrator-with-server-and-ui-to-be-di",
+  "issue": 283,
+  "slug": "orchestrator-with-server-and-ui-to-be-di",
+  "spec_dir": "specs/283-orchestrator-with-server-and-ui-to-be-di",
+  "branch": "283-orchestrator-with-server-and-ui-to-be-di",
   "status": "spec-ready",
-  "updated": "2026-05-29"
+  "updated": "2026-07-27"
 }
