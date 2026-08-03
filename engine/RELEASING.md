@@ -137,7 +137,13 @@ consumer who already pinned to the bad version. Always deprecate + supersede.
 
 If the maintainer's GPG private key is lost (new machine, corrupted
 keyring, no backup) or is intentionally rotated, `git tag -s` and CI's
-`git verify-tag` will fail until every one of these steps completes:
+`git verify-tag` will fail until every one of these steps completes.
+
+**Do steps 1–6 below *before* pushing the release tag.** If you tag first,
+`engine-release.yml` starts immediately, sits `waiting` on the `release`
+Environment approval, then fails "No public key" at `git verify-tag` once
+approved — you'll need a second approval after `gh run rerun` (§ below).
+Completing the secret update first avoids the wasted approval cycle.
 
 ```bash
 # 1. Install GPG (macOS) + a GUI pinentry — curses pinentry commonly fails
