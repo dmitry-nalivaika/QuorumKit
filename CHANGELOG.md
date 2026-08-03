@@ -11,7 +11,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ---
 
-## [3.2.0] — Issue #283
+## [3.2.0] — 2026-08-03 · Issues #283, #273
 
 ### ✨ Added
 
@@ -27,6 +27,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 ### 🐛 Fixed
 
 - **`npx quorumkit-engine dashboard` crashed with `Cannot find module 'ws'` on every real consumer install** (Reviewer Agent finding on PR #324, FR-002/FR-003/FR-006): `engine/package.json` declared no `dependencies`, so `ws` — a hard runtime dependency of `dashboard/server.js` — was never installed for consumers, even though `dashboard/node_modules/` is (correctly) excluded from the published tarball. Fixed by adding `"dependencies": { "ws": "^8.21.0" }` to `engine/package.json`. Guarded against regression by `engine/tests/dashboard-isolated-npm-install.test.js`, which does a real `npm pack` → `npm install` into an isolated directory with no shared `node_modules` before exercising the installed bin.
+- **Stop/Join buttons invisible on Local Pipelines rows** (Issue #273, PR #284): `.lp-row`'s `align-items: center` sized the `hdr` flex child to its intrinsic content width, overflowing the card bounds and clipping the ■ Stop / ⎇ Join buttons off-screen under `overflow: hidden`. Fixed with `width:100%; box-sizing:border-box; min-width:0` on `hdr`, `min-width:0` on `.lp-branch`, and `align-items:stretch` on the card container. Left pipeline column widened from 280px to 380px for readability.
+
+### 🔧 Chores & Maintenance
+
+- Dependency bumps merged via Dependabot: `ws` 8.21.0 → 8.21.1 (`engine/dashboard`, `engine/orchestrator`), `vitest` (`engine/orchestrator`), `actions/setup-node` 4.4.0 → 6.4.0 (CI workflows) (#280, #315, #319, #320).
+- Routine dashboard agent-data auto-sync commits from `.github/agents` (`[skip ci]`).
 
 ---
 
