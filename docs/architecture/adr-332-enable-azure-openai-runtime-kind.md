@@ -4,7 +4,7 @@
 |---|---|
 | **ADR Number** | 332 |
 | **Issue** | #332 — LLM keys for the project to be configured per project, so agentic workflows run on the predictable LLM provided by me (root cause: #326 — Pipeline failed) |
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Date** | 2026-08-03 |
 | **Deciders** | Architect Agent |
 | **Supersedes** | — |
@@ -213,19 +213,57 @@ dashboard (subject to Constitution §IX — dashboard remains read-only).
 
 ---
 
+## Terminology Reconciliation (spec #332 vs. spec #044 / ADR-005)
+
+The BA Agent's spec (`specs/332-llm-keys-for-the-project-to-be-configure/spec.md`)
+introduces its own product-level vocabulary — **LLM Provider**,
+**Agent-to-Provider Assignment**, **Credential Reference** — which is a
+**naming inconsistency** (non-blocking `ARCH-CONCERN`, not an `ARCH-CONFLICT`)
+against the vocabulary already ratified in spec #044 / ADR-005, where the same
+concepts are named **runtime entry**, **`agent_defaults` mapping**, and
+**`credential_ref`** respectively (spec #044 even gives the worked example of a
+named Azure runtime, `gpt5-azure-eu`, predating this issue).
+
+No new entity types are introduced by spec #332; it is a product-facing
+restatement of entities that already exist in the registry. To prevent the
+Developer Agent from building a second, parallel "LLM Provider" object model,
+this ADR fixes the mapping as authoritative for implementation:
+
+| Spec #332 term | Existing registry term (spec #044 / ADR-005) |
+|---|---|
+| LLM Provider | Runtime entry (`runtimes.<name>`, this ADR: `kind: azure-openai`) |
+| Agent-to-Provider Assignment | `agent_defaults.<agent>` → runtime name (FR-008) |
+| Credential Reference | `credential_ref` (name-only secret reference) |
+
+No schema or code changes are implied by this reconciliation — it is a
+documentation/implementation-guidance clarification only. The Docs Agent should
+use the spec's product vocabulary in user-facing docs while keeping
+`src/runtimes.yml` and code comments on the existing `runtime`/`agent_defaults`/
+`credential_ref` terms, with a glossary note linking the two.
+
+## Spec Coverage Check (FR-001 – FR-009)
+
+Cross-checked against `specs/332-llm-keys-for-the-project-to-be-configure/spec.md`:
+all of FR-001–FR-009 are satisfied by the decisions in this ADR without further
+architectural work — FR-002/FR-006 (Azure AI Foundry, multiple entries) by §1–§3
+above, FR-003/FR-004 (per-agent assignment, default fallback) by the existing
+`agent_defaults`/`default_runtime` mechanism (§4), FR-005 (no silent fallback)
+by §5, FR-007 (config-only changes) and FR-008 (unaffected default provider) by
+construction (no schema change, `azure-openai` purely additive to the
+allowlist), and FR-009 (documentation) by the Follow-Up Work item below. No
+`ARCH-BLOCKER` items were found. **Result: ARCH-APPROVE**, with the
+`ARCH-CONCERN` on terminology noted above.
+
 ## Follow-Up Work (not covered by this ADR)
 
 1. **Developer Agent**: implement `runtimes/azure-openai.js`, generalize the
    dispatched-workflow HTTP step, add `azure-openai` to `ENABLED_KINDS` in
    `runtime-registry.js`, add tests (mirrors ADR-005 step 4).
-2. **BA/Product Agent**: issue #332 is currently labelled `status:needs-info`
-   with no acceptance criteria — a formal spec (`specs/332-.../spec.md`) is
-   still required to pin down concrete deployment names, which agents map to
-   which tier, and rollout acceptance scenarios. This ADR fixes the
-   *architecture*; it does not substitute for that spec.
+2. ~~**BA/Product Agent**: write `specs/332-.../spec.md`~~ — done; see
+   `specs/332-llm-keys-for-the-project-to-be-configure/spec.md`.
 3. **Docs Agent**: update `docs/AGENT_PROTOCOL.md` and `src/runtimes.yml`
    header comments to document the new supported kind and the per-agent
-   cost-tiering example above.
+   cost-tiering example above, using the terminology mapping in this ADR.
 4. **Security Agent**: review the generalized dispatch step and the new
    `AZURE_OPENAI_API_KEY` secret handling before merge.
 
@@ -234,6 +272,8 @@ dashboard (subject to Constitution §IX — dashboard remains read-only).
 ## References
 
 - Issue #332 (this decision) and #326 (root cause, pipeline failure)
+- `specs/332-llm-keys-for-the-project-to-be-configure/spec.md` — BA/Product
+  Agent spec this ADR was cross-checked against (FR-001–FR-009)
 - `docs/architecture/adr-005-pluggable-runtime-registry-interface.md` — kind
   allowlist and the reserved-kind enablement process this ADR exercises
 - `docs/architecture/adr-003-copilot-workflow-github-models-migration.md` —
