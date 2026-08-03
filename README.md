@@ -71,10 +71,14 @@ bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
 - Issue templates: bug report, feature request, security vulnerability
 - Starter `CONTRIBUTING.md` and `SECURITY.md`
 
-After it completes, commit and push the generated files:
+After it completes, commit and push the generated files. `init.sh` never touches
+existing source code, so it's safe to stage everything in one go — this also
+picks up `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, the reference guides,
+`scripts/` (local pipeline runner), and `src/pipelines/` (orchestrator pipeline
+definitions), not just `.github/`/`.claude/`/`.specify/`:
 
 ```bash
-git add .github/ .claude/ .specify/ specs/
+git add -A
 git commit -m "chore: install QuorumKit"
 git push
 ```

@@ -1530,6 +1530,7 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
+  const cfg = loadConfig();
   console.log('');
   console.log('  ████████████████████████████████████████████████');
   console.log('  ██                                            ██');
@@ -1540,7 +1541,14 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  ► http://localhost:${PORT}`);
   console.log(`  ► WebSocket: ws://localhost:${PORT}`);
   console.log('');
-  console.log('  Open the URL above in your browser, then use');
-  console.log('  the ⚙ Settings button to set your project path.');
+  if (cfg.localPath) {
+    console.log(`  Project: ${cfg.localPath}`);
+    console.log('  Open the URL above in your browser — the project path,');
+    console.log('  git remote, and branch were auto-detected. Use the ⚙');
+    console.log('  Settings button only if you need to change them.');
+  } else {
+    console.log('  Open the URL above in your browser, then use');
+    console.log('  the ⚙ Settings button to set your project path.');
+  }
   console.log('');
 });
