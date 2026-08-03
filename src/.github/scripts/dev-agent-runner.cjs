@@ -31,6 +31,14 @@
  *   ITERATION           — pipeline iteration (default '1')
  *   RUNTIME_NAME        — the named runtime entry from src/runtimes.yml
  *   MAX_ITERATIONS      — agentic loop cap (default 20)
+ *   RUNTIME_ENDPOINT     — Azure OpenAI / Azure AI Foundry endpoint override
+ *                          for RUNTIME_KIND=copilot (ADR-332); routes the
+ *                          chat/completions call there instead of GitHub
+ *                          Models when set. No silent fallback: an
+ *                          unreachable/misconfigured endpoint fails loudly.
+ *   RUNTIME_MODEL        — model/deployment name to send (ADR-332)
+ *   RUNTIME_API_VERSION  — Azure OpenAI api-version query param (ADR-332)
+ *   RUNTIME_CREDENTIAL   — resolved API key for RUNTIME_ENDPOINT (ADR-332)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -460,20 +468,37 @@ async function runCopilot({ system, user }) {
     { role: 'user',   content: user },
   ];
 
+  // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI Foundry
+  // deployment when RUNTIME_ENDPOINT is supplied; otherwise fall back to the
+  // existing GitHub Models default (byte-for-byte unchanged).
+  const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
+  const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
+  const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
+  const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+  let hostname       = 'models.inference.ai.azure.com';
+  let requestPath    = '/chat/completions';
+  let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
+  if (runtimeEndpoint) {
+    const u = new URL(runtimeEndpoint);
+    hostname       = u.hostname;
+    requestPath    = `${u.pathname.replace(/\/$/, '')}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
+    requestHeaders = { 'api-key': runtimeCredential };
+  }
+
   for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
     console.log(`[runner] iteration ${i + 1} (copilot)`);
     const body = JSON.stringify({
-      model: 'gpt-4o',
+      model: runtimeModel,
       messages,
       tools,
       max_tokens: 4096,
     });
     const res = await httpsRequest({
-      hostname: 'models.inference.ai.azure.com',
-      path: '/chat/completions',
+      hostname,
+      path: requestPath,
       method: 'POST',
       headers: {
-        Authorization: 'Bearer ' + process.env.GITHUB_TOKEN,
+        ...requestHeaders,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
       },

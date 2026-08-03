@@ -1,8 +1,15 @@
 # APM Runtime Registry (FR-007, ADR-005)
 #
 # Canonical source of truth for runtimes available to v2 pipelines.
-# Reserved kinds (azure-openai, bedrock, ollama, custom) are NOT enabled in v2;
-# enabling any of them requires a per-kind ADR. See ADR-005.
+# Supported kinds: claude, copilot, azure-openai (enabled by ADR-332).
+# Reserved kinds (bedrock, ollama, custom) are NOT enabled in v2; enabling any
+# of them requires a per-kind ADR. See ADR-005.
+#
+# azure-openai (ADR-332): lets a maintainer point agents at their own Azure AI
+# Foundry / Azure OpenAI deployment instead of the GitHub Models default, so
+# agentic workflows run on a predictable, maintainer-controlled LLM provider.
+# There is NO silent fallback: if the configured runtime is unreachable or the
+# credential is missing, the run fails loudly (ADR-332 §5).
 #
 # Credentials are referenced BY NAME ONLY. The orchestrator resolves the
 # secret value from `process.env` (i.e. GitHub Actions ${{ secrets.* }})
@@ -10,9 +17,13 @@
 
 default_runtime: copilot-default
 
-# Per-agent overrides (FR-008). Empty by default.
-# Example:
-#   qa-agent: claude-default
+# Per-agent overrides (FR-008), used for cost-aware model selection. Empty by
+# default. Example assigning cheaper/stronger Azure OpenAI deployments per
+# agent (ADR-332 §4) — applies uniformly to every agent, including dev-agent
+# (dispatched via the iterative dev-agent-runner.cjs, not a one-shot script):
+#   triage-agent: azure-foundry-mini
+#   architect-agent: azure-foundry-standard
+#   dev-agent: azure-foundry-standard
 agent_defaults: {}
 
 runtimes:
@@ -25,3 +36,24 @@ runtimes:
     kind: claude
     endpoint: https://api.anthropic.com/v1
     credential_ref: ANTHROPIC_API_KEY
+
+  # Example azure-openai entries (ADR-332). Uncomment and adjust <resource>/
+  # <deployment> to enable, then reference them in `agent_defaults` above.
+  # The `AZURE_OPENAI_API_KEY` secret (or a differently named credential_ref)
+  # must be configured as a GitHub Actions repository secret.
+  #
+  # azure-foundry-mini:
+  #   kind: azure-openai
+  #   endpoint: https://<resource>.openai.azure.com/openai/deployments/<mini-deployment>
+  #   credential_ref: AZURE_OPENAI_API_KEY
+  #   model: <mini-deployment-name>
+  #   parameters:
+  #     api_version: "2024-10-21"
+  #
+  # azure-foundry-standard:
+  #   kind: azure-openai
+  #   endpoint: https://<resource>.openai.azure.com/openai/deployments/<standard-deployment>
+  #   credential_ref: AZURE_OPENAI_API_KEY
+  #   model: <standard-deployment-name>
+  #   parameters:
+  #     api_version: "2024-10-21"
