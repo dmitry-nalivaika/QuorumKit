@@ -45,8 +45,12 @@ gh auth login
 git --version
 ```
 
-The scripts are executable after running `scripts/init.sh`. If you cloned
-manually, make them executable once:
+The scripts are copied automatically into your project's own `scripts/`
+directory when you run `npx quorumkit-engine dashboard`'s installer
+(`scripts/init.sh` — see [DASHBOARD.md](DASHBOARD.md)), and are made
+executable. Re-running the installer is idempotent: it will not overwrite
+scripts you've already customised. If you cloned manually, make them
+executable once:
 
 ```zsh
 chmod +x scripts/branch-guard.sh scripts/pipeline.sh

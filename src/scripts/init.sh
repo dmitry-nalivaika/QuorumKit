@@ -342,6 +342,34 @@ install_pipelines() {
   done
 }
 
+# =============================================================================
+# LOCAL PARALLEL PIPELINES (FR-004, Issue #283, AD-4)
+# =============================================================================
+install_local_pipelines() {
+  h1 "Installing local pipeline scripts (scripts/)"
+  # Copies the local-pipeline lifecycle manager and its branch-guard helper
+  # into the consumer project's own top-level scripts/ directory, so
+  # `scripts/pipeline.sh start <N>` works without a QuorumKit source checkout.
+  local src_dir="$QUORUMKIT_PACKAGE_DIR/src/scripts"
+
+  mkdir -p scripts
+
+  for script_name in pipeline.sh branch-guard.sh; do
+    local src_file="$src_dir/$script_name"
+    if [ ! -f "$src_file" ]; then
+      warn "$script_name not found at $src_file — skipping"
+      continue
+    fi
+    if [ ! -f "scripts/$script_name" ]; then
+      cp "$src_file" "scripts/$script_name"
+      chmod +x "scripts/$script_name"
+      ok "Local pipeline script: scripts/$script_name"
+    else
+      warn "scripts/$script_name already exists — skipping (edit to customise)"
+    fi
+  done
+}
+
 install_github_templates() {
   local ai_mode="$1"
   h1 "Installing GitHub templates (workflows, PR & issue templates)"
@@ -586,12 +614,14 @@ case "$AI_MODE" in
     install_github_templates "claude"
     install_speckit "claude"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
   copilot)
     install_copilot
     install_github_templates "copilot"
     install_speckit "copilot"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
   both)
     install_claude
@@ -599,6 +629,7 @@ case "$AI_MODE" in
     install_github_templates "both"
     install_speckit "both"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
 esac
 
@@ -676,10 +707,13 @@ if [[ "$AI_MODE" == "copilot" || "$AI_MODE" == "both" ]]; then
 fi
 
 echo "  ── Orchestrator dashboard (optional) ────────────────────────────────"
-echo "  Run from THIS project directory ($PROJECT_DIR) to auto-fill the"
-echo "  project path, git remote, and current branch in the dashboard:"
-echo "    bash $QUORUMKIT_PACKAGE_DIR/engine/dashboard/start.sh"
+echo "  Install and launch the dashboard from THIS project directory"
+echo "  ($PROJECT_DIR) to auto-fill the project path, git remote, and"
+echo "  current branch in the dashboard:"
+echo "    npm install --no-save quorumkit-engine"
+echo "    npx quorumkit-engine dashboard"
 echo "  Then open http://localhost:3131 — agents are launchable from the UI."
+echo "  (Self-hosting from a QuorumKit source checkout? See docs/DASHBOARD.md.)"
 echo ""
 echo "  Comment on a PR or issue to trigger agents:"
 echo "    @qa-agent             — QA + mutation testing review on PR"
