@@ -7,6 +7,22 @@ on:
     types: [created]
   workflow_dispatch:
     inputs:
+      runtime_endpoint:
+        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332)'
+        required: false
+        default: ''
+      runtime_model:
+        description: 'Optional LLM model/deployment override (ADR-332)'
+        required: false
+        default: ''
+      runtime_credential_ref:
+        description: 'Optional secret name holding the API key for runtime_endpoint (ADR-332)'
+        required: false
+        default: ''
+      runtime_api_version:
+        description: 'Optional API version query parameter for Azure OpenAI-style endpoints (ADR-332)'
+        required: false
+        default: ''
       issue_number:
         description: 'Issue or PR number (used when triggered by the Orchestrator)'
         required: true
@@ -34,6 +50,10 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
+          RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
+          RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
+          RUNTIME_CREDENTIAL: ${{ (github.event.inputs.runtime_credential_ref && secrets[github.event.inputs.runtime_credential_ref]) || secrets.GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -59,14 +79,29 @@ jobs:
               `@${commentAuthor} asked you (via comment on #${issueNumber}) to perform an architectural review.\n` +
               `Comment:\n${commentBody}`;
 
-            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
+            // Foundry deployment when the Orchestrator's azure-openai runtime
+            // adapter supplied these inputs; otherwise fall back to the
+            // existing GitHub Models default (byte-for-byte unchanged).
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            const requestUrl = runtimeEndpoint
+              ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
+              : 'https://models.inference.ai.azure.com/chat/completions';
+            const authHeaders = runtimeEndpoint
+              ? { 'api-key': runtimeCredential }
+              : { 'Authorization': `Bearer ${runtimeCredential}` };
+
+            const res = await fetch(requestUrl, {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                ...authHeaders,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                model: 'gpt-4o',
+                model: runtimeModel,
                 messages: [
                   { role: 'system', content: systemContent },
                   { role: 'user',   content: userContent },
