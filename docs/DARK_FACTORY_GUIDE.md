@@ -47,8 +47,9 @@ bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
 # Use --ai=claude for Claude Code only, --ai=copilot for GitHub Copilot only.
 # init.sh also installs specify-cli and creates .specify/ automatically.
 
-# 5. Commit the generated files
-git add .github/ .claude/ .specify/ specs/
+# 5. Commit the generated files (init.sh never touches existing source code,
+#    so it's safe to stage everything in one go)
+git add -A
 git commit -m "chore: install QuorumKit with industrial domain pack"
 git push
 ```
