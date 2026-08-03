@@ -152,6 +152,28 @@ The dashboard webhook authentication identifiers have been renamed:
 
 ---
 
+## [3.2.0] — Issue #283 (additive only, no migration required)
+
+Issue #283 packaged the dashboard server/UI and the local-pipeline scripts
+(`pipeline.sh`, `branch-guard.sh`) inside the `quorumkit-engine` npm package
+and made `init.sh` copy the pipeline scripts into every consumer project
+automatically. This is a **MINOR, additive-only release**:
+
+- No files were renamed or removed from the consumer-facing layout.
+- `scripts/pipeline.sh` and `scripts/branch-guard.sh` continue to work
+  unchanged — they now point at a new internal canonical location
+  (`src/scripts/`) via a backward-compatible shim, transparent to consumers.
+- No action is required to upgrade. Running `npx quorumkit-engine dashboard`
+  from your project root (instead of a QuorumKit source-clone path) is now
+  the recommended way to launch the dashboard — see
+  [`docs/DASHBOARD.md`](DASHBOARD.md).
+
+Any *future* breaking file-layout change will continue to use the
+`init.sh --upgrade --apply` mechanism documented above, with its own
+dedicated section in this guide.
+
+---
+
 ## Further help
 
 - Open an Issue at `github.com/dmitry-nalivaika/quorumkit/issues`
