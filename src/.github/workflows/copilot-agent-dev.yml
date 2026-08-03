@@ -6,6 +6,22 @@ name: Developer Agent (Copilot)
 on:
   workflow_dispatch:
     inputs:
+      runtime_endpoint:
+        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332)'
+        required: false
+        default: ''
+      runtime_model:
+        description: 'Optional LLM model/deployment override (ADR-332)'
+        required: false
+        default: ''
+      runtime_credential_ref:
+        description: 'Optional secret name holding the API key for runtime_endpoint (ADR-332)'
+        required: false
+        default: ''
+      runtime_api_version:
+        description: 'Optional API version query parameter for Azure OpenAI-style endpoints (ADR-332)'
+        required: false
+        default: ''
       issue_number:
         description: 'Issue or PR number triggering this agent'
         required: true
@@ -54,6 +70,10 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           RUNTIME_KIND: copilot
           RUNTIME_NAME: copilot-default
+          RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
+          RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
+          RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
+          RUNTIME_CREDENTIAL: ${{ (github.event.inputs.runtime_credential_ref && secrets[github.event.inputs.runtime_credential_ref]) || secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
           RUN_ID: ${{ github.event.inputs.run_id }}
           STEP: ${{ github.event.inputs.step }}

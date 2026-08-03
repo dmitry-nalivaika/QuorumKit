@@ -19,9 +19,11 @@ default_runtime: copilot-default
 
 # Per-agent overrides (FR-008), used for cost-aware model selection. Empty by
 # default. Example assigning cheaper/stronger Azure OpenAI deployments per
-# agent (ADR-332 §4):
+# agent (ADR-332 §4) — applies uniformly to every agent, including dev-agent
+# (dispatched via the iterative dev-agent-runner.cjs, not a one-shot script):
 #   triage-agent: azure-foundry-mini
 #   architect-agent: azure-foundry-standard
+#   dev-agent: azure-foundry-standard
 agent_defaults: {}
 
 runtimes:

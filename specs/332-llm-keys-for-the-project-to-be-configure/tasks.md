@@ -17,14 +17,20 @@ in every code task.
    case for an `azure-openai` runtime entry. Confirm it fails.
 4. **[impl]** In `engine/orchestrator/runtime-registry.js`, move `azure-openai`
    from `RESERVED_KINDS` to `ENABLED_KINDS`. Confirm task 3 tests pass.
-5. **[impl]** Generalize the dispatched-workflow HTTP step in the 9-10
+5. **[impl]** Generalize the dispatched-workflow HTTP step in the 9 inline-fetch
    `copilot-agent-*.yml` files (both `.github/workflows/` and
    `src/.github/workflows/`, keeping byte-parity per ADR-006 M5): add the four
    optional `workflow_dispatch.inputs`, the four new `env:` entries, and the
    conditional endpoint/auth-header/model logic in the fetch call. Excludes
-   `copilot-agent-dev.yml` and the `copilot-code-action`-based workflows
-   (compliance/digital-twin/incident/ot-integration — no fetch call to
-   generalize there).
+   the `copilot-code-action`-based workflows (compliance/digital-twin/incident/
+   ot-integration — no fetch call to generalize there).
+5b. **[impl]** Generalize `copilot-agent-dev.yml` (both trees) and
+    `dev-agent-runner.cjs`'s `runCopilot()` (both `.github/scripts/` and
+    `src/.github/scripts/`) the same way, so `dev-agent` can also be assigned
+    an `azure-openai` runtime per ADR-332 §4's own worked example
+    (`dev-agent: azure-foundry-standard`). Uses `URL()` to split
+    `runtime_endpoint` into hostname/path since the runner calls
+    `https.request()` directly rather than `fetch()`.
 6. **[docs]** Update `src/runtimes.yml` header comment with the `azure-openai`
    worked example (cheaper + stronger deployment tiers).
 7. **[docs]** Update `docs/AGENT_PROTOCOL.md` with the new supported kind,

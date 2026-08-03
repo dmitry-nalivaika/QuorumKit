@@ -50,13 +50,28 @@ Structurally parallel to `copilot.js` (same `invoke(context)` contract,
 
 ### 2. Generalize the dispatched-workflow HTTP step
 
-The 9-10 `copilot-agent-*.yml` workflows that call
-`https://models.inference.ai.azure.com/chat/completions` directly (excluding
-`copilot-agent-dev.yml`, which uses the iterative `dev-agent-runner.cjs` path
-and `copilot-agent-compliance/digital-twin/incident/ot-integration.yml`, which
-use `github/copilot-code-action` instead of a raw fetch — both out of scope,
-no fetch call exists there to generalize) are updated identically in both
-`.github/workflows/` and `src/.github/workflows/` (ADR-006 §4 M5 byte-parity):
+The 9 `copilot-agent-*.yml` workflows that call
+`https://models.inference.ai.azure.com/chat/completions` directly via an
+inline `actions/github-script` step are updated identically in both
+`.github/workflows/` and `src/.github/workflows/` (ADR-006 §4 M5 byte-parity).
+
+`copilot-agent-dev.yml` is also in scope — it does not have an inline fetch
+call, but its `dev-agent-runner.cjs` (iterative agentic loop, RUNTIME_KIND=copilot
+branch) makes the *same* hardcoded `models.inference.ai.azure.com` /
+`gpt-4o` call via Node's `https` module. ADR-332 §4's own worked example
+(`dev-agent: azure-foundry-standard`) requires `dev-agent` to be assignable to
+an `azure-openai` runtime like every other agent, so `copilot-agent-dev.yml`
+gets the same four new `workflow_dispatch.inputs` + env forwarding, and
+`runCopilot()` in `dev-agent-runner.cjs` (both `.github/scripts/` and
+`src/.github/scripts/` copies) is generalized the same way, using `URL()` to
+split `runtime_endpoint` into hostname/path since `https.request()` takes
+those separately (unlike `fetch()`'s single URL argument).
+
+`copilot-agent-compliance/digital-twin/incident/ot-integration.yml` remain out
+of scope: they use `github/copilot-code-action` instead of a raw fetch/HTTP
+call, so there is nothing to generalize.
+
+For the 9 inline-fetch workflows:
 
 - Add four new **optional** `workflow_dispatch.inputs` (default `''`,
   `required: false`): `runtime_endpoint`, `runtime_model`,
@@ -113,6 +128,10 @@ already supports `model`/`region`/`parameters` per ADR-005).
 - Cost/token telemetry (spec Out of Scope; ADR-332 §6 `ARCH-CONCERN`, future work)
 - AAD/managed-identity auth (spec Out of Scope; ADR-332 §2)
 - Any runtime kind other than `azure-openai` (bedrock/ollama/custom remain reserved)
-- Rewriting `copilot-agent-dev.yml`'s iterative runner or the
-  `copilot-code-action`-based workflows (compliance/digital-twin/incident/
-  ot-integration) — no hardcoded fetch call exists there to generalize
+- Rewriting `copilot-agent-dev.yml`'s iterative agentic-loop *architecture*
+  (tool-calling, `signal_outcome`, etc.) — only its LLM-call routing is
+  generalized, mirroring the other 9 workflows
+- The `copilot-code-action`-based workflows (compliance/digital-twin/incident/
+  ot-integration) — no hardcoded fetch/HTTP call exists there to generalize
+- `agent-dev.yml` / the `RUNTIME_KIND=claude` branch of `dev-agent-runner.cjs`
+  — unrelated to `azure-openai` (Claude routes through Anthropic only)
