@@ -150,6 +150,33 @@ only the runtime contract is fixed.
       and `npm` for `/engine/`.
 - [ ] Security Agent re-reviews and lifts the SEC-MED-005 finding.
 
+## Verifying the Maintainer Signing Key
+
+Every release tag (`vX.Y.Z`) MUST be signed with the current maintainer GPG
+key before `engine-release.yml` will publish it (`git verify-tag`, per this
+ADR's `node20` + committed-`dist/` trust boundary — the signed tag is the
+root of trust for what gets published).
+
+| Field | Value |
+|---|---|
+| **Current fingerprint** | `B7A8 4789 C59F 594A 19DA  33DC 3B6F 93CB C471 3271` |
+| **Key owner** | `dmitry_nalivaika@epam.com` |
+| **Last rotated** | 2026-08-03 (prior key lost with the previous maintainer machine) |
+| **Verified against** | The `MAINTAINER_GPG_PUBLIC_KEY` GitHub Actions secret — imported by `engine-release.yml`'s "Import maintainer GPG public key" step before `git verify-tag` runs |
+
+Downstream consumers can verify any release tag locally:
+
+```bash
+git fetch --tags
+git verify-tag vX.Y.Z
+```
+
+**Rotate the fingerprint in this table — and only here — when the
+maintainer's signing key changes.** See `engine/RELEASING.md` §7 for the
+full key-rotation runbook (generating/replacing the key, updating the
+`MAINTAINER_GPG_PUBLIC_KEY` secret, and re-running a release that started
+before the secret was updated).
+
 ## Cross-References
 
 - Spec: `specs/047-repo-topology/spec.md` (FR-008, FR-013, FR-014, FR-031,
@@ -157,3 +184,4 @@ only the runtime contract is fixed.
 - Parent ADR: `docs/architecture/adr-047-repo-topology-and-engine-distribution.md`
 - Constitution: Principles V (Reusability), VII (Simplicity), and the
   Security & Privacy Constraints section.
+- Release runbook: `engine/RELEASING.md` §1 (one-time key setup), §7 (key rotation)

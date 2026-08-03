@@ -20,7 +20,7 @@ the same `engine/` source on every signed `v*` tag:
 
 | Setup task | Where | Who |
 |---|---|---|
-| Maintainer GPG key registered with GitHub & in the local keyring | `gpg --import` + `git config user.signingkey <FPR>` + `gpg --export <FPR>` uploaded to GitHub | Maintainer |
+| Maintainer GPG key generated/imported, `git config user.signingkey <FPR>` set, and the **public** key set as the `MAINTAINER_GPG_PUBLIC_KEY` secret (`gpg --armor --export <FPR> \| gh secret set MAINTAINER_GPG_PUBLIC_KEY`) | Local keyring + repo Settings → Secrets and variables → Actions | Maintainer |
 | `release` GitHub Environment with required-reviewer protection rule | Repo Settings → Environments → `release` | Maintainer (admin) |
 | npm "Trusted Publisher" mapping for `quorumkit-engine` | <https://www.npmjs.com/package/quorumkit-engine/access> → Trusted Publishers → add this repo + workflow `engine-release.yml` | Maintainer + npm package owner |
 | Branch-protection on `main` requires PR + verify-mirror green | Repo Settings → Branches → `main` | Maintainer (admin) |
@@ -83,9 +83,9 @@ npm view quorumkit-engine@X.Y.Z --json | jq '.dist'
 ```
 
 The maintainer's GPG public key fingerprint is published at
-`docs/architecture/adr-047-action-runtime.md` §Verifying-key. Rotate the
-fingerprint there — and only there — when the maintainer's signing key
-changes.
+`docs/architecture/adr-047-action-runtime.md` § "Verifying the Maintainer
+Signing Key". Rotate the fingerprint there — and only there — when the
+maintainer's signing key changes (see §6 below for the full rotation runbook).
 
 ---
 
@@ -133,7 +133,52 @@ consumer who already pinned to the bad version. Always deprecate + supersede.
 
 ---
 
-## 6. Disaster recovery — fallback NPM token (SEC-HIGH-001)
+## 6. Rotating a lost or replaced signing key
+
+If the maintainer's GPG private key is lost (new machine, corrupted
+keyring, no backup) or is intentionally rotated, `git tag -s` and CI's
+`git verify-tag` will fail until every one of these steps completes:
+
+```bash
+# 1. Install GPG (macOS) + a GUI pinentry — curses pinentry commonly fails
+#    with "Inappropriate ioctl for device" in non-interactive/VS Code shells.
+brew install gnupg pinentry-mac
+echo "pinentry-program $(brew --prefix)/bin/pinentry-mac" > ~/.gnupg/gpg-agent.conf
+gpgconf --kill gpg-agent
+export GPG_TTY=$(tty)                              # add to ~/.zshrc too
+
+# 2. Generate a new key (or import a backed-up one — never paste key
+#    material into a chat/AI tool; it is a secret)
+gpg --full-generate-key
+gpg --list-secret-keys --keyid-format=long --fingerprint   # copy the FPR
+
+# 3. Point git at the new key
+git config --global user.signingkey <FPR>
+git config --global tag.gpgsign true
+git config --global gpg.program $(which gpg)
+
+# 4. Publish the new PUBLIC key to the repo secret CI verifies against
+#    (exporting a public key is not sensitive — safe to pipe directly)
+gpg --armor --export <FPR> | gh secret set MAINTAINER_GPG_PUBLIC_KEY --repo dmitry-nalivaika/QuorumKit
+
+# 5. (Recommended) add the same public key to your GitHub account for the
+#    "Verified" badge: Settings → SSH and GPG keys → New GPG key.
+
+# 6. Update the fingerprint record — the only other place it is recorded:
+#    docs/architecture/adr-047-action-runtime.md § Verifying the Maintainer Signing Key
+```
+
+If a release run already started (and is `waiting` on tag verification or the
+`release` Environment approval) before you finished step 4, re-run it instead
+of re-tagging — the workflow re-imports the secret fresh on every run:
+
+```bash
+gh run rerun <run-id>
+```
+
+---
+
+## 7. Disaster recovery — fallback NPM token (SEC-HIGH-001)
 
 If npm trusted publishing is unavailable (e.g. a registry-side outage or
 the maintainer needs to publish from an air-gapped host), and only then,
