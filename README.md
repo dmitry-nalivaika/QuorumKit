@@ -36,7 +36,7 @@ You can also invoke any agent on demand — with a slash command in Claude Code,
 
 > **You do not need both Claude Code and Copilot.** Install only the row that matches your platform.
 
-> **Optional:** to run agents against your own Azure AI Foundry / Azure OpenAI deployment instead of the shared default, add an `AZURE_OPENAI_API_KEY` GitHub Actions secret and register a runtime in `src/runtimes.yml` — see [docs/PIPELINES.md#runtime-registry](docs/PIPELINES.md#runtime-registry).
+> **Optional:** to run agents against your own Azure AI Foundry / Azure OpenAI deployment instead of the shared default, add an `AZURE_OPENAI_API_KEY` GitHub Actions secret and register a runtime in `src/runtimes.yml` — see [docs/AZURE_FOUNDRY_GUIDE.md](docs/AZURE_FOUNDRY_GUIDE.md) for a full walkthrough, including creating models in Azure AI Foundry.
 
 ---
 
@@ -369,6 +369,7 @@ apm install
 | [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | You want to configure the dashboard or run it in development mode |
 | [`docs/BROWNFIELD_GUIDE.md`](docs/BROWNFIELD_GUIDE.md) | You are adding QuorumKit to an existing repo that already has CI/CD |
 | [`docs/DARK_FACTORY_GUIDE.md`](docs/DARK_FACTORY_GUIDE.md) | You are setting up a greenfield industrial or lights-out project |
+| [`docs/AZURE_FOUNDRY_GUIDE.md`](docs/AZURE_FOUNDRY_GUIDE.md) | You want to run agents on your own Azure AI Foundry / Azure OpenAI deployment, including creating models |
 | [`docs/ENHANCEMENTS.md`](docs/ENHANCEMENTS.md) | You want to contribute a new feature or review the roadmap |
 | [`CHANGELOG.md`](CHANGELOG.md) | You want to see what changed in a specific release |
 

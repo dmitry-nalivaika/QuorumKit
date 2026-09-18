@@ -344,6 +344,7 @@ bash scripts/quality-check.sh
 | [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md) | Canonical list of labels, outcomes, and transition triggers |
 | [INIT.md](INIT.md) | Installing the Orchestrator and initial setup |
 | [LOCAL_PIPELINES.md](LOCAL_PIPELINES.md) | Running pipelines locally without GitHub Actions |
+| [AZURE_FOUNDRY_GUIDE.md](AZURE_FOUNDRY_GUIDE.md) | Step-by-step: creating Azure AI Foundry models and wiring them into `src/runtimes.yml` |
 | [ADR-004][ADR-004] | Two-channel state storage model |
 | [ADR-005][ADR-005] | Pluggable runtime registry interface |
 | [ADR-332](architecture/adr-332-enable-azure-openai-runtime-kind.md) | Configuring an `azure-openai` (Azure AI Foundry) runtime per project |
