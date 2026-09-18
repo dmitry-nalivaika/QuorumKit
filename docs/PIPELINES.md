@@ -246,7 +246,7 @@ agent_defaults: {}
 
 runtimes:
   copilot-default:
-    kind: copilot                  # only `claude` and `copilot` are enabled in v2
+    kind: copilot                  # GitHub Models default
     endpoint: https://models.github.ai/inference
     credential_ref: GITHUB_TOKEN   # referenced by name; the Orchestrator reads process.env at runtime
 
@@ -254,11 +254,22 @@ runtimes:
     kind: claude
     endpoint: https://api.anthropic.com/v1
     credential_ref: ANTHROPIC_API_KEY
+
+  # Optional: route agents to your own Azure AI Foundry / Azure OpenAI
+  # deployment instead of the shared default (ADR-332). Requires an
+  # `AZURE_OPENAI_API_KEY` GitHub Actions secret.
+  azure-foundry-standard:
+    kind: azure-openai
+    endpoint: https://<resource>.openai.azure.com/openai/deployments/<deployment>
+    credential_ref: AZURE_OPENAI_API_KEY
+    model: <deployment-name>
+    parameters: { api_version: "2024-10-21" }
 ```
 
-`azure-openai`, `bedrock`, `ollama`, and `custom` are **reserved** kinds. The
+`claude`, `copilot`, and `azure-openai` are **enabled** kinds ([ADR-005],
+[ADR-332]). `bedrock`, `ollama`, and `custom` remain **reserved** — the
 validator emits `RUNTIME_KIND_NOT_ENABLED` for any pipeline that references one
-until a per-kind ADR is merged ([ADR-005]).
+until a per-kind ADR is merged.
 
 ---
 
@@ -316,7 +327,7 @@ bash scripts/quality-check.sh
 | Symptom | Cause and fix |
 |---------|---------------|
 | No pipeline fires on label | Issue is missing one of the required `trigger.labels`; confirm all labels are applied. Also verify `orchestrator.yml` is present in `.github/workflows/`. |
-| `RUNTIME_KIND_NOT_ENABLED` error | Pipeline references a reserved runtime kind. Change it to `claude` or `copilot`. |
+| `RUNTIME_KIND_NOT_ENABLED` error | Pipeline references a reserved runtime kind. Change it to `claude`, `copilot`, or `azure-openai`. |
 | `protocol-violation` audit comment | The agent's `apm-msg` block is missing, malformed, or has a mismatched `runId`, `step`, or `iteration`. Check the agent's workflow log. |
 | `status:loop-budget-exceeded` label applied | A backward edge crossed `max_iterations_per_edge`. Human intervention is required; increase the budget in the pipeline YAML or resolve the underlying issue manually. |
 | Step stuck at `status:awaiting-approval` | Post `/approve` on the issue. Requires `write`, `maintain`, or `admin` permission on the repository. |
@@ -335,10 +346,12 @@ bash scripts/quality-check.sh
 | [LOCAL_PIPELINES.md](LOCAL_PIPELINES.md) | Running pipelines locally without GitHub Actions |
 | [ADR-004][ADR-004] | Two-channel state storage model |
 | [ADR-005][ADR-005] | Pluggable runtime registry interface |
+| [ADR-332](architecture/adr-332-enable-azure-openai-runtime-kind.md) | Configuring an `azure-openai` (Azure AI Foundry) runtime per project |
 | [ADR-006][ADR-006] | `src/` as the canonical runtime source of truth |
 | [ADR-007](architecture/adr-007-orchestrator-github-actions-substrate-contract.md) | Concurrency, deduplication, and timeout contracts |
 | [specs/044-orchestrator-v2-design/spec.md](../specs/044-orchestrator-v2-design/spec.md) | Full v2 functional specification |
 
 [ADR-004]: architecture/adr-004-orchestrator-state-comment-model-v2.md
 [ADR-005]: architecture/adr-005-pluggable-runtime-registry-interface.md
+[ADR-332]: architecture/adr-332-enable-azure-openai-runtime-kind.md
 [ADR-006]: architecture/adr-006-dual-runtime-source-of-truth-and-sync.md

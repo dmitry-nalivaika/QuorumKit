@@ -36,6 +36,8 @@ You can also invoke any agent on demand — with a slash command in Claude Code,
 
 > **You do not need both Claude Code and Copilot.** Install only the row that matches your platform.
 
+> **Optional:** to run agents against your own Azure AI Foundry / Azure OpenAI deployment instead of the shared default, add an `AZURE_OPENAI_API_KEY` GitHub Actions secret and register a runtime in `src/runtimes.yml` — see [docs/PIPELINES.md#runtime-registry](docs/PIPELINES.md#runtime-registry).
+
 ---
 
 ## Quick start
@@ -158,7 +160,7 @@ The orchestrator runs agent sequences automatically from pipeline YAML configura
 |------------|--------|
 | Event-driven | Triggered by GitHub events: new issues, PRs opened or updated, labels applied, or upstream workflow completions (`workflow_run`) |
 | Pipeline schema | Each pipeline YAML defines an `entry` step, `transitions` (what step runs next and under what conditions), and a `loop_budget` (maximum agent invocations per run) |
-| Per-step runtime | Each step can run on `claude` or `copilot`; defaults come from `src/runtimes.yml` |
+| Per-step runtime | Each step can run on `claude`, `copilot`, or your own `azure-openai` deployment; defaults come from `src/runtimes.yml` |
 | State tracking | Progress is stored in a hidden HTML comment (`<!-- apm-state -->`) on the orchestrator comment; a human-readable summary is also posted to the issue timeline |
 | Agent protocol | Each agent reports its outcome with a structured comment token: `<!-- apm-msg v="1" outcome="success/failure/escalate" -->` |
 | Loop budget | If the invocation count for a run exceeds the budget, the run halts to prevent runaway loops |
@@ -321,7 +323,7 @@ quorumkit/
 │   ├── agents/                   # Agent definitions — single source of truth
 │   ├── skills/                   # Slash-command activation wrappers
 │   ├── pipelines/                # Orchestrator pipeline YAML files
-│   ├── runtimes.yml              # Maps each agent to its default runtime (claude / copilot)
+│   ├── runtimes.yml              # Maps each agent to its default runtime (claude / copilot / azure-openai)
 │   ├── agent-identities.yml      # Per-agent runtime overrides
 │   ├── seed/                     # Starter files written to the target repo on init
 │   │                             # (CLAUDE.md, CONTRIBUTING.md, SECURITY.md, …)

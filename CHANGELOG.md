@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **`azure-openai` runtime kind enabled** (Issue #332, ADR-332): maintainers can register their own Azure AI Foundry / Azure OpenAI deployment as a named runtime in `src/runtimes.yml` and assign it per-agent via `agent_defaults`, alongside the existing `claude` and `copilot` kinds. Credentials are referenced by name (e.g. `AZURE_OPENAI_API_KEY`) and resolved from GitHub Actions secrets at dispatch time; a missing/invalid credential or unreachable endpoint fails the run visibly with no silent fallback to another provider. See `docs/architecture/adr-332-enable-azure-openai-runtime-kind.md`.
+
 ---
 
 ## [3.2.0] — 2026-08-03 · Issues #283, #273
