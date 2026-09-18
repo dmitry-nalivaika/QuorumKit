@@ -17,6 +17,6 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.6",
     "vitest": "^4.1.10",
-    "ws": "^8.21.1"
+    "ws": "^8.21.3"
   }
 }
