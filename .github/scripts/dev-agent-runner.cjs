@@ -83,6 +83,21 @@ function readSafe(p) {
   try { return fs.readFileSync(p, 'utf8'); } catch { return ''; }
 }
 
+// SEC-CRIT-002 (Security Agent review, PR #334): RUNTIME_ENDPOINT can be an
+// attacker-influenced workflow_dispatch input if this workflow is invoked
+// directly (bypassing the Orchestrator). Restrict it to known Azure OpenAI /
+// Azure AI Foundry hostnames so it cannot be used as an SSRF primitive.
+const ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+function isAllowedRuntimeEndpoint(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' &&
+      ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.some(suffix => u.hostname.toLowerCase().endsWith(suffix));
+  } catch {
+    return false;
+  }
+}
+
 function exec(cmd, opts = {}) {
   try {
     return execSync(cmd, { encoding: 'utf8', stdio: 'pipe', timeout: 120_000, ...opts }).trim();
@@ -475,6 +490,9 @@ async function runCopilot({ system, user }) {
   const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
   const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
   const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+  if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
+    throw new Error(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.join(' or ')}): ${runtimeEndpoint}`);
+  }
   let hostname       = 'models.inference.ai.azure.com';
   let requestPath    = '/chat/completions';
   let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
@@ -608,5 +626,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs };
+  module.exports = { executeTool, toolDefs, isAllowedRuntimeEndpoint };
 }

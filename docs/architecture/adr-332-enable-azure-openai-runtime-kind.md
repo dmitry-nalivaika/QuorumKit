@@ -166,6 +166,31 @@ today. Recorded as `ARCH-CONCERN`: a future spec (via BA Agent) + its own ADR
 would be needed for token/cost metering per agent-run, surfaced on the
 dashboard (subject to Constitution §IX — dashboard remains read-only).
 
+### 7. Threat model — `workflow_dispatch` trust boundary (amended post-review, PR #334)
+
+The Security Agent's review of PR #334 identified that `runtime_endpoint` and
+`runtime_credential_ref`, while intended to be populated only by the trusted
+Orchestrator (`azure-openai.js`), are declared as free-text `workflow_dispatch`
+inputs on the dispatched agent workflows. `workflow_dispatch` itself enforces
+no restriction that limits invocation to the Orchestrator — any collaborator
+with Actions-write can dispatch these workflows directly (UI/API/`gh workflow
+run`), bypassing `src/runtimes.yml` entirely. Two mitigations were added to
+close this gap without redesigning the dispatch contract:
+
+- **Credential resolution is a bounded enum, not dynamic indexing.**
+  `RUNTIME_CREDENTIAL` no longer evaluates `secrets[github.event.inputs.*]`
+  (which would let an attacker-supplied string select *any* repo/org secret).
+  It compares the input against the single literal `'AZURE_OPENAI_API_KEY'`
+  and falls back to `secrets.GITHUB_TOKEN` otherwise — a raw `workflow_dispatch`
+  invocation can therefore never cause a secret other than the one this ADR
+  documents to be resolved.
+- **`runtime_endpoint` is validated against a host allowlist** (must be
+  `https://` and end in `.openai.azure.com` or `.cognitiveservices.azure.com`)
+  before it is used to build any outbound request, in every dispatched
+  workflow and in `dev-agent-runner.cjs`. This closes the SSRF vector; an
+  invalid endpoint fails the step loudly (§5 — no silent fallback) rather than
+  proceeding.
+
 ---
 
 ## Consequences

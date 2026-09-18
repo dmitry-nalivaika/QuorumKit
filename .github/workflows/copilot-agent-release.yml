@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
       runtime_credential_ref:
-        description: 'Optional secret name holding the API key for runtime_endpoint (ADR-332)'
+        description: 'Must equal the literal string AZURE_OPENAI_API_KEY to use that credential (bounded allowlist, SEC-CRIT-001); any other value falls back to GITHUB_TOKEN (ADR-332)'
         required: false
         default: ''
       runtime_api_version:
@@ -51,7 +51,7 @@ jobs:
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ (github.event.inputs.runtime_credential_ref && secrets[github.event.inputs.runtime_credential_ref]) || secrets.GITHUB_TOKEN }}
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -87,6 +87,20 @@ jobs:
             const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
             const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
             const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
+            // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
+            // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
+            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+            const isAllowedRuntimeEndpoint = raw => {
+              try {
+                const u = new URL(raw);
+                return u.protocol === 'https:' && allowedRuntimeEndpointHostSuffixes.some(s => u.hostname.toLowerCase().endsWith(s));
+              } catch { return false; }
+            };
+            if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
+              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              return;
+            }
             const requestUrl = runtimeEndpoint
               ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
               : 'https://models.inference.ai.azure.com/chat/completions';
@@ -112,7 +126,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 

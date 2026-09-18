@@ -15,7 +15,7 @@ on:
         required: false
         default: ''
       runtime_credential_ref:
-        description: 'Optional secret name holding the API key for runtime_endpoint (ADR-332)'
+        description: 'Must equal the literal string AZURE_OPENAI_API_KEY to use that credential (bounded allowlist, SEC-CRIT-001); any other value falls back to GITHUB_TOKEN (ADR-332)'
         required: false
         default: ''
       runtime_api_version:
@@ -73,7 +73,7 @@ jobs:
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ (github.event.inputs.runtime_credential_ref && secrets[github.event.inputs.runtime_credential_ref]) || secrets.GITHUB_TOKEN }}
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
           RUN_ID: ${{ github.event.inputs.run_id }}
           STEP: ${{ github.event.inputs.step }}

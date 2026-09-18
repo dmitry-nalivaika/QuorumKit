@@ -21,6 +21,7 @@ const RUNNER_PATH = path.resolve(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 let tmpDir;
 let executeTool;
+let isAllowedRuntimeEndpoint;
 
 function abs(rel) {
   return path.join(tmpDir, rel);
@@ -41,7 +42,7 @@ beforeEach(() => {
   const requireCjs = createRequire(import.meta.url);
   // Clear require cache to get a fresh module with updated cwd.
   delete requireCjs.cache[requireCjs.resolve(RUNNER_PATH)];
-  ({ executeTool } = requireCjs(RUNNER_PATH));
+  ({ executeTool, isAllowedRuntimeEndpoint } = requireCjs(RUNNER_PATH));
 });
 
 afterEach(() => {
@@ -163,5 +164,32 @@ describe('write_file size-shrink guard', () => {
     });
 
     expect(result).toMatch(/Wrote/);
+  });
+});
+
+// ─── isAllowedRuntimeEndpoint (SEC-CRIT-002 — PR #334 security review) ──────
+describe('isAllowedRuntimeEndpoint', () => {
+  it('allows an https Azure OpenAI endpoint', () => {
+    expect(isAllowedRuntimeEndpoint('https://my-resource.openai.azure.com/openai/deployments/gpt-4o')).toBe(true);
+  });
+
+  it('allows an https Azure Cognitive Services endpoint', () => {
+    expect(isAllowedRuntimeEndpoint('https://my-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o')).toBe(true);
+  });
+
+  it('rejects a non-Azure host (SSRF attempt)', () => {
+    expect(isAllowedRuntimeEndpoint('https://attacker.example.com/collect')).toBe(false);
+  });
+
+  it('rejects a host that merely contains the allowlisted suffix as a substring', () => {
+    expect(isAllowedRuntimeEndpoint('https://openai.azure.com.attacker.example.com/x')).toBe(false);
+  });
+
+  it('rejects plain http (no TLS)', () => {
+    expect(isAllowedRuntimeEndpoint('http://my-resource.openai.azure.com/x')).toBe(false);
+  });
+
+  it('rejects malformed URLs', () => {
+    expect(isAllowedRuntimeEndpoint('not-a-url')).toBe(false);
   });
 });
