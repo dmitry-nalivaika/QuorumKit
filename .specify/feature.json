@@ -1,9 +1,9 @@
 {
-  "feature_directory": "specs/283-orchestrator-with-server-and-ui-to-be-di",
-  "issue": 283,
-  "slug": "orchestrator-with-server-and-ui-to-be-di",
-  "spec_dir": "specs/283-orchestrator-with-server-and-ui-to-be-di",
-  "branch": "283-orchestrator-with-server-and-ui-to-be-di",
+  "feature_directory": "specs/332-llm-keys-for-the-project-to-be-configure",
+  "issue": 332,
+  "slug": "llm-keys-for-the-project-to-be-configure",
+  "spec_dir": "specs/332-llm-keys-for-the-project-to-be-configure",
+  "branch": "332-llm-keys-for-the-project-to-be-configure",
   "status": "spec-ready",
-  "updated": "2026-07-27"
+  "updated": "2026-08-03"
 }

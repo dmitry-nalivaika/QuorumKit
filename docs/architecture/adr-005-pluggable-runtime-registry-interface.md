@@ -69,6 +69,10 @@ in the **kind allowlist**.
 | `ollama` | **Reserved** | not shipped | future ADR required |
 | `custom` | **Reserved** | not shipped | future ADR required |
 
+> **Status update:** `azure-openai` has since moved from Reserved to Supported
+> per [ADR-332](adr-332-enable-azure-openai-runtime-kind.md). `bedrock`,
+> `ollama`, and `custom` remain reserved as originally decided here.
+
 Reserved kinds: the validator MUST reject `src/runtimes.yml` files that use
 them with the error `RUNTIME_KIND_NOT_ENABLED: <kind> is reserved; enable
 requires a per-kind ADR. See docs/architecture/`. The string is reserved (i.e. a

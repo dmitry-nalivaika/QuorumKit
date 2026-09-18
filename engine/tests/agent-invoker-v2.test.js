@@ -33,12 +33,13 @@ describe('agent-invoker.invokeAgentV2', () => {
   });
 
   it('rejects reserved kinds with RUNTIME_KIND_NOT_ENABLED (ADR-005)', async () => {
+    // `bedrock` remains reserved (azure-openai was enabled by ADR-332).
     const client = makeClient();
     await expect(invokeAgentV2({
       client, owner: 'o', repo: 'r', agent: 'qa-agent', ref: 'main',
-      issueNumber: 1, runtime: { kind: 'azure-openai', endpoint: 'x', credential_ref: 'K' },
+      issueNumber: 1, runtime: { kind: 'bedrock', endpoint: 'x', credential_ref: 'K' },
       env: { K: 'x' }, clock: fastClock,
-    })).rejects.toMatchObject({ code: 'RUNTIME_KIND_NOT_ENABLED', kind: 'azure-openai' });
+    })).rejects.toMatchObject({ code: 'RUNTIME_KIND_NOT_ENABLED', kind: 'bedrock' });
   });
 
   it('passes runtime-credential-missing through unchanged (does NOT remap to runtime-error)', async () => {

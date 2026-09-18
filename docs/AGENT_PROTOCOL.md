@@ -390,6 +390,7 @@ marker, or `apm-msg` block from a registered agent identity.
 | Constitution §VI (Observable, Auditable Automation) | Audit comment channel (§6.1) |
 | ADR-004 (live-status channel) | Supersedes ADR-002; introduces §6.2 |
 | ADR-005 (runtime kind allowlist) | Frozen allowlist enforced by pipeline validator |
+| ADR-332 (`azure-openai` runtime kind) | Lets a maintainer configure their own Azure AI Foundry / Azure OpenAI deployment as an LLM Provider, with a `credential_ref` (e.g. `AZURE_OPENAI_API_KEY`) resolved as a GitHub Actions secret and no silent fallback on failure |
 | ADR-006 (source of truth) | Declares `src/` as the config source; this document governs label and outcome identifiers |
 | ADR-007 §6 (Orchestrator self-reporting) | Mandates `outcome: orchestrator-failure` on uncaught Orchestrator errors |
 
@@ -402,7 +403,8 @@ identifier that references it in the same PR. The Reviewer Agent enforces this
 ## Related topics
 
 - [`src/agent-identities.yml`](../src/agent-identities.yml) — agent slug registry
-- [`src/runtimes.yml`](../src/runtimes.yml) — runtime kind allowlist (ADR-005)
+- [`src/runtimes.yml`](../src/runtimes.yml) — runtime kind allowlist (ADR-005) and per-agent LLM Provider assignment via `agent_defaults` (ADR-332)
+- [`docs/architecture/adr-332-enable-azure-openai-runtime-kind.md`](architecture/adr-332-enable-azure-openai-runtime-kind.md) — configuring an `azure-openai` LLM Provider per project
 - [`docs/architecture/adr-004-orchestrator-state-comment-model-v2.md`](architecture/adr-004-orchestrator-state-comment-model-v2.md) — live-status comment design
 - [`docs/architecture/adr-006-dual-runtime-source-of-truth-and-sync.md`](architecture/adr-006-dual-runtime-source-of-truth-and-sync.md) — source-of-truth rules
 - [`docs/architecture/adr-007-orchestrator-github-actions-substrate-contract.md`](architecture/adr-007-orchestrator-github-actions-substrate-contract.md) — Orchestrator substrate contract
