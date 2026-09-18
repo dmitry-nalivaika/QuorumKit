@@ -1,0 +1,47 @@
+# Tasks: Per-Feature and Per-Agent LLM Cost & Token Visibility — Issue #335
+
+Ordered by dependency. Each task follows TDD (test → implement → refactor → commit).
+
+1. **Pricing config** — Create `src/model-pricing.yml` with `gpt-4o` / `gpt-4o-mini` /
+   `claude-opus-4-5` entries and an "estimates only" header comment (FR-006, FR-016).
+2. **Pricing loader (engine, ESM)** — Write `engine/tests/model-pricing.test.js`
+   covering: valid lookup, missing file, malformed YAML, unknown model,
+   zero-token invocation. Then implement `engine/orchestrator/model-pricing.js`
+   (`loadPricing`, `computeUsage`) to pass (FR-007, FR-008).
+3. **`apm-msg` schema extension** — Extend
+   `engine/tests/apm-msg-parser.test.js` with a case asserting a message
+   containing a `usage` object still validates, and one asserting `usage` is
+   optional (absent passes). Then add the `usage` property to
+   `engine/orchestrator/schemas/apm-msg.schema.json` (FR-003, FR-004).
+4. **Pricing loader (GHA scripts, CJs, dependency-free)** — Implement
+   `.github/scripts/model-pricing.cjs` with the same `computeUsage()` contract
+   as task 2, covered by a new test requiring it directly; mirror to
+   `src/.github/scripts/model-pricing.cjs` (FR-007, FR-008).
+5. **`dev-agent-runner.cjs` usage capture** — Extend
+   `engine/tests/dev-agent-runner-tools.test.js` to assert `signal_outcome`'s
+   posted comment includes a fenced ```apm-msg``` block with a `usage` object
+   when the runtime reported token usage, and omits it when the API response
+   has no `usage`. Implement accumulation in `runCopilot`/`runClaude` and wire
+   into `signal_outcome` in `.github/scripts/dev-agent-runner.cjs`; mirror to
+   `src/.github/scripts/dev-agent-runner.cjs` (FR-001, FR-002, FR-005).
+6. **`copilot-agent-ba.yml` usage wiring** — Pass `data.usage` from the first
+   `chat/completions` step to the PR-publish step via `core.setOutput` /
+   `steps.<id>.outputs`, and include the computed `usage` object in the
+   `apmMsg` payload already posted; mirror to `src/.github/workflows/copilot-agent-ba.yml`
+   (FR-001, FR-002, FR-003).
+7. **Dashboard aggregation** — Extend `engine/tests/dashboard-timeline.test.js`
+   with fixtures containing `usage`-bearing and `usage`-less `apm-msg`
+   comments; assert `/api/timeline/:n` response's new `costTokens` field sums
+   tokens/cost per agent and per feature, marks "not tracked" invocations
+   correctly, and flags partial totals. Implement `aggregateCostTokens()` and
+   wire it into `engine/dashboard/server.js` (FR-009 – FR-014).
+8. **Dashboard UI panel** — Add the read-only "💰 Cost & Tokens" summary panel
+   to the Timeline view in `engine/dashboard/index.html`, rendering
+   `costTokens` from task 7, labelled as an estimate (FR-012, FR-016).
+9. **Security check** — Add/confirm a test asserting the `usage` object and
+   `model-pricing.yml` contain no prompt/completion content (FR-015).
+10. **Full suite + coverage** — Run `npm test` (orchestrator) and dashboard
+    tests; confirm 80% line coverage threshold still holds; run
+    `markdown-link-check` on any `.md` files touched.
+11. **Open/refresh Draft PR** — Push branch, open/refresh `[WIP] 335 …` PR
+    linked with `Closes #335`.
