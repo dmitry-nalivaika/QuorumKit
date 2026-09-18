@@ -98,6 +98,18 @@ function isAllowedRuntimeEndpoint(raw) {
   }
 }
 
+// SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
+// doesn't bind the endpoint to the maintainer's own resource — anyone can
+// provision an Azure resource under the same public suffix. Reject any
+// endpoint that isn't one of the maintainer-reviewed entries committed to
+// src/runtimes.yml, so an attacker-provisioned resource is never reachable
+// even when RUNTIME_ENDPOINT is supplied directly via workflow_dispatch.
+function getDeclaredRuntimeEndpoints() {
+  return new Set(
+    [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
+  );
+}
+
 function exec(cmd, opts = {}) {
   try {
     return execSync(cmd, { encoding: 'utf8', stdio: 'pipe', timeout: 120_000, ...opts }).trim();
@@ -493,6 +505,9 @@ async function runCopilot({ system, user }) {
   if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
     throw new Error(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.join(' or ')}): ${runtimeEndpoint}`);
   }
+  if (runtimeEndpoint && !getDeclaredRuntimeEndpoints().has(runtimeEndpoint)) {
+    throw new Error(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+  }
   let hostname       = 'models.inference.ai.azure.com';
   let requestPath    = '/chat/completions';
   let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
@@ -626,5 +641,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs, isAllowedRuntimeEndpoint };
+  module.exports = { executeTool, toolDefs, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
 }

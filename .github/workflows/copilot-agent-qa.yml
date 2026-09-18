@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       runtime_endpoint:
-        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332)'
+        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332); must match an endpoint declared in src/runtimes.yml (SEC-HIGH-001)'
         required: false
         default: ''
       runtime_model:
@@ -97,6 +97,19 @@ jobs:
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
               core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              return;
+            }
+            // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
+            // doesn't bind the endpoint to the maintainer's own resource — anyone can
+            // provision an Azure resource under the same public suffix. Reject any
+            // endpoint that isn't one of the maintainer-reviewed entries committed to
+            // src/runtimes.yml, so an attacker-provisioned resource is never reachable
+            // even when RUNTIME_ENDPOINT is supplied directly via workflow_dispatch.
+            const declaredRuntimeEndpoints = new Set(
+              [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
+            );
+            if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
+              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             const requestUrl = runtimeEndpoint

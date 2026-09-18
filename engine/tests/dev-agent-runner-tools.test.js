@@ -22,6 +22,7 @@ const RUNNER_PATH = path.resolve(
 let tmpDir;
 let executeTool;
 let isAllowedRuntimeEndpoint;
+let getDeclaredRuntimeEndpoints;
 
 function abs(rel) {
   return path.join(tmpDir, rel);
@@ -42,7 +43,7 @@ beforeEach(() => {
   const requireCjs = createRequire(import.meta.url);
   // Clear require cache to get a fresh module with updated cwd.
   delete requireCjs.cache[requireCjs.resolve(RUNNER_PATH)];
-  ({ executeTool, isAllowedRuntimeEndpoint } = requireCjs(RUNNER_PATH));
+  ({ executeTool, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints } = requireCjs(RUNNER_PATH));
 });
 
 afterEach(() => {
@@ -191,5 +192,49 @@ describe('isAllowedRuntimeEndpoint', () => {
 
   it('rejects malformed URLs', () => {
     expect(isAllowedRuntimeEndpoint('not-a-url')).toBe(false);
+  });
+});
+
+// ─── getDeclaredRuntimeEndpoints (SEC-HIGH-001 residual — PR #334 re-review) ─
+describe('getDeclaredRuntimeEndpoints', () => {
+  it('extracts only the endpoints declared in src/runtimes.yml', () => {
+    fs.mkdirSync(abs('src'), { recursive: true });
+    fs.writeFileSync(abs('src/runtimes.yml'), [
+      'runtimes:',
+      '  copilot-default:',
+      '    kind: copilot',
+      '    endpoint: https://models.github.ai/inference',
+      '  azure-foundry-mini:',
+      '    kind: azure-openai',
+      '    endpoint: https://my-resource.openai.azure.com/openai/deployments/mini',
+      '  # azure-foundry-standard:',
+      '  #   kind: azure-openai',
+      '  #   endpoint: https://<resource>.openai.azure.com/openai/deployments/<standard-deployment>',
+    ].join('\n'), 'utf8');
+
+    const endpoints = getDeclaredRuntimeEndpoints();
+
+    expect(endpoints.has('https://my-resource.openai.azure.com/openai/deployments/mini')).toBe(true);
+    expect(endpoints.has('https://models.github.ai/inference')).toBe(true);
+    // Commented-out example entries must never be treated as declared/allowed.
+    expect(endpoints.has('https://<resource>.openai.azure.com/openai/deployments/<standard-deployment>')).toBe(false);
+  });
+
+  it('rejects an attacker-provisioned endpoint that is not declared, even if suffix-allowlisted', () => {
+    fs.mkdirSync(abs('src'), { recursive: true });
+    fs.writeFileSync(abs('src/runtimes.yml'), [
+      'runtimes:',
+      '  azure-foundry-mini:',
+      '    kind: azure-openai',
+      '    endpoint: https://my-resource.openai.azure.com/openai/deployments/mini',
+    ].join('\n'), 'utf8');
+
+    const endpoints = getDeclaredRuntimeEndpoints();
+
+    expect(endpoints.has('https://attacker123.cognitiveservices.azure.com/openai/deployments/mini')).toBe(false);
+  });
+
+  it('returns an empty set when src/runtimes.yml is missing', () => {
+    expect(getDeclaredRuntimeEndpoints().size).toBe(0);
   });
 });

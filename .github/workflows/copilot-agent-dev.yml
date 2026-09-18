@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       runtime_endpoint:
-        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332)'
+        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332); must match an endpoint declared in src/runtimes.yml (SEC-HIGH-001)'
         required: false
         default: ''
       runtime_model:

@@ -191,6 +191,20 @@ close this gap without redesigning the dispatch contract:
   invalid endpoint fails the step loudly (§5 — no silent fallback) rather than
   proceeding.
 
+**Residual gap closed (Security re-review, PR #334, SEC-HIGH-001):** the host
+allowlist above matches on a *public, multi-tenant* suffix — anyone can
+self-provision an Azure resource under `*.openai.azure.com` /
+`*.cognitiveservices.azure.com`, so it alone doesn't bind `runtime_endpoint`
+to the maintainer's specific resource. A direct `workflow_dispatch` could
+therefore still set `runtime_credential_ref=AZURE_OPENAI_API_KEY` together
+with an attacker-provisioned (but suffix-valid) endpoint. Closed by adding an
+exact-match check against the endpoints actually declared in the
+maintainer-reviewed `src/runtimes.yml`: `runtime_endpoint` must equal one of
+those committed values or the step fails loudly. An attacker-provisioned
+resource — even one satisfying the suffix allowlist — is never one of the
+maintainer's committed endpoints, so it is rejected before any credential is
+attached to the request.
+
 ---
 
 ## Consequences

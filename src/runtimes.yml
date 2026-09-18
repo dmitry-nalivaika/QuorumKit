@@ -39,8 +39,12 @@ runtimes:
 
   # Example azure-openai entries (ADR-332). Uncomment and adjust <resource>/
   # <deployment> to enable, then reference them in `agent_defaults` above.
-  # The `AZURE_OPENAI_API_KEY` secret (or a differently named credential_ref)
-  # must be configured as a GitHub Actions repository secret.
+  # SEC-MED-001 (PR #334 security re-review): the dispatched workflows only
+  # recognize the single literal credential_ref `AZURE_OPENAI_API_KEY` (bounded
+  # allowlist, no dynamic `secrets[]` indexing) — any other credential_ref
+  # value silently falls back to `GITHUB_TOKEN`. The `AZURE_OPENAI_API_KEY`
+  # secret must be configured as a GitHub Actions repository secret; a
+  # differently named credential_ref is NOT supported project-wide.
   #
   # azure-foundry-mini:
   #   kind: azure-openai
