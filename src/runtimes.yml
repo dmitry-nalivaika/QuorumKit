@@ -15,17 +15,15 @@
 # secret value from `process.env` (i.e. GitHub Actions ${{ secrets.* }})
 # at invocation time. Never inline a secret value here.
 
-default_runtime: copilot-default
+default_runtime: azure-foundry-standard
 
-# Per-agent overrides (FR-008). Empty by default.
-# Example:
-#   qa-agent: claude-default
+# Per-agent overrides (FR-008).
+# All agents now use azure-foundry-standard by default.
+# Override here only if specific agents need different runtimes.
 agent_defaults:
-  triage-agent: azure-foundry-standard       # cheap/fast model for high-frequency, low-stakes work
-  docs-agent: azure-foundry-standard
-  architect-agent: azure-foundry-standard # stronger model for low-frequency, high-stakes work
-  security-agent: azure-foundry-standard
-  dev-agent: azure-foundry-standard
+  # All agents inherit azure-foundry-standard from default_runtime
+  # Add overrides here only if needed, e.g.:
+  #   triage-agent: copilot-default  # Use GitHub Models for high-frequency, low-stakes work
 
 
 runtimes:
