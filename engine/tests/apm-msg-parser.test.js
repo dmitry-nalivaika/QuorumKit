@@ -79,6 +79,53 @@ describe('apm-msg-parser.parseApmMsg', () => {
     expect(r.ok).toBe(false);
     expect(r.redacted.length).toBeLessThanOrEqual(201); // includes ellipsis
   });
+
+  it('accepts a message with a populated usage object (#335, additive/optional)', () => {
+    const withUsage = {
+      ...validMsg,
+      usage: {
+        runtime: 'copilot-default',
+        model: 'gpt-4o',
+        prompt_tokens: 1234,
+        completion_tokens: 567,
+        total_tokens: 1801,
+        estimated_cost_usd: 0.0142,
+      },
+    };
+    const r = parseApmMsg(fence(withUsage));
+    expect(r.ok).toBe(true);
+    expect(r.message.usage.total_tokens).toBe(1801);
+  });
+
+  it('accepts a message with usage.estimated_cost_usd: null (unknown model price, #335)', () => {
+    const withUsage = {
+      ...validMsg,
+      usage: {
+        runtime: 'copilot-default',
+        model: 'unknown-model',
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        total_tokens: 15,
+        estimated_cost_usd: null,
+      },
+    };
+    const r = parseApmMsg(fence(withUsage));
+    expect(r.ok).toBe(true);
+    expect(r.message.usage.estimated_cost_usd).toBeNull();
+  });
+
+  it('returns schema-invalid when usage has a non-integer or negative token count (#335)', () => {
+    const bad = { ...validMsg, usage: { runtime: 'r', model: 'm', prompt_tokens: -1, completion_tokens: 'x', total_tokens: 0, estimated_cost_usd: null } };
+    const r = parseApmMsg(fence(bad));
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('schema-invalid');
+  });
+
+  it('still accepts a message with no usage field at all (backward compatibility, #335)', () => {
+    const r = parseApmMsg(fence(validMsg));
+    expect(r.ok).toBe(true);
+    expect(r.message.usage).toBeUndefined();
+  });
 });
 
 describe('apm-msg-parser.redactBlock', () => {
