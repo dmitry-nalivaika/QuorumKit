@@ -13,7 +13,13 @@ default_runtime: copilot-default
 # Per-agent overrides (FR-008). Empty by default.
 # Example:
 #   qa-agent: claude-default
-agent_defaults: {}
+agent_defaults:
+  triage-agent: azure-foundry-standard       # cheap/fast model for high-frequency, low-stakes work
+  docs-agent: azure-foundry-standard
+  architect-agent: azure-foundry-standard # stronger model for low-frequency, high-stakes work
+  security-agent: azure-foundry-standard
+  dev-agent: azure-foundry-standard
+
 
 runtimes:
   copilot-default:
@@ -25,3 +31,10 @@ runtimes:
     kind: claude
     endpoint: https://api.anthropic.com/v1
     credential_ref: ANTHROPIC_API_KEY
+
+  azure-foundry-standard:
+    kind: azure-openai
+    endpoint: https://quorum-kit-resource.services.ai.azure.com/openai/v1/responses
+    credential_ref: AZURE_OPENAI_API_KEY
+    model: gpt-5.2-codex
+    parameters: { api_version: "2026-01-14" }
