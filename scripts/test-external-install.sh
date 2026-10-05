@@ -103,10 +103,10 @@ run_mode_test() {
     h1 "Claude Code files"
     if [[ "$domain" == "industrial" ]]; then
       check_dir  ".claude/agents"  15
-      check_dir  ".claude/skills"  20
+      check_dir  ".claude/skills"  16
     else
       check_dir  ".claude/agents"  11
-      check_dir  ".claude/skills"  16
+      check_dir  ".claude/skills"  12
     fi
     check_file "CLAUDE.md"
   fi
