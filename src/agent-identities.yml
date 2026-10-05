@@ -13,6 +13,10 @@ identities:
     logins:
       - github-actions[bot]
       - apm-triage-bot
+  - agent: docs-agent
+    logins:
+      - github-actions[bot]
+      - apm-docs-bot
   - agent: ba-agent
     logins:
       - github-actions[bot]
