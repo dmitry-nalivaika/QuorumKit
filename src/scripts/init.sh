@@ -363,6 +363,26 @@ install_model_pricing() {
 }
 
 # =============================================================================
+# RUNTIME REGISTRY (ADR-005, ADR-332)
+# =============================================================================
+install_runtimes() {
+  h1 "Installing runtime registry (src/runtimes.yml)"
+  local runtimes_src="$QUORUMKIT_PACKAGE_DIR/src/runtimes.yml"
+  if [ ! -f "$runtimes_src" ]; then
+    warn "Runtime registry not found at $runtimes_src — skipping"
+    return
+  fi
+
+  mkdir -p src
+  if [ ! -f "src/runtimes.yml" ]; then
+    cp "$runtimes_src" "src/runtimes.yml"
+    ok "Runtime registry: src/runtimes.yml (register your own azure-openai deployments here)"
+  else
+    warn "src/runtimes.yml already exists — skipping (maintainer-edited)"
+  fi
+}
+
+# =============================================================================
 # LOCAL PARALLEL PIPELINES (FR-004, Issue #283, AD-4)
 # =============================================================================
 install_local_pipelines() {
@@ -634,6 +654,7 @@ case "$AI_MODE" in
     install_github_templates "claude"
     install_speckit "claude"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_runtimes
     [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
@@ -642,6 +663,7 @@ case "$AI_MODE" in
     install_github_templates "copilot"
     install_speckit "copilot"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_runtimes
     [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
@@ -651,6 +673,7 @@ case "$AI_MODE" in
     install_github_templates "both"
     install_speckit "both"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_runtimes
     [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;

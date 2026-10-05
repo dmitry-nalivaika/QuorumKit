@@ -142,7 +142,7 @@ identifiers.
 | `engine/tests/copilot-agent-usage-wiring.test.js` | New — structural wiring + mirror parity + runtime labels |
 | `engine/dashboard/cost-tokens.js`, `server.js` | Cross-feature aggregation + `GET /api/cost-tokens` |
 | `engine/tests/dashboard-cost-overview.test.js` | New — end-to-end `/api/cost-tokens` |
-| `src/scripts/init.sh`, `scripts/test-external-install.sh` | Install `src/model-pricing.yml` for consumers; assert install + re-run safety |
+| `src/scripts/init.sh`, `scripts/test-external-install.sh` | Install `src/model-pricing.yml` and `src/runtimes.yml` for consumers; assert install + re-run safety |
 
 ## Out of Scope (mirrors spec.md)
 
