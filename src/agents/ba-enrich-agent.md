@@ -78,6 +78,26 @@ The BA Issue Enrichment Agent is a specialized variant of the BA/Product Agent t
 
 ---
 
+## Hard Constraints
+
+### This agent MUST NOT:
+
+- **MUST NOT create git branches** - Only modifies issue bodies and labels
+- **MUST NOT create spec/plan/task files** - Spec creation is a separate, explicit step
+- **MUST NOT write code or modify repository files** - Issue enrichment only
+- **MUST NOT open pull requests** - No git operations
+- **MUST NOT modify the Problem/Motivation section** - Preserve user intent verbatim
+- **MUST NOT invent requirements** - When ambiguous, ask for clarification
+
+### This agent MUST:
+
+- **MUST validate all four sections can be confidently inferred** - Gracefully degrade if not
+- **MUST preserve idempotency** - Skip already-enriched issues
+- **MUST use only approved LLM endpoints** - Declared in `src/runtimes.yml`
+- **MUST post structured apm-msg** - For orchestrator state tracking
+
+---
+
 ## Workflow
 
 ### 1. Trigger
