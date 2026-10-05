@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run BA / Product Agent via GitHub Models
+        id: llm
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -87,6 +88,22 @@ jobs:
             const reply = data.choices?.[0]?.message?.content?.trim()
               ?? '⚠️ BA agent produced no output.';
 
+            // Token usage + estimated cost for the audit trail (#335). Never fails the run.
+            if (Number.isFinite(data.usage?.prompt_tokens) || Number.isFinite(data.usage?.completion_tokens)) {
+              try {
+                const { loadPricing, computeUsage } = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`);
+                core.setOutput('usage', JSON.stringify(computeUsage({
+                  runtime: 'copilot-default',
+                  model: 'gpt-4o',
+                  promptTokens: data.usage.prompt_tokens ?? 0,
+                  completionTokens: data.usage.completion_tokens ?? 0,
+                  pricing: loadPricing().pricing,
+                })));
+              } catch (e) {
+                core.warning(`Usage capture skipped: ${e.message}`);
+              }
+            }
+
             await github.rest.issues.createComment({
               owner:        context.repo.owner,
               repo:         context.repo.repo,
@@ -98,6 +115,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LLM_USAGE: ${{ steps.llm.outputs.usage }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -278,14 +296,18 @@ jobs:
             }
 
             // ── 12. Post PR URL + apm-msg on originating issue ────────────────
-            const apmMsg = JSON.stringify({
+            const apmPayload = {
               version: '2',
               step: 'ba',
               agent: 'ba-agent',
               outcome: 'spec-ready',
               summary: `Spec published for #${issueNumber}. PR: ${prUrl}`,
               payload: { specPath, branch: branchName, prUrl },
-            }, null, 2);
+            };
+            let usage = null;
+            try { usage = process.env.LLM_USAGE ? JSON.parse(process.env.LLM_USAGE) : null; } catch { /* ignore malformed usage */ }
+            if (usage) apmPayload.usage = usage;
+            const apmMsg = JSON.stringify(apmPayload, null, 2);
 
             await github.rest.issues.createComment({
               owner, repo, issue_number: issueNumber,
