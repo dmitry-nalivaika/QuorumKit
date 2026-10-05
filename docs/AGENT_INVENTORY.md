@@ -1,7 +1,7 @@
 # QuorumKit Agent Inventory
 
 > **Auto-generated** by `scripts/generate-agent-inventory.js`. Do not edit manually.
-> Last updated: 2026-10-05T19:24:39.451Z
+> Last updated: 2026-10-05T19:26:59.205Z
 
 This table shows all QuorumKit agents and their associated artifacts.
 
@@ -9,7 +9,7 @@ This table shows all QuorumKit agents and their associated artifacts.
 |------------|------------|-------------|--------|-------|-----------------|------------------|-----------------|-----------------|----------------|
 | architect-agent | ✅ [architect-agent.md](../src/agents/architect-agent.md) | ✅ [architect-agent.instructions.md](../src/.github/instructions/architect-agent.instructions.md) | ✅ [architect-agent.prompt.md](../src/.github/prompts/architect-agent.prompt.md) | ✅ [SKILL.md](../src/skills/architect-agent/SKILL.md) | ❌ MISSING | ✅ [copilot-agent-architect.yml](../.github/workflows/copilot-agent-architect.yml) | `github-actions[bot]`, `apm-architect-bot` | `azure-foundry-standard` | feature-pipeline (architect) |
 | ba-agent | ✅ [ba-product-agent.md](../src/agents/ba-product-agent.md) | ✅ [ba-agent.instructions.md](../src/.github/instructions/ba-agent.instructions.md) | ✅ [ba-product-agent.prompt.md](../src/.github/prompts/ba-product-agent.prompt.md) | ✅ [SKILL.md](../src/skills/ba-agent/SKILL.md) | ❌ MISSING | ✅ [copilot-agent-ba.yml](../.github/workflows/copilot-agent-ba.yml) | `github-actions[bot]`, `apm-ba-bot` | `copilot-default` | feature-pipeline (ba) |
-| ba-enrich-agent | ✅ [ba-enrich-agent.md](../src/agents/ba-enrich-agent.md) | ❌ MISSING | ❌ MISSING | ❌ MISSING | ❌ MISSING | ✅ [copilot-agent-ba-enrich.yml](../.github/workflows/copilot-agent-ba-enrich.yml) | `github-actions[bot]` | `copilot-default` | ba-enrichment-pipeline (ba-enrich) |
+| ba-enrich-agent | ✅ [ba-enrich-agent.md](../src/agents/ba-enrich-agent.md) | ✅ [ba-enrich-agent.instructions.md](../src/.github/instructions/ba-enrich-agent.instructions.md) | ❌ MISSING | ❌ MISSING | ❌ MISSING | ✅ [copilot-agent-ba-enrich.yml](../.github/workflows/copilot-agent-ba-enrich.yml) | `github-actions[bot]` | `copilot-default` | ba-enrichment-pipeline (ba-enrich) |
 | compliance-agent | ✅ [compliance-agent.md](../src/agents/compliance-agent.md) | ✅ [compliance-agent.instructions.md](../src/.github/instructions/compliance-agent.instructions.md) | ❌ MISSING | ✅ [SKILL.md](../src/skills/compliance-agent/SKILL.md) | ❌ MISSING | ❌ MISSING | N/A | `copilot-default` | N/A |
 | dev-agent | ✅ [developer-agent.md](../src/agents/developer-agent.md) | ✅ [dev-agent.instructions.md](../src/.github/instructions/dev-agent.instructions.md) | ✅ [developer-agent.prompt.md](../src/.github/prompts/developer-agent.prompt.md) | ✅ [SKILL.md](../src/skills/dev-agent/SKILL.md) | ❌ MISSING | ✅ [copilot-agent-dev.yml](../.github/workflows/copilot-agent-dev.yml) | `github-actions[bot]`, `apm-dev-bot` | `azure-foundry-standard` | bug-fix-pipeline (dev); feature-pipeline (dev) |
 | devops-agent | ✅ [devops-agent.md](../src/agents/devops-agent.md) | ✅ [devops-agent.instructions.md](../src/.github/instructions/devops-agent.instructions.md) | ✅ [devops-agent.prompt.md](../src/.github/prompts/devops-agent.prompt.md) | ✅ [SKILL.md](../src/skills/devops-agent/SKILL.md) | ❌ MISSING | ❌ MISSING | N/A | `copilot-default` | N/A |

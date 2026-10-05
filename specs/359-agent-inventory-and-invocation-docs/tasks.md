@@ -57,17 +57,17 @@
 
 ### Implementation for User Story 2
 
-- [ ] T021 [P] [US2] Create `docs/AGENT_INVOCATION.md` with frontmatter and overview section
-- [ ] T022 [P] [US2] Write "GitHub Event Flow" section: event → orchestrator.yml → index.js → pipeline-loader → router-v2 → entry step
-- [ ] T023 [P] [US2] Write "Runtime Resolution" section: runtime-registry.js reads runtimes.yml, resolves slug → runtime → workflow filename
-- [ ] T024 [P] [US2] Write "Agent Invocation" section: agent-invoker-v2.js dispatches workflow_dispatch, workflow runs, agent posts apm-msg
-- [ ] T025 [P] [US2] Write "Comment Processing" section: issue_comment trigger, apm-msg-parser, identity-registry validation
-- [ ] T026 [P] [US2] Write "Transition Resolution" section: router-v2 resolves (step, outcome) → next step, loop-budget check, state-manager updates
-- [ ] T027 [P] [US2] Write "Local Dashboard Invocations" section: contrast with GitHub flow (WebSocket bridge, no orchestrator.yml, direct workflow_dispatch)
-- [ ] T028 [P] [US2] Write "Claude vs. Copilot" section: explain workflow filename convention (agent-*.yml vs. copilot-agent-*.yml), runtime kind selection
-- [ ] T029 [US2] Create ASCII or Mermaid diagram showing full invocation flow (GitHub event → orchestrator → runtime → workflow → apm-msg → transition)
-- [ ] T030 [US2] Add references section with links to: engine/orchestrator/*.js files, ADR-004, ADR-005, ADR-006, ADR-007, docs/PIPELINES.md
-- [ ] T031 [US2] Add table of contents to `docs/AGENT_INVOCATION.md` for navigation
+- [x] T021 [P] [US2] Create `docs/AGENT_INVOCATION.md` with frontmatter and overview section
+- [x] T022 [P] [US2] Write "GitHub Event Flow" section: event → orchestrator.yml → index.js → pipeline-loader → router-v2 → entry step
+- [x] T023 [P] [US2] Write "Runtime Resolution" section: runtime-registry.js reads runtimes.yml, resolves slug → runtime → workflow filename
+- [x] T024 [P] [US2] Write "Agent Invocation" section: agent-invoker-v2.js dispatches workflow_dispatch, workflow runs, agent posts apm-msg
+- [x] T025 [P] [US2] Write "Comment Processing" section: issue_comment trigger, apm-msg-parser, identity-registry validation
+- [x] T026 [P] [US2] Write "Transition Resolution" section: router-v2 resolves (step, outcome) → next step, loop-budget check, state-manager updates
+- [x] T027 [P] [US2] Write "Local Dashboard Invocations" section: contrast with GitHub flow (WebSocket bridge, no orchestrator.yml, direct workflow_dispatch)
+- [x] T028 [P] [US2] Write "Claude vs. Copilot" section: explain workflow filename convention (agent-*.yml vs. copilot-agent-*.yml), runtime kind selection
+- [x] T029 [US2] Create ASCII or Mermaid diagram showing full invocation flow (GitHub event → orchestrator → runtime → workflow → apm-msg → transition)
+- [x] T030 [US2] Add references section with links to: engine/orchestrator/*.js files, ADR-004, ADR-005, ADR-006, ADR-007, docs/PIPELINES.md
+- [x] T031 [US2] Add table of contents to `docs/AGENT_INVOCATION.md` for navigation
 
 **Checkpoint**: At this point, `docs/AGENT_INVOCATION.md` should comprehensively explain the orchestrator flow with examples and diagrams
 
@@ -81,17 +81,17 @@
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Create `scripts/verify-agent-inventory.sh` with bash shebang and error handling
-- [ ] T033 [US3] Implement temp file generation: run `node scripts/generate-agent-inventory.js` to temp file
-- [ ] T034 [US3] Implement diff check: compare temp file to `docs/AGENT_INVENTORY.md`
-- [ ] T035 [US3] If diff found, print diff output and exit 1 with message: "Agent inventory is stale. Run `node scripts/generate-agent-inventory.js` and commit the result."
-- [ ] T036 [US3] If no diff, print "✅ Agent inventory is up-to-date" and exit 0
-- [ ] T037 [US3] Add cleanup: remove temp file on exit (trap EXIT)
-- [ ] T038 [US3] Make script executable: `chmod +x scripts/verify-agent-inventory.sh`
-- [ ] T039 [US3] Open `.github/workflows/quality.yml` for editing
-- [ ] T040 [US3] Add new step "Verify agent inventory is up-to-date" after existing checks, run `bash scripts/verify-agent-inventory.sh`
-- [ ] T041 [US3] Test locally: run generator, commit, then add dummy file, run verify script, confirm it fails
-- [ ] T042 [US3] Test locally: remove dummy file, run verify script, confirm it passes
+- [x] T032 [US3] Create `scripts/verify-agent-inventory.sh` with bash shebang and error handling
+- [x] T033 [US3] Implement temp file generation: run `node scripts/generate-agent-inventory.js` to temp file
+- [x] T034 [US3] Implement diff check: compare temp file to `docs/AGENT_INVENTORY.md`
+- [x] T035 [US3] If diff found, print diff output and exit 1 with message: "Agent inventory is stale. Run `node scripts/generate-agent-inventory.js` and commit the result."
+- [x] T036 [US3] If no diff, print "✅ Agent inventory is up-to-date" and exit 0
+- [x] T037 [US3] Add cleanup: remove temp file on exit (trap EXIT)
+- [x] T038 [US3] Make script executable: `chmod +x scripts/verify-agent-inventory.sh`
+- [x] T039 [US3] Open `.github/workflows/quality.yml` for editing
+- [x] T040 [US3] Add new step "Verify agent inventory is up-to-date" after existing checks, run `bash scripts/verify-agent-inventory.sh`
+- [x] T041 [US3] Test locally: run generator, commit, then add dummy file, run verify script, confirm it fails
+- [x] T042 [US3] Test locally: remove dummy file, run verify script, confirm it passes
 
 **Checkpoint**: At this point, CI will block PRs if `docs/AGENT_INVENTORY.md` is out of sync
 
@@ -105,27 +105,29 @@
 
 ### Gap Fix 1: Missing ba-enrich-agent.md
 
-- [ ] T043 [P] [GAP1] Read `.github/workflows/copilot-agent-ba-enrich.yml` to understand ba-enrich-agent behavior
-- [ ] T044 [GAP1] Create `src/agents/ba-enrich-agent.md` with standard agent definition structure:
+- [x] T043 [P] [GAP1] Read `.github/workflows/copilot-agent-ba-enrich.yml` to understand ba-enrich-agent behavior
+- [x] T044 [GAP1] Create `src/agents/ba-enrich-agent.md` with standard agent definition structure:
   - Agent Identity section
   - Capabilities section
   - Tools section
   - Constraints section
   - Workflow section
   - Agent Footprint templates (start, complete, fail)
-- [ ] T045 [GAP1] Populate agent definition based on ba-enrichment-pipeline.yml purpose: "Automatically enrich sparse issue body with structured sections after triage"
-- [ ] T046 [GAP1] Mirror agent definition to `.github/agents/ba-enrich-agent.md` (run `bash src/scripts/init.sh` or copy manually)
+- [x] T045 [GAP1] Populate agent definition based on ba-enrichment-pipeline.yml purpose: "Automatically enrich sparse issue body with structured sections after triage"
+- [x] T046 [GAP1] Mirror agent definition to `.github/agents/ba-enrich-agent.md` (run `bash src/scripts/init.sh` or copy manually)
+- [x] T046b [GAP1] Create `src/.github/instructions/ba-enrich-agent.instructions.md` with Copilot instructions
+- [x] T046c [GAP1] Mirror instruction to `.github/instructions/ba-enrich-agent.instructions.md`
 
 ### Gap Fix 2: Workflow Mirroring Verification
 
-- [ ] T047 [P] [GAP2] Run `bash scripts/verify-mirror.sh` to check if all src/.github/workflows/ files are mirrored to .github/workflows/
-- [ ] T048 [GAP2] If verify-mirror.sh fails, run `bash src/scripts/init.sh --ai=both` to sync workflows
-- [ ] T049 [GAP2] Re-run `bash scripts/verify-mirror.sh` to confirm sync completed
+- [x] T047 [P] [GAP2] Run `bash scripts/verify-mirror.sh` to check if all src/.github/workflows/ files are mirrored to .github/workflows/
+- [x] T048 [GAP2] If verify-mirror.sh fails, run `bash src/scripts/init.sh --ai=both` to sync workflows
+- [x] T049 [GAP2] Re-run `bash scripts/verify-mirror.sh` to confirm sync completed
 
 ### Gap Fix 3: Slug Naming Documentation
 
-- [ ] T050 [P] [GAP3] Add comment block in `scripts/generate-agent-inventory.js` documenting slug-mapping heuristic with examples
-- [ ] T051 [P] [GAP3] Add note to `docs/AGENT_INVENTORY.md` header explaining slug aliases (ba-product-agent → ba-agent, etc.)
+- [x] T050 [P] [GAP3] Add comment block in `scripts/generate-agent-inventory.js` documenting slug-mapping heuristic with examples
+- [x] T051 [P] [GAP3] Add note to `docs/AGENT_INVENTORY.md` header explaining slug aliases (ba-product-agent → ba-agent, etc.)
 
 **Checkpoint**: All fixable gaps are resolved; inventory regeneration shows only intentional MISSING markers (e.g., agents with no prompt or skill)
 
@@ -135,12 +137,12 @@
 
 **Purpose**: Final validation, documentation updates, commit message
 
-- [ ] T052 [P] Run `node scripts/generate-agent-inventory.js` and commit generated `docs/AGENT_INVENTORY.md`
-- [ ] T053 [P] Run `bash scripts/verify-agent-inventory.sh` locally, confirm it passes
-- [ ] T054 Review `docs/AGENT_INVENTORY.md` table, verify all 15+ agents are listed
-- [ ] T055 Review `docs/AGENT_INVOCATION.md`, verify all 9 sections are complete
+- [x] T052 [P] Run `node scripts/generate-agent-inventory.js` and commit generated `docs/AGENT_INVENTORY.md`
+- [x] T053 [P] Run `bash scripts/verify-agent-inventory.sh` locally, confirm it passes
+- [x] T054 Review `docs/AGENT_INVENTORY.md` table, verify all 15+ agents are listed
+- [x] T055 Review `docs/AGENT_INVOCATION.md`, verify all 9 sections are complete
 - [ ] T056 Check all links in both docs (agent definitions, workflows, ADRs) are valid (optional: run markdown-link-check)
-- [ ] T057 Update issue #359 body with acceptance criteria (if needed)
+- [x] T057 Update issue #359 body with acceptance criteria (if needed)
 - [ ] T058 Commit all changes with conventional commit message: `feat: add agent inventory generator and invocation docs (#359)`
 - [ ] T059 Push branch `359-agent-inventory-and-invocation-docs` to remote
 - [ ] T060 Open PR, verify quality.yml CI check runs and passes
