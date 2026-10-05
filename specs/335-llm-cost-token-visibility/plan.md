@@ -50,9 +50,8 @@ path is introduced.
 
 Known limits: `release` / `tech-debt` / `docs` (no-issue path) post report
 issues, whose bodies the dashboard does not read, so their usage is auditable
-in GitHub but not aggregated. `src/model-pricing.yml` is not installed into
-consumer repos (same as `src/runtimes.yml`), so there `estimated_cost_usd` is
-`null` with tokens still reported.
+in GitHub but not aggregated. `init.sh` installs `src/model-pricing.yml` into
+consumer repos (never overwriting a maintainer-edited copy).
 
 ## Design
 
@@ -143,6 +142,7 @@ identifiers.
 | `engine/tests/copilot-agent-usage-wiring.test.js` | New — structural wiring + mirror parity + runtime labels |
 | `engine/dashboard/cost-tokens.js`, `server.js` | Cross-feature aggregation + `GET /api/cost-tokens` |
 | `engine/tests/dashboard-cost-overview.test.js` | New — end-to-end `/api/cost-tokens` |
+| `src/scripts/init.sh`, `scripts/test-external-install.sh` | Install `src/model-pricing.yml` for consumers; assert install + re-run safety |
 
 ## Out of Scope (mirrors spec.md)
 

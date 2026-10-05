@@ -160,6 +160,9 @@ run_mode_test() {
   check_file "src/pipelines/bug-fix-pipeline.yml"
   check_file "src/pipelines/release-pipeline.yml"
 
+  h1 "LLM pricing table (#335)"
+  check_file "src/model-pricing.yml"
+
   # ── Verify: Guide copies at root ─────────────────────────────────────────
   h1 "Root-level guide docs"
   check_file "BROWNFIELD_GUIDE.md"
@@ -206,6 +209,8 @@ run_mode_test() {
   local custom_script_sentinel="# hand-edited script sentinel $(date +%s)"
   echo "$custom_pipeline_sentinel" >> "$tmpdir/src/pipelines/feature-pipeline.yml"
   echo "$custom_script_sentinel" >> "$tmpdir/scripts/pipeline.sh"
+  local custom_pricing_sentinel="# hand-edited pricing sentinel $(date +%s)"
+  echo "$custom_pricing_sentinel" >> "$tmpdir/src/model-pricing.yml"
 
   cd "$tmpdir"
   QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
@@ -221,6 +226,11 @@ run_mode_test() {
     ok "hand-edited scripts/pipeline.sh survives re-run (byte-identical)"
   else
     fail "hand-edited scripts/pipeline.sh was OVERWRITTEN by re-run"
+  fi
+  if grep -qF "$custom_pricing_sentinel" "$tmpdir/src/model-pricing.yml"; then
+    ok "hand-edited src/model-pricing.yml survives re-run (byte-identical)"
+  else
+    fail "hand-edited src/model-pricing.yml was OVERWRITTEN by re-run"
   fi
 
   # ── Summary ───────────────────────────────────────────────────────────────

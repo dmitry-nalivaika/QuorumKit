@@ -343,6 +343,26 @@ install_pipelines() {
 }
 
 # =============================================================================
+# MODEL PRICING TABLE (Issue #335)
+# =============================================================================
+install_model_pricing() {
+  h1 "Installing LLM pricing table (src/model-pricing.yml)"
+  local pricing_src="$QUORUMKIT_PACKAGE_DIR/src/model-pricing.yml"
+  if [ ! -f "$pricing_src" ]; then
+    warn "Pricing table not found at $pricing_src — skipping"
+    return
+  fi
+
+  mkdir -p src
+  if [ ! -f "src/model-pricing.yml" ]; then
+    cp "$pricing_src" "src/model-pricing.yml"
+    ok "Pricing table: src/model-pricing.yml (estimates only — edit rates to match your provider)"
+  else
+    warn "src/model-pricing.yml already exists — skipping (maintainer-edited)"
+  fi
+}
+
+# =============================================================================
 # LOCAL PARALLEL PIPELINES (FR-004, Issue #283, AD-4)
 # =============================================================================
 install_local_pipelines() {
@@ -614,6 +634,7 @@ case "$AI_MODE" in
     install_github_templates "claude"
     install_speckit "claude"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
   copilot)
@@ -621,6 +642,7 @@ case "$AI_MODE" in
     install_github_templates "copilot"
     install_speckit "copilot"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
   both)
@@ -629,6 +651,7 @@ case "$AI_MODE" in
     install_github_templates "both"
     install_speckit "both"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
 esac
