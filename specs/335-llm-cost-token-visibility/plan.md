@@ -21,33 +21,38 @@ store, or external dependency.
 
 ## Scope Decision (read before implementing)
 
-Investigation of the current codebase found that of the many
-`copilot-agent-*.yml` workflows, only **`copilot-agent-ba.yml`** currently
-posts a real fenced ` ```apm-msg ` JSON block from a live `chat/completions`
-response, and **`.github/scripts/dev-agent-runner.cjs`** (shared by the
-`copilot` and `claude` runtime kinds — see its own top-of-file comment) is
-the only *shared, already-tested* runtime-adapter call site making
-instrumented `chat/completions` / `/v1/messages` calls. `azure-openai` is a
-**reserved, not-yet-enabled** runtime kind (`engine/orchestrator/runtime-registry.js`
-`RESERVED_KINDS`); ADR-332 / issue #332's ADR file does not exist yet, and the
-issue body itself says "(once implemented) Azure OpenAI runtime kind" —
-confirming it is out of scope until that runtime kind ships.
+`azure-openai` was enabled by ADR-332 (it is no longer in
+`runtime-registry.js` `RESERVED_KINDS`). Its adapter dispatches the same
+`copilot-agent-<slug>.yml` workflow family as the `copilot` kind, passing
+`runtime_endpoint` / `runtime_model` inputs, so usage capture for
+`azure-openai` is implemented at those shared call sites:
 
-Per Constitution §VII (YAGNI) this plan wires `usage` capture into the two
-call sites above (the concrete "already posts apm-msg" / "already-shared
-adapter" surfaces named by the ADR) rather than rewriting every per-agent
-inline `actions/github-script` workflow (most of which don't post `apm-msg`
-blocks at all today — a pre-existing gap orthogonal to this issue). Extending
-those to the full agent-footprint protocol is tracked as follow-up, not part
-of #335.
+- `.github/scripts/dev-agent-runner.cjs` (dev agent; `copilot` / `claude` / `azure-openai`).
+- Every `copilot-agent-*.yml` workflow that performs a `chat/completions` call
+  (`ba`, `ba-enrich`, `architect`, `qa`, `reviewer`, `security`, `triage`,
+  `docs`, `release`, `tech-debt`). `ba` extends its existing `apm-msg`; the
+  others append a **usage-only** `apm-msg` block to the comment/issue they
+  already post, built by `usageApmBlock()` in `model-pricing.cjs`.
 
-The dashboard "Cost & Tokens" view is implemented as an additive summary
-panel inside the existing per-issue Timeline view (`/api/timeline/:n`
-already fetches and parses every `apm-msg` comment for that issue/feature),
-rather than a brand-new main-nav tab requiring a new cross-issue data source
-— consistent with ADR-335 §3 ("purely a derived view over data the dashboard
-already reads" (ADR-335 §3); no existing endpoint enumerates issues across features, so a
-cross-feature view would need a new data source, which is beyond this ADR's scope.
+The usage-only block carries no `outcome` / `event_type`: a free-text reply
+cannot prove one, and the dashboard would otherwise read it as a pipeline
+status. It is not orchestrator-protocol-conformant (no `runId`), same as the
+existing `ba` block. `usage.runtime` is `azure-openai` when an endpoint
+override is in use, otherwise `copilot-default`.
+
+The dashboard "Cost & Tokens" view is both a summary panel in the per-issue
+Timeline and a main-nav tab backed by `GET /api/cost-tokens`, which reads the
+repo-wide `issues/comments` list (one read-only `gh api` call, filtered to
+comments containing an `apm-msg` block) for a bounded window (`days`, default
+90, max 365). Features are grouped by the block's `issue` / `pipeline_id`,
+falling back to the comment's issue number. No new backend, store, or write
+path is introduced.
+
+Known limits: `release` / `tech-debt` / `docs` (no-issue path) post report
+issues, whose bodies the dashboard does not read, so their usage is auditable
+in GitHub but not aggregated. `src/model-pricing.yml` is not installed into
+consumer repos (same as `src/runtimes.yml`), so there `estimated_cost_usd` is
+`null` with tokens still reported.
 
 ## Design
 
@@ -72,7 +77,7 @@ cross-feature view would need a new data source, which is beyond this ADR's scop
   `total_tokens`, `estimated_cost_usd` nullable). `version` stays `"2"`.
   `additionalProperties: true` already present, so this is purely additive.
 
-### 3. Usage capture at the two identified call sites (FR-001, FR-002, FR-005)
+### 3. Usage capture at the shared call sites (FR-001, FR-002, FR-005)
 
 - `.github/workflows/copilot-agent-ba.yml` (+ `src/` mirror): the "Run BA /
   Product Agent" step's `chat/completions` response already contains
@@ -83,6 +88,10 @@ cross-feature view would need a new data source, which is beyond this ADR's scop
   call made during the run; on `signal_outcome`, compute the `usage` object
   via `model-pricing.cjs` and append it as an additive fenced ```apm-msg```
   block to the comment already posted (existing text/marker untouched).
+- Every other `copilot-agent-*.yml` workflow (azure-openai-capable): append
+  `usageApmBlock({ response, model, agent, issueNumber, runtime })` to the
+  posted body; returns `''` when the response has no usage (FR-005) and never
+  throws.
 - If a response omits `usage` entirely, the field is omitted rather than
   fabricated (FR-005); the run still completes.
 
@@ -127,15 +136,19 @@ identifiers.
 | `engine/dashboard/cost-tokens.js` | New — pure `aggregateCostTokens` (server.js listens on load, so not testable in place) |
 | `engine/dashboard/server.js` | `usage` passthrough + `costTokens` in timeline response |
 | `engine/tests/cost-tokens.test.js`, `dashboard-cost-tokens.test.js` | New — aggregation unit + end-to-end |
-| `engine/dashboard/index.html` | Cost & Tokens summary panel in Timeline view |
-| `engine/tests/dashboard-cost-panel.test.js` | New — structural + read-only checks |
+| `engine/dashboard/index.html` | Cost & Tokens summary panel in Timeline view + main-nav Cost & Tokens tab |
+| `engine/tests/dashboard-cost-panel.test.js` | New — structural + read-only checks (panel and tab) |
+| `.github/scripts/model-pricing.cjs` (+ `src/` mirror) | `usageApmBlock()` helper |
+| `.github/workflows/copilot-agent-{architect,qa,reviewer,security,triage,docs,release,tech-debt,ba-enrich}.yml` (+ `src/` mirrors, except `ba-enrich`) | Append usage-only `apm-msg` block |
+| `engine/tests/copilot-agent-usage-wiring.test.js` | New — structural wiring + mirror parity + runtime labels |
+| `engine/dashboard/cost-tokens.js`, `server.js` | Cross-feature aggregation + `GET /api/cost-tokens` |
+| `engine/tests/dashboard-cost-overview.test.js` | New — end-to-end `/api/cost-tokens` |
 
 ## Out of Scope (mirrors spec.md)
 
 - Billing-grade cost, budgets/alerts, third-party LLM gateway/proxy.
-- Wiring every other per-agent inline workflow (qa/security/reviewer/architect/
-  triage/docs/release/…) that does not yet post `apm-msg` blocks — pre-existing
-  gap, not introduced or worsened by this change.
-- `azure-openai` runtime kind (not yet enabled).
+- Making the non-`ba` workflows fully orchestrator-protocol-conformant
+  (`run_id`/`step`/`iteration` inputs, `outcome`) — pre-existing gap; only a
+  usage-only block is added here.
 - Docs Agent's `AGENT_PROTOCOL.md` update (ADR-335 Follow-Up Work item 2) and
   Security Agent's independent PII audit (item 4) — separate agent roles.

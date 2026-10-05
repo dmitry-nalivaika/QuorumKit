@@ -43,5 +43,18 @@ Ordered by dependency. Each task follows TDD (test → implement → refactor �
 10. [x] **Full suite + coverage** — Run `npm test` (orchestrator) and dashboard
     tests; confirm 80% line coverage threshold still holds; run
     `markdown-link-check` on any `.md` files touched.
-11. **Open/refresh Draft PR** — Push branch, open/refresh `[WIP] 335 …` PR
+11. [x] **azure-openai usage capture (QA blocker 1)** — Add `usageApmBlock()` to
+    `model-pricing.cjs` (tests in `model-pricing-cjs.test.js`); wire it into every
+    `copilot-agent-*.yml` that calls `chat/completions`; label usage
+    `runtime: azure-openai` when an endpoint override is used (workflows and
+    `dev-agent-runner.cjs`); mirror to `src/`; structural tests in
+    `copilot-agent-usage-wiring.test.js` (FR-001, FR-002, FR-005, FR-015).
+12. [x] **Cross-feature aggregation + endpoint (QA blocker 2)** — Tests then
+    `aggregateCostTokensByFeature`, `normalizeFeature`, `parsePaginatedJson` in
+    `engine/dashboard/cost-tokens.js`; `fetchCostOverview` + `GET /api/cost-tokens`
+    in `server.js` (`dashboard-cost-overview.test.js`) (FR-009–FR-011, FR-013, FR-014).
+13. [x] **Cross-feature UI** — "💰 Cost & Tokens" main-nav tab with per-feature
+    and per-agent tables, partial / not-tracked indicators, and the estimate
+    label (FR-012, FR-014, FR-016).
+14. **Open/refresh Draft PR** — Push branch, open/refresh `[WIP] 335 …` PR
     linked with `Closes #335`.

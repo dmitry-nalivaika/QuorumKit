@@ -7,7 +7,7 @@ import path from 'path';
 
 const require = createRequire(import.meta.url);
 const REPO_ROOT = path.resolve(new URL(import.meta.url).pathname, '../../..');
-const { aggregateCostTokens } = require(path.join(REPO_ROOT, 'engine/dashboard/cost-tokens.js'));
+const { aggregateCostTokens, aggregateCostTokensByFeature, normalizeFeature, parsePaginatedJson } = require(path.join(REPO_ROOT, 'engine/dashboard/cost-tokens.js'));
 
 const usage = (total, cost, model = 'gpt-4o') => ({
   runtime: 'copilot-default', model,
@@ -69,5 +69,82 @@ describe('aggregateCostTokens', () => {
 
   it('labels the figures as an estimate (FR-016)', () => {
     expect(aggregateCostTokens([]).disclaimer).toMatch(/estimate/i);
+  });
+});
+
+describe('normalizeFeature', () => {
+  it('reduces issue numbers, zero-padded pipeline ids, and URLs to one canonical key', () => {
+    expect(normalizeFeature(42)).toBe('42');
+    expect(normalizeFeature('42')).toBe('42');
+    expect(normalizeFeature('042')).toBe('42');
+    expect(normalizeFeature('https://github.com/o/r/issues/42')).toBe('42');
+  });
+
+  it('returns null for missing or non-numeric values', () => {
+    for (const v of [undefined, null, '', 'abc', 0, '000']) expect(normalizeFeature(v)).toBeNull();
+  });
+});
+
+describe('aggregateCostTokensByFeature (cross-feature view, US-3, FR-010, FR-011)', () => {
+  const fev = (feature, agent, usageObj) => ev(agent, usageObj, { feature });
+
+  it('groups totals per feature and per agent across features', () => {
+    const r = aggregateCostTokensByFeature([
+      fev('42', 'dev-agent', usage(1000, 0.01)),
+      fev('42', 'qa-agent', usage(200, 0.002)),
+      fev('7', 'dev-agent', usage(500, 0.005)),
+    ]);
+    expect(r.byFeature['42']).toMatchObject({ totalTokens: 1200, estimatedCostUsd: 0.012, trackedInvocations: 2 });
+    expect(r.byFeature['7']).toMatchObject({ totalTokens: 500, estimatedCostUsd: 0.005 });
+    expect(r.byAgent['dev-agent']).toMatchObject({ totalTokens: 1500, estimatedCostUsd: 0.015, trackedInvocations: 2 });
+    expect(r.byAgent['qa-agent']).toMatchObject({ totalTokens: 200 });
+    expect(r.total).toMatchObject({ totalTokens: 1700, estimatedCostUsd: 0.017, partial: false });
+  });
+
+  it('flags a feature partial when it has an untracked or cost-unknown invocation without tainting others (FR-014)', () => {
+    const r = aggregateCostTokensByFeature([
+      fev('42', 'dev-agent', usage(1000, 0.01)),
+      fev('42', 'qa-agent', undefined),
+      fev('7', 'dev-agent', usage(500, null)),
+      fev('9', 'dev-agent', usage(100, 0.001)),
+    ]);
+    expect(r.byFeature['42']).toMatchObject({ untrackedInvocations: 1, partial: true });
+    expect(r.byFeature['7']).toMatchObject({ costUnknownInvocations: 1, estimatedCostUsd: null, partial: true });
+    expect(r.byFeature['9'].partial).toBe(false);
+    expect(r.total.partial).toBe(true);
+  });
+
+  it('buckets events with no resolvable feature under "unknown" rather than dropping them', () => {
+    const r = aggregateCostTokensByFeature([fev(undefined, 'dev-agent', usage(100, 0.001))]);
+    expect(r.byFeature.unknown.totalTokens).toBe(100);
+  });
+
+  it('ignores non-apm-msg events and tolerates invalid input', () => {
+    expect(aggregateCostTokensByFeature([{ source: 'footprint', feature: '1' }]).byFeature).toEqual({});
+    expect(aggregateCostTokensByFeature(undefined).total.trackedInvocations).toBe(0);
+  });
+
+  it('labels the figures as an estimate (FR-016)', () => {
+    expect(aggregateCostTokensByFeature([]).disclaimer).toMatch(/estimate/i);
+  });
+});
+
+describe('parsePaginatedJson', () => {
+  it('parses a single JSON array', () => {
+    expect(parsePaginatedJson('[{"a":1}]')).toEqual([{ a: 1 }]);
+  });
+
+  it('merges the concatenated per-page arrays emitted by `gh api --paginate`', () => {
+    expect(parsePaginatedJson('[{"a":1}][{"a":2}]\n[{"a":3}]')).toEqual([{ a: 1 }, { a: 2 }, { a: 3 }]);
+  });
+
+  it('is not fooled by "][" or brackets inside string values', () => {
+    const raw = JSON.stringify([{ body: 'see [a][b] and ] [ ' }]) + JSON.stringify([{ body: '"][" \\" ]' }]);
+    expect(parsePaginatedJson(raw)).toEqual([{ body: 'see [a][b] and ] [ ' }, { body: '"][" \\" ]' }]);
+  });
+
+  it('returns an empty array for empty output and throws on garbage', () => {
+    expect(parsePaginatedJson('')).toEqual([]);
+    expect(() => parsePaginatedJson('not json')).toThrow();
   });
 });
