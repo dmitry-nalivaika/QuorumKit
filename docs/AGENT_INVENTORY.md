@@ -1,7 +1,7 @@
 # QuorumKit Agent Inventory
 
 > **Auto-generated** by `scripts/generate-agent-inventory.js`. Do not edit manually.
-> Last updated: 2026-10-05T19:26:59.205Z
+> Last updated: 2026-10-05T19:28:46.219Z
 
 This table shows all QuorumKit agents and their associated artifacts.
 
@@ -31,6 +31,10 @@ This table shows all QuorumKit agents and their associated artifacts.
 - ✅ File exists (click link to view)
 - ❌ MISSING: File does not exist (may need to be created)
 - N/A: Not applicable (agent doesn't use this artifact type)
+
+**Note on Pipeline Usage:**
+- Most agents are invoked BY pipelines (e.g., `feature-pipeline` → `ba-agent`)
+- **Exception: `triage-agent`** is triggered directly by GitHub webhook (`issues.opened`) because it runs BEFORE any pipeline can match. It applies the `triaged` label which enables pipeline matching.
 
 ## Naming Conventions
 

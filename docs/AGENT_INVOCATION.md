@@ -198,6 +198,25 @@ entry: ba
 - Step `agent` is the canonical agent slug (e.g., `ba-agent`, `dev-agent`, `qa-agent`)
 - One step can only invoke one agent
 
+### Special Case: Direct-Trigger Agents
+
+**Triage Agent is NOT invoked by any pipeline** - it's triggered directly via GitHub webhook:
+
+```yaml
+# .github/workflows/copilot-agent-triage.yml
+on:
+  issues:
+    types: [opened]  # Direct webhook trigger
+```
+
+**Why?** The triage agent is the **entry point** for all new issues. It runs BEFORE the orchestrator can match any pipeline, because:
+1. New issue opens → triage workflow triggers immediately
+2. Triage agent posts comment + applies `triaged` label + classification labels
+3. Orchestrator sees `triaged` label + classification labels → matches to appropriate pipeline
+4. Pipeline begins execution (e.g., `feature-pipeline` if `triaged` + `type:feature`)
+
+**Other directly-triggered agents**: None currently. All other agents are invoked through pipelines.
+
 ---
 
 ## Runtime Resolution
