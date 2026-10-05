@@ -46,9 +46,8 @@ panel inside the existing per-issue Timeline view (`/api/timeline/:n`
 already fetches and parses every `apm-msg` comment for that issue/feature),
 rather than a brand-new main-nav tab requiring a new cross-issue data source
 — consistent with ADR-335 §3 ("purely a derived view over data the dashboard
-already reads") and the fact no existing endpoint enumerates historical
-issues across features to aggregate on my own volition would be a new
-capability beyond this ADR's stated scope.
+already reads" (ADR-335 §3); no existing endpoint enumerates issues across features, so a
+cross-feature view would need a new data source, which is beyond this ADR's scope.
 
 ## Design
 
@@ -121,12 +120,15 @@ identifiers.
 | `src/.github/scripts/model-pricing.cjs` | New (mirror) |
 | `.github/scripts/dev-agent-runner.cjs` | Capture + report `usage` |
 | `src/.github/scripts/dev-agent-runner.cjs` | Mirror |
-| `engine/tests/dev-agent-runner-tools.test.js` | Extend for usage accumulation |
+| `engine/tests/dev-agent-runner-usage.test.js` | New — usage accumulation + apm-msg block |
 | `.github/workflows/copilot-agent-ba.yml` | Pass through + include `usage` in `apmMsg` |
 | `src/.github/workflows/copilot-agent-ba.yml` | Mirror |
-| `engine/dashboard/server.js` | `usage` passthrough + `aggregateCostTokens` |
-| `engine/tests/dashboard-timeline.test.js` | Extend for `costTokens` aggregation |
+| `engine/tests/copilot-agent-ba-usage.test.js` | New — structural wiring + mirror parity |
+| `engine/dashboard/cost-tokens.js` | New — pure `aggregateCostTokens` (server.js listens on load, so not testable in place) |
+| `engine/dashboard/server.js` | `usage` passthrough + `costTokens` in timeline response |
+| `engine/tests/cost-tokens.test.js`, `dashboard-cost-tokens.test.js` | New — aggregation unit + end-to-end |
 | `engine/dashboard/index.html` | Cost & Tokens summary panel in Timeline view |
+| `engine/tests/dashboard-cost-panel.test.js` | New — structural + read-only checks |
 
 ## Out of Scope (mirrors spec.md)
 

@@ -743,6 +743,13 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .tl-new-badge { font-size: 10px; font-weight: 700; background: var(--amber); color: #0d1117; padding: 1px 7px; border-radius: 8px; }
 #tl-agent-filter { background: var(--surface3); border: 1px solid var(--border); border-radius: var(--r-xs); color: var(--text); font-size: 11px; padding: 3px 6px; outline: none; }
 .tl-events { display: flex; flex-direction: column; gap: 4px; }
+.tl-cost { border: 1px solid var(--border, #30363d); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text2); }
+.tl-cost[hidden] { display: none; }
+.tl-cost-head { font-weight: 600; color: var(--text); }
+.tl-cost-note { font-size: 11px; margin-top: 2px; }
+.tl-cost-warn { color: #d29922; }
+.tl-cost-table { border-collapse: collapse; margin-top: 6px; }
+.tl-cost-table td, .tl-cost-table th { padding: 1px 12px 1px 0; text-align: left; font-weight: normal; }
 .tl-event { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--r-xs); padding: 6px 10px; cursor: pointer; transition: border-color .15s; }
 .tl-event:hover { border-color: var(--blue); }
 .tl-event.te-complete { border-left-color: var(--green); }
@@ -852,6 +859,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
         <select id="tl-agent-filter" hidden><option value="">All agents</option></select>
         <span class="tl-new-badge" id="tl-new-badge" hidden></span>
       </div>
+      <div id="tl-cost" class="tl-cost" hidden></div>
       <div id="tl-events" class="tl-events"><span class="lp-empty">Enter an issue number and click Load.</span></div>
     </div>
   </div>
@@ -3004,6 +3012,38 @@ function statusBadgeClass(status) {
   return map[status] || 'tl-status-unknown';
 }
 
+function renderCostTokens(ct) {
+  const el = document.getElementById('tl-cost');
+  if (!el) return;
+  el.replaceChildren();
+  const t = ct && ct.total;
+  if (!t || (t.trackedInvocations === 0 && t.untrackedInvocations === 0)) { el.setAttribute('hidden', ''); return; }
+  el.removeAttribute('hidden');
+
+  const fmtCost = c => (c === null || c === undefined) ? 'unknown' : `$${c.toFixed(4)}`;
+  const add = (parent, tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    n.textContent = text;
+    parent.appendChild(n);
+    return n;
+  };
+
+  add(el, 'div', 'tl-cost-head', `💰 Cost & Tokens — ${t.totalTokens.toLocaleString()} tokens, est. ${fmtCost(t.estimatedCostUsd)}`);
+  if (t.untrackedInvocations > 0) add(el, 'div', 'tl-cost-note tl-cost-warn', `${t.untrackedInvocations} invocation(s) not tracked — total is incomplete.`);
+  if (t.costUnknownInvocations > 0) add(el, 'div', 'tl-cost-note tl-cost-warn', `${t.costUnknownInvocations} invocation(s) have unknown cost (no pricing entry) — cost total is incomplete.`);
+
+  const table = add(el, 'table', 'tl-cost-table', '');
+  for (const [agent, b] of Object.entries(ct.byAgent || {})) {
+    const tr = add(table, 'tr', '', '');
+    add(tr, 'th', '', agentLabel(agent));
+    add(tr, 'td', '', `${b.totalTokens.toLocaleString()} tokens`);
+    add(tr, 'td', '', `est. ${fmtCost(b.estimatedCostUsd)}`);
+    add(tr, 'td', '', b.untrackedInvocations > 0 ? `${b.untrackedInvocations} not tracked` : '');
+  }
+  add(el, 'div', 'tl-cost-note', ct.disclaimer || 'Estimates only.');
+}
+
 function renderTimeline(data, isRefresh = false) {
   const eventsEl  = document.getElementById('tl-events');
   const badgeEl   = document.getElementById('tl-status-badge');
@@ -3024,6 +3064,8 @@ function renderTimeline(data, isRefresh = false) {
 
   // Refresh button
   refreshEl.removeAttribute('hidden');
+
+  renderCostTokens(data.costTokens);
 
   // Agent filter
   const agents = [...new Set(data.events.map(e => e.agent).filter(Boolean))];
