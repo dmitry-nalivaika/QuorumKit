@@ -55,6 +55,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           INPUT_ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
@@ -191,14 +192,39 @@ jobs:
               '7. Respond with ONLY a JSON object — no markdown fences, no prose.',
             ].join('\n');
 
-            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
-            // Foundry deployment when the Orchestrator's azure-openai runtime
-            // adapter supplied these inputs; otherwise fall back to the
-            // existing GitHub Models default (byte-for-byte unchanged).
-            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
-            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
-            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
-            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // ADR-332: Load default runtime from src/runtimes.yml when inputs are empty
+            const runtimesYaml = readSafe('src/runtimes.yml');
+            const defaultRuntimeMatch = runtimesYaml.match(/^default_runtime:\s*(\S+)/m);
+            const defaultRuntimeName = defaultRuntimeMatch?.[1] || 'copilot-default';
+
+            const parseRuntime = (yaml, name) => {
+              const runtimeBlockMatch = new RegExp(`^\\s*${name}:\\s*$`, 'm').exec(yaml);
+              if (!runtimeBlockMatch) return null;
+              const startIdx = runtimeBlockMatch.index + runtimeBlockMatch[0].length;
+              const remainingYaml = yaml.slice(startIdx);
+              const endMatch = remainingYaml.match(/^\s*\w+:\s*$/m);
+              const block = endMatch ? remainingYaml.slice(0, endMatch.index) : remainingYaml;
+              const endpoint = block.match(/^\s+endpoint:\s*(\S+)/m)?.[1] || '';
+              const model = block.match(/^\s+model:\s*(\S+)/m)?.[1] || 'gpt-4o';
+              const credentialRef = block.match(/^\s+credential_ref:\s*(\S+)/m)?.[1] || 'GITHUB_TOKEN';
+              const apiVersionMatch = block.match(/api_version:\s*["']([^"']+)["']/);
+              const apiVersion = apiVersionMatch?.[1] || '';
+              return { endpoint, model, credentialRef, apiVersion };
+            };
+
+            const defaultRuntime = parseRuntime(runtimesYaml, defaultRuntimeName);
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || defaultRuntime?.endpoint || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || defaultRuntime?.model || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || defaultRuntime?.apiVersion || '';
+            const runtimeCredentialRef = defaultRuntime?.credentialRef || 'GITHUB_TOKEN';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || 
+              (runtimeCredentialRef === 'AZURE_OPENAI_API_KEY' ? process.env.AZURE_OPENAI_API_KEY : process.env.GITHUB_TOKEN) ||
+              process.env.GITHUB_TOKEN;
+
+            console.log(`Using runtime: ${defaultRuntimeName}`);
+            console.log(`Endpoint: ${runtimeEndpoint || '(GitHub Models default)'}`);
+            console.log(`Model: ${runtimeModel}`);
+            console.log(`Credential: ${runtimeCredentialRef}`);
             // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
             // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
             // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
