@@ -211,6 +211,48 @@ do not point `credential_ref` at anything else — it will silently fall back to
 
 ---
 
+## Testing Your Configuration
+
+After configuring Azure AI Foundry, verify that agents are using your deployment:
+
+### Quick Test
+
+1. **Merge your configuration** to `main`
+2. **Open a test issue** (or trigger triage manually):
+   ```bash
+   gh workflow run copilot-agent-triage.yml --field issue_number=<issue-number>
+   ```
+3. **Check workflow logs**:
+   ```bash
+   gh run list --workflow=copilot-agent-triage.yml --limit=1
+   gh run view <run-id> --log
+   ```
+   Look for:
+   ```
+   Using runtime: azure-foundry-standard
+   Endpoint: https://your-resource.services.ai.azure.com/...
+   Model: your-model-deployment
+   Credential: AZURE_OPENAI_API_KEY
+   ```
+4. **Check Azure AI Foundry portal**:
+   - Go to your resource → Monitoring → Logs
+   - Filter for recent requests to your model deployment
+   - Verify requests are appearing
+
+### Complete Testing Guide
+
+For comprehensive testing instructions covering all 11 agent workflows, see:
+
+**[Complete Workflow Simulation Guide](../specs/359-agent-inventory-and-invocation-docs/ALL_WORKFLOWS_SIMULATION.md)**
+
+This guide includes:
+- Step-by-step testing procedures for each agent
+- Expected flow diagrams and verification steps
+- Success criteria and troubleshooting
+- Testing checklist with expected outcomes
+
+---
+
 ## Related topics
 
 | Resource | What it covers |

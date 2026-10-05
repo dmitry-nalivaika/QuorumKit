@@ -555,4 +555,21 @@ gh run view <RUN_ID> --log
 
 ---
 
+## Testing Agent Workflows
+
+To test agent workflows with your Azure AI Foundry runtime configuration, see the comprehensive testing guide:
+
+**[Complete Workflow Simulation Guide](../specs/359-agent-inventory-and-invocation-docs/ALL_WORKFLOWS_SIMULATION.md)**
+
+This guide includes:
+- Step-by-step testing instructions for all 11 agent workflows
+- Expected flow diagrams and verification procedures
+- Success criteria and troubleshooting for each agent
+- Testing checklist with expected outcomes
+
+For detailed triage agent testing, see:
+**[Triage Workflow Simulation](../specs/359-agent-inventory-and-invocation-docs/TRIAGE_WORKFLOW_SIMULATION.md)**
+
+---
+
 **End of Document**

@@ -41,3 +41,11 @@ Agent slugs may differ from filenames due to historical naming:
 - `qa-agent` → definition: `qa-test-agent.md`, instruction: `qa-agent.instructions.md`
 
 These mappings are handled automatically by the generator script.
+
+## Testing Agents
+
+To test agent workflows with Azure AI Foundry or other runtimes, see:
+
+**[Complete Workflow Simulation Guide](../specs/359-agent-inventory-and-invocation-docs/ALL_WORKFLOWS_SIMULATION.md)**
+
+Includes step-by-step testing instructions, verification procedures, and troubleshooting for all 11 agent workflows.
