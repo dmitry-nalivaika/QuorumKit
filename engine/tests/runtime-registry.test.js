@@ -90,7 +90,37 @@ describe('runtime-registry.resolveRuntime — precedence', () => {
 });
 
 describe('runtime-registry.ENABLED_KINDS', () => {
-  it('ships exactly claude and copilot in v2 (ADR-005)', () => {
-    expect(new Set(ENABLED_KINDS)).toEqual(new Set(['claude', 'copilot']));
+  it('ships claude, copilot, and azure-openai (ADR-005, ADR-332)', () => {
+    expect(new Set(ENABLED_KINDS)).toEqual(new Set(['claude', 'copilot', 'azure-openai']));
+  });
+
+  it('no longer rejects azure-openai as reserved (ADR-332 moves it off RESERVED_KINDS)', () => {
+    expect(RESERVED_KINDS).not.toContain('azure-openai');
+  });
+});
+
+describe('runtime-registry.validateRegistry — azure-openai (ADR-332)', () => {
+  it('accepts a registry declaring an azure-openai runtime entry', () => {
+    const r = {
+      default_runtime: 'azure-foundry-standard',
+      agent_defaults: { 'triage-agent': 'azure-foundry-mini' },
+      runtimes: {
+        'azure-foundry-mini': {
+          kind: 'azure-openai',
+          endpoint: 'https://my-resource.openai.azure.com/openai/deployments/gpt-4o-mini',
+          credential_ref: 'AZURE_OPENAI_API_KEY',
+          model: 'gpt-4o-mini',
+          parameters: { api_version: '2024-10-21' },
+        },
+        'azure-foundry-standard': {
+          kind: 'azure-openai',
+          endpoint: 'https://my-resource.openai.azure.com/openai/deployments/gpt-4o',
+          credential_ref: 'AZURE_OPENAI_API_KEY',
+          model: 'gpt-4o',
+          parameters: { api_version: '2024-10-21' },
+        },
+      },
+    };
+    expect(validateRegistry(r)).toEqual([]);
   });
 });

@@ -31,6 +31,14 @@
  *   ITERATION           — pipeline iteration (default '1')
  *   RUNTIME_NAME        — the named runtime entry from src/runtimes.yml
  *   MAX_ITERATIONS      — agentic loop cap (default 20)
+ *   RUNTIME_ENDPOINT     — Azure OpenAI / Azure AI Foundry endpoint override
+ *                          for RUNTIME_KIND=copilot (ADR-332); routes the
+ *                          chat/completions call there instead of GitHub
+ *                          Models when set. No silent fallback: an
+ *                          unreachable/misconfigured endpoint fails loudly.
+ *   RUNTIME_MODEL        — model/deployment name to send (ADR-332)
+ *   RUNTIME_API_VERSION  — Azure OpenAI api-version query param (ADR-332)
+ *   RUNTIME_CREDENTIAL   — resolved API key for RUNTIME_ENDPOINT (ADR-332)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -73,6 +81,33 @@ if (RUNTIME_KIND === 'claude' && !process.env.ANTHROPIC_API_KEY) {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function readSafe(p) {
   try { return fs.readFileSync(p, 'utf8'); } catch { return ''; }
+}
+
+// SEC-CRIT-002 (Security Agent review, PR #334): RUNTIME_ENDPOINT can be an
+// attacker-influenced workflow_dispatch input if this workflow is invoked
+// directly (bypassing the Orchestrator). Restrict it to known Azure OpenAI /
+// Azure AI Foundry hostnames so it cannot be used as an SSRF primitive.
+const ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+function isAllowedRuntimeEndpoint(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' &&
+      ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.some(suffix => u.hostname.toLowerCase().endsWith(suffix));
+  } catch {
+    return false;
+  }
+}
+
+// SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
+// doesn't bind the endpoint to the maintainer's own resource — anyone can
+// provision an Azure resource under the same public suffix. Reject any
+// endpoint that isn't one of the maintainer-reviewed entries committed to
+// src/runtimes.yml, so an attacker-provisioned resource is never reachable
+// even when RUNTIME_ENDPOINT is supplied directly via workflow_dispatch.
+function getDeclaredRuntimeEndpoints() {
+  return new Set(
+    [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
+  );
 }
 
 function exec(cmd, opts = {}) {
@@ -460,20 +495,43 @@ async function runCopilot({ system, user }) {
     { role: 'user',   content: user },
   ];
 
+  // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI Foundry
+  // deployment when RUNTIME_ENDPOINT is supplied; otherwise fall back to the
+  // existing GitHub Models default (byte-for-byte unchanged).
+  const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
+  const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
+  const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
+  const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+  if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
+    throw new Error(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.join(' or ')}): ${runtimeEndpoint}`);
+  }
+  if (runtimeEndpoint && !getDeclaredRuntimeEndpoints().has(runtimeEndpoint)) {
+    throw new Error(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+  }
+  let hostname       = 'models.inference.ai.azure.com';
+  let requestPath    = '/chat/completions';
+  let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
+  if (runtimeEndpoint) {
+    const u = new URL(runtimeEndpoint);
+    hostname       = u.hostname;
+    requestPath    = `${u.pathname.replace(/\/$/, '')}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
+    requestHeaders = { 'api-key': runtimeCredential };
+  }
+
   for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
     console.log(`[runner] iteration ${i + 1} (copilot)`);
     const body = JSON.stringify({
-      model: 'gpt-4o',
+      model: runtimeModel,
       messages,
       tools,
       max_tokens: 4096,
     });
     const res = await httpsRequest({
-      hostname: 'models.inference.ai.azure.com',
-      path: '/chat/completions',
+      hostname,
+      path: requestPath,
       method: 'POST',
       headers: {
-        Authorization: 'Bearer ' + process.env.GITHUB_TOKEN,
+        ...requestHeaders,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
       },
@@ -583,5 +641,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs };
+  module.exports = { executeTool, toolDefs, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
 }

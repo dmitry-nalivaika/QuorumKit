@@ -1,8 +1,15 @@
 # APM Runtime Registry (FR-007, ADR-005)
 #
 # Canonical source of truth for runtimes available to v2 pipelines.
-# Reserved kinds (azure-openai, bedrock, ollama, custom) are NOT enabled in v2;
-# enabling any of them requires a per-kind ADR. See ADR-005.
+# Supported kinds: claude, copilot, azure-openai (enabled by ADR-332).
+# Reserved kinds (bedrock, ollama, custom) are NOT enabled in v2; enabling any
+# of them requires a per-kind ADR. See ADR-005.
+#
+# azure-openai (ADR-332): lets a maintainer point agents at their own Azure AI
+# Foundry / Azure OpenAI deployment instead of the GitHub Models default, so
+# agentic workflows run on a predictable, maintainer-controlled LLM provider.
+# There is NO silent fallback: if the configured runtime is unreachable or the
+# credential is missing, the run fails loudly (ADR-332 §5).
 #
 # Credentials are referenced BY NAME ONLY. The orchestrator resolves the
 # secret value from `process.env` (i.e. GitHub Actions ${{ secrets.* }})
