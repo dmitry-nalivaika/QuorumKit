@@ -40,6 +40,7 @@ const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 const { execSync } = require('child_process');
+const { loadPricing, computeUsage } = require('./model-pricing.cjs');
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 const RUNTIME_KIND   = (process.env.RUNTIME_KIND || 'copilot').toLowerCase();
@@ -214,6 +215,48 @@ let prUrl = '';
 let finalOutcome = null; // populated by signal_outcome
 const repoRoot = process.cwd();
 
+// Token usage accumulated across every LLM call in this run (#335).
+const usageTotals = { model: '', prompt: 0, completion: 0, seen: false };
+
+/** Add one API response's token counts; ignored when the provider reported none. */
+function recordUsage(model, promptTokens, completionTokens) {
+  const p = Number.isFinite(promptTokens) ? promptTokens : null;
+  const c = Number.isFinite(completionTokens) ? completionTokens : null;
+  if (p === null && c === null) return;
+  usageTotals.model = model;
+  usageTotals.prompt += p ?? 0;
+  usageTotals.completion += c ?? 0;
+  usageTotals.seen = true;
+}
+
+/** Fenced apm-msg block for signal_outcome; empty when not orchestrator-driven. */
+function buildApmBlock(outcome, summary) {
+  if (!RUN_ID) return '';
+  const msg = {
+    version: '2',
+    runId: RUN_ID,
+    step: STEP,
+    agent: 'dev-agent',
+    iteration: Number(ITERATION) || 1,
+    outcome,
+    summary: (String(summary).replace(/`/g, "'").replace(/\s+/g, ' ').trim() || outcome).slice(0, 280),
+    event_type: outcome === 'success' ? 'complete' : 'fail',
+    pipeline_id: String(ISSUE_NUMBER).padStart(3, '0'),
+    issue: String(ISSUE_NUMBER),
+    timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+  };
+  if (usageTotals.seen) {
+    msg.usage = computeUsage({
+      runtime: RUNTIME_NAME || RUNTIME_KIND,
+      model: usageTotals.model,
+      promptTokens: usageTotals.prompt,
+      completionTokens: usageTotals.completion,
+      pricing: loadPricing(repoRoot).pricing,
+    });
+  }
+  return '```apm-msg\n' + JSON.stringify(msg, null, 2) + '\n```';
+}
+
 async function executeTool(name, input) {
   switch (name) {
     case 'read_file': {
@@ -331,6 +374,7 @@ async function executeTool(name, input) {
         RUN_ID
           ? `\n<!-- apm:run_id=${RUN_ID} step=${STEP} iteration=${ITERATION} runtime=${RUNTIME_NAME || RUNTIME_KIND} outcome=${input.outcome} -->`
           : '',
+        buildApmBlock(input.outcome, input.summary),
       ].join('\n').trim();
       const r = await ghApi(`/repos/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}/comments`, {
         method: 'POST', body: { body: apmMsg },
@@ -484,6 +528,7 @@ async function runCopilot({ system, user }) {
       return;
     }
     const data    = JSON.parse(res.body);
+    recordUsage('gpt-4o', data.usage?.prompt_tokens, data.usage?.completion_tokens);
     const message = data.choices?.[0]?.message;
     if (!message) { console.error('[runner] no message in response'); return; }
 
@@ -533,6 +578,7 @@ async function runClaude({ system, user }) {
       return;
     }
     const data = JSON.parse(res.body);
+    recordUsage('claude-opus-4-5', data.usage?.input_tokens, data.usage?.output_tokens);
     messages.push({ role: 'assistant', content: data.content });
 
     if (data.stop_reason === 'end_turn') { console.log('[runner] end_turn'); return; }
@@ -583,5 +629,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs };
+  module.exports = { executeTool, toolDefs, recordUsage };
 }
