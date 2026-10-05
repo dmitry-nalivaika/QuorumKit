@@ -259,6 +259,15 @@ jobs:
             const data = await res.json();
             const rawContent = data.choices?.[0]?.message?.content?.trim() ?? '{}';
 
+            // LLM usage for the audit trail (#335); never fails the run.
+            let usageBlock = '';
+            try {
+              usageBlock = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`).usageApmBlock({
+                response: data, model: runtimeModel, agent: 'ba-agent', issueNumber,
+                runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
+              });
+            } catch (e) { core.warning(`Usage capture skipped: ${e.message}`); }
+
             let parsed;
             try {
               parsed = JSON.parse(rawContent);
@@ -317,7 +326,7 @@ jobs:
                   '`status:needs-info` has been removed. The issue is now `status:confirmed` and ready for spec-writing.',
                   '',
                   '_To write a formal spec, trigger the BA Agent manually via `/ba-agent`._',
-                ].join('\n'),
+                ].join('\n') + usageBlock,
               });
 
               return;
@@ -344,6 +353,6 @@ jobs:
                 questionList,
                 '',
                 'Please reply to this comment with the requested information, then re-trigger the BA agent via `/ba-agent`.',
-              ].join('\n'),
+              ].join('\n') + usageBlock,
             });
             // status:needs-info is NOT touched (FR-008)

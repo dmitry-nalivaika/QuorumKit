@@ -61,4 +61,35 @@ function computeUsage({ runtime, model, promptTokens, completionTokens, pricing 
   };
 }
 
-module.exports = { PRICING_PATH, loadPricing, computeUsage };
+/**
+ * Fenced usage-only `apm-msg` block to append to a workflow's reply comment.
+ * Returns '' when the response reported no usable usage (FR-005). Never throws.
+ * Deliberately omits `outcome`/`event_type`: a free-text reply cannot prove one.
+ */
+function usageApmBlock({ response, runtime, model, agent, issueNumber, pricing } = {}) {
+  try {
+    const u = response && response.usage;
+    const finite = n => Number.isFinite(n);
+    if (!u || (!finite(u.prompt_tokens) && !finite(u.completion_tokens))) return '';
+    const msg = {
+      version: '2',
+      step: String(agent).replace(/-agent$/, ''),
+      agent,
+      summary: `LLM usage recorded for ${agent}.`,
+      ...(issueNumber ? { pipeline_id: String(issueNumber).padStart(3, '0'), issue: String(issueNumber) } : {}),
+      timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      usage: computeUsage({
+        runtime,
+        model,
+        promptTokens: finite(u.prompt_tokens) ? u.prompt_tokens : 0,
+        completionTokens: finite(u.completion_tokens) ? u.completion_tokens : 0,
+        pricing: pricing ?? loadPricing().pricing,
+      }),
+    };
+    return '\n\n```apm-msg\n' + JSON.stringify(msg, null, 2) + '\n```';
+  } catch {
+    return '';
+  }
+}
+
+module.exports = { PRICING_PATH, loadPricing, computeUsage, usageApmBlock };

@@ -152,11 +152,20 @@ jobs:
             const report = data.choices?.[0]?.message?.content?.trim()
               ?? '⚠️ Tech-debt agent produced no output.';
 
+            // LLM usage for the audit trail (#335); never fails the run.
+            let usageBlock = '';
+            try {
+              usageBlock = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`).usageApmBlock({
+                response: data, model: runtimeModel, agent: 'tech-debt-agent', issueNumber,
+                runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
+              });
+            } catch (e) { core.warning(`Usage capture skipped: ${e.message}`); }
+
             const today = new Date().toISOString().slice(0,7); // YYYY-MM
             await github.rest.issues.create({
               owner:  context.repo.owner,
               repo:   context.repo.repo,
               title:  `🔧 Tech-Debt Report – ${today} (${focusArea})`,
-              body:   report,
+              body:   report + usageBlock,
               labels: ['tech-debt', 'agent-report'],
             });

@@ -147,10 +147,19 @@ jobs:
             const report = data.choices?.[0]?.message?.content?.trim()
               ?? '⚠️ Release agent produced no output.';
 
+            // LLM usage for the audit trail (#335); never fails the run.
+            let usageBlock = '';
+            try {
+              usageBlock = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`).usageApmBlock({
+                response: data, model: runtimeModel, agent: 'release-agent',
+                runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
+              });
+            } catch (e) { core.warning(`Usage capture skipped: ${e.message}`); }
+
             await github.rest.issues.create({
               owner:  context.repo.owner,
               repo:   context.repo.repo,
               title:  `🚀 Release Agent Report – ${new Date().toISOString().slice(0,10)}`,
-              body:   report,
+              body:   report + usageBlock,
               labels: ['release', 'agent-report'],
             });

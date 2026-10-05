@@ -282,7 +282,7 @@ function buildApmBlock(outcome, summary) {
   };
   if (usageTotals.seen) {
     msg.usage = computeUsage({
-      runtime: RUNTIME_NAME || RUNTIME_KIND,
+      runtime: process.env.RUNTIME_ENDPOINT ? 'azure-openai' : (RUNTIME_NAME || RUNTIME_KIND),
       model: usageTotals.model,
       promptTokens: usageTotals.prompt,
       completionTokens: usageTotals.completion,

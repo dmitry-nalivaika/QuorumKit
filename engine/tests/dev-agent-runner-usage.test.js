@@ -83,6 +83,19 @@ describe('signal_outcome apm-msg block with usage', () => {
     });
   });
 
+  it('reports the azure-openai runtime when routed to an Azure endpoint (FR-002)', async () => {
+    const runner = loadRunner({ RUNTIME_ENDPOINT: 'https://acme.openai.azure.com/openai/deployments/gpt-4o', RUNTIME_MODEL: 'gpt-4o' });
+    runner.recordUsage('gpt-4o', 1000, 500);
+    await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
+    const parsed = parseApmMsg(commentBody());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.message.usage).toEqual({
+      runtime: 'azure-openai', model: 'gpt-4o',
+      prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500,
+      estimated_cost_usd: 0.0075,
+    });
+  });
+
   it('reports estimated_cost_usd: null when the model has no pricing entry', async () => {
     const runner = loadRunner();
     runner.recordUsage('mystery-model', 10, 5);

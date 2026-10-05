@@ -155,7 +155,7 @@ jobs:
               try {
                 const { loadPricing, computeUsage } = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`);
                 core.setOutput('usage', JSON.stringify(computeUsage({
-                  runtime: 'copilot-default',
+                  runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
                   model: runtimeModel,
                   promptTokens: data.usage.prompt_tokens ?? 0,
                   completionTokens: data.usage.completion_tokens ?? 0,

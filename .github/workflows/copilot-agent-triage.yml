@@ -170,11 +170,20 @@ jobs:
               reply = rawContent || reply;
             }
 
+            // LLM usage for the audit trail (#335); never fails the run.
+            let usageBlock = '';
+            try {
+              usageBlock = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`).usageApmBlock({
+                response: data, model: runtimeModel, agent: 'triage-agent', issueNumber,
+                runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
+              });
+            } catch (e) { core.warning(`Usage capture skipped: ${e.message}`); }
+
             await github.rest.issues.createComment({
               owner:        context.repo.owner,
               repo:         context.repo.repo,
               issue_number: issueNumber,
-              body:         reply,
+              body:         reply + usageBlock,
             });
 
             // Ensure all required labels exist before applying them
