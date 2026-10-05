@@ -383,6 +383,26 @@ install_runtimes() {
 }
 
 # =============================================================================
+# AGENT IDENTITY REGISTRY (ADR-005)
+# =============================================================================
+install_agent_identities() {
+  h1 "Installing agent identity registry (src/agent-identities.yml)"
+  local identities_src="$QUORUMKIT_PACKAGE_DIR/src/agent-identities.yml"
+  if [ ! -f "$identities_src" ]; then
+    warn "Agent identity registry not found at $identities_src — skipping"
+    return
+  fi
+
+  mkdir -p src
+  if [ ! -f "src/agent-identities.yml" ]; then
+    cp "$identities_src" "src/agent-identities.yml"
+    ok "Agent identity registry: src/agent-identities.yml"
+  else
+    warn "src/agent-identities.yml already exists — skipping (maintainer-edited)"
+  fi
+}
+
+# =============================================================================
 # LOCAL PARALLEL PIPELINES (FR-004, Issue #283, AD-4)
 # =============================================================================
 install_local_pipelines() {
@@ -655,6 +675,7 @@ case "$AI_MODE" in
     install_speckit "claude"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     [ "$SKIP_PIPELINES" -eq 0 ] && install_runtimes
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_agent_identities
     [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
@@ -664,6 +685,7 @@ case "$AI_MODE" in
     install_speckit "copilot"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     [ "$SKIP_PIPELINES" -eq 0 ] && install_runtimes
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_agent_identities
     [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;
@@ -674,6 +696,7 @@ case "$AI_MODE" in
     install_speckit "both"
     [ "$SKIP_PIPELINES" -eq 0 ] && install_pipelines
     [ "$SKIP_PIPELINES" -eq 0 ] && install_runtimes
+    [ "$SKIP_PIPELINES" -eq 0 ] && install_agent_identities
     [ "$SKIP_PIPELINES" -eq 0 ] && install_model_pricing
     [ "$SKIP_PIPELINES" -eq 0 ] && install_local_pipelines
     ;;

@@ -165,6 +165,7 @@ run_mode_test() {
 
   h1 "Runtime registry"
   check_file "src/runtimes.yml"
+  check_file "src/agent-identities.yml"
 
   # ── Verify: Guide copies at root ─────────────────────────────────────────
   h1 "Root-level guide docs"
@@ -216,6 +217,8 @@ run_mode_test() {
   echo "$custom_pricing_sentinel" >> "$tmpdir/src/model-pricing.yml"
   local custom_runtimes_sentinel="# hand-edited runtimes sentinel $(date +%s)"
   echo "$custom_runtimes_sentinel" >> "$tmpdir/src/runtimes.yml"
+  local custom_identities_sentinel="# hand-edited identities sentinel $(date +%s)"
+  echo "$custom_identities_sentinel" >> "$tmpdir/src/agent-identities.yml"
 
   cd "$tmpdir"
   QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
@@ -241,6 +244,11 @@ run_mode_test() {
     ok "hand-edited src/runtimes.yml survives re-run (byte-identical)"
   else
     fail "hand-edited src/runtimes.yml was OVERWRITTEN by re-run"
+  fi
+  if grep -qF "$custom_identities_sentinel" "$tmpdir/src/agent-identities.yml"; then
+    ok "hand-edited src/agent-identities.yml survives re-run (byte-identical)"
+  else
+    fail "hand-edited src/agent-identities.yml was OVERWRITTEN by re-run"
   fi
 
   # ── Summary ───────────────────────────────────────────────────────────────
