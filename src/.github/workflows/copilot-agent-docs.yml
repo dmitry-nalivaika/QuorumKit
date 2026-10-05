@@ -9,6 +9,22 @@ on:
     types: [created]
   workflow_dispatch:
     inputs:
+      runtime_endpoint:
+        description: 'Optional LLM endpoint override for Orchestrator v2 runtime dispatch (ADR-332); must match an endpoint declared in src/runtimes.yml (SEC-HIGH-001)'
+        required: false
+        default: ''
+      runtime_model:
+        description: 'Optional LLM model/deployment override (ADR-332)'
+        required: false
+        default: ''
+      runtime_credential_ref:
+        description: 'Must equal the literal string AZURE_OPENAI_API_KEY to use that credential (bounded allowlist, SEC-CRIT-001); any other value falls back to GITHUB_TOKEN (ADR-332)'
+        required: false
+        default: ''
+      runtime_api_version:
+        description: 'Optional API version query parameter for Azure OpenAI-style endpoints (ADR-332)'
+        required: false
+        default: ''
       issue_number:
         description: 'Issue or PR number (used when triggered by the Orchestrator)'
         required: false
@@ -36,6 +52,10 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
+          RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
+          RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -236,14 +256,56 @@ jobs:
               'If documentation updates are needed, describe them clearly so a follow-up PR can be opened.',
             ].filter(Boolean).join('\n');
 
-            const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
+            // Foundry deployment when the Orchestrator's azure-openai runtime
+            // adapter supplied these inputs; otherwise fall back to the
+            // existing GitHub Models default (byte-for-byte unchanged).
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
+            // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
+            // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
+            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+            const isAllowedRuntimeEndpoint = raw => {
+              try {
+                const u = new URL(raw);
+                return u.protocol === 'https:' && allowedRuntimeEndpointHostSuffixes.some(s => u.hostname.toLowerCase().endsWith(s));
+              } catch { return false; }
+            };
+            if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
+              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              return;
+            }
+            // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
+            // doesn't bind the endpoint to the maintainer's own resource — anyone can
+            // provision an Azure resource under the same public suffix. Reject any
+            // endpoint that isn't one of the maintainer-reviewed entries committed to
+            // src/runtimes.yml, so an attacker-provisioned resource is never reachable
+            // even when RUNTIME_ENDPOINT is supplied directly via workflow_dispatch.
+            const declaredRuntimeEndpoints = new Set(
+              [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
+            );
+            if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
+              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              return;
+            }
+            const requestUrl = runtimeEndpoint
+              ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
+              : 'https://models.inference.ai.azure.com/chat/completions';
+            const authHeaders = runtimeEndpoint
+              ? { 'api-key': runtimeCredential }
+              : { 'Authorization': `Bearer ${runtimeCredential}` };
+
+            const res = await fetch(requestUrl, {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                ...authHeaders,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                model: 'gpt-4o',
+                model: runtimeModel,
                 messages: [
                   { role: 'system', content: systemContent },
                   { role: 'user',   content: userContent },
@@ -254,7 +316,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`GitHub Models API error ${res.status}: ${txt}`);
+              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 

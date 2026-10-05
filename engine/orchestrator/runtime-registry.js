@@ -1,10 +1,11 @@
 /**
  * runtime-registry.js
- * Load and validate `src/runtimes.yml` (FR-007, FR-008, ADR-005).
+ * Load and validate `src/runtimes.yml` (FR-007, FR-008, ADR-005, ADR-332).
  *
- * Enforces the kind allowlist: only `claude` and `copilot` are enabled in v2.
- * Reserved kinds (`azure-openai`, `bedrock`, `ollama`, `custom`) are rejected
- * with the canonical error code `RUNTIME_KIND_NOT_ENABLED` (ADR-005).
+ * Enforces the kind allowlist: `claude`, `copilot`, and `azure-openai` are
+ * enabled. Reserved kinds (`bedrock`, `ollama`, `custom`) are rejected with
+ * the canonical error code `RUNTIME_KIND_NOT_ENABLED` (ADR-005). `azure-openai`
+ * was moved from reserved to enabled by ADR-332 (Issue #332).
  *
  * Resolution precedence (FR-008):
  *   step.runtime → agent_defaults[agent] → default_runtime → null
@@ -23,8 +24,8 @@ const schema = JSON.parse(await readFile(schemaUrl, 'utf8'));
 const ajv = new Ajv({ allErrors: true });
 const validateSchema = ajv.compile(schema);
 
-export const ENABLED_KINDS = Object.freeze(['claude', 'copilot']);
-export const RESERVED_KINDS = Object.freeze(['azure-openai', 'bedrock', 'ollama', 'custom']);
+export const ENABLED_KINDS = Object.freeze(['claude', 'copilot', 'azure-openai']);
+export const RESERVED_KINDS = Object.freeze(['bedrock', 'ollama', 'custom']);
 export const REGISTRY_PATH = 'src/runtimes.yml';
 
 /**

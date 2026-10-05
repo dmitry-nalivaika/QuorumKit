@@ -26,7 +26,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "description": "Runtime adapter kind. Allowlist enforced by runtime-registry.js (claude, copilot)."
+          "description": "Runtime adapter kind. Allowlist enforced by runtime-registry.js (claude, copilot, azure-openai)."
         },
         "endpoint": { "type": "string", "minLength": 1 },
         "credential_ref": {
