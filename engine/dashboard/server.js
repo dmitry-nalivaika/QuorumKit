@@ -41,6 +41,7 @@ const crypto     = require('crypto');
 const { exec, spawn }  = require('child_process');
 const { WebSocketServer } = require('ws');
 const os         = require('os');
+const { aggregateCostTokens } = require('./cost-tokens.js');
 
 // ─── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -584,6 +585,7 @@ function parseCommentToEvent(comment) {
         step:      parsed.step,
         iteration: parsed.iteration,
         pipelineId: parsed.pipeline_id,
+        usage:     parsed.usage ?? null,
         commentId: comment.id,
         commentUrl: comment.html_url || '',
         body:      safeBody,
@@ -720,6 +722,7 @@ async function fetchTimeline(issueNumber, cfg) {
   const data = {
     events,
     status: derivePipelineStatus(events),
+    costTokens: aggregateCostTokens(events),
     meta: {
       issueNumber,
       totalComments:    comments.length,
