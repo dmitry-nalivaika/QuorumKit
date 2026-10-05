@@ -1,7 +1,7 @@
 # QuorumKit Agent Inventory
 
 > **Auto-generated** by `scripts/generate-agent-inventory.js`. Do not edit manually.
-> Last updated: 2026-10-05T19:58:31.933Z
+> Last updated: 2026-10-05T20:20:51.530Z
 
 This table shows all QuorumKit agents and their associated artifacts.
 

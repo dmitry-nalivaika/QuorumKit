@@ -362,7 +362,11 @@ function renderInventoryTable(inventories) {
   md += `- \`ba-agent\` → definition: \`ba-product-agent.md\`, instruction: \`ba-agent.instructions.md\`\n`;
   md += `- \`dev-agent\` → definition: \`developer-agent.md\`, instruction: \`dev-agent.instructions.md\`\n`;
   md += `- \`qa-agent\` → definition: \`qa-test-agent.md\`, instruction: \`qa-agent.instructions.md\`\n\n`;
-  md += `These mappings are handled automatically by the generator script.\n`;
+  md += `These mappings are handled automatically by the generator script.\n\n`;
+  md += `## Testing Agents\n\n`;
+  md += `To test agent workflows with Azure AI Foundry or other runtimes, see:\n\n`;
+  md += `**[Complete Workflow Simulation Guide](../specs/359-agent-inventory-and-invocation-docs/ALL_WORKFLOWS_SIMULATION.md)**\n\n`;
+  md += `Includes step-by-step testing instructions, verification procedures, and troubleshooting for all 11 agent workflows.\n`;
   
   return md;
 }
