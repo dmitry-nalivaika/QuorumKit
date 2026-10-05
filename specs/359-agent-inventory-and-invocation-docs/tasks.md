@@ -16,7 +16,7 @@
 - [x] T001 Create spec directory `specs/359-agent-inventory-and-invocation-docs/`
 - [x] T002 Create `spec.md` with user stories, FRs, acceptance scenarios
 - [x] T003 Create `plan.md` with implementation approach, constitution check
-- [ ] T004 Create `tasks.md` (this file)
+- [x] T004 Create `tasks.md` (this file)
 
 ---
 
@@ -28,22 +28,22 @@
 
 ### Implementation for User Story 1
 
-- [ ] T005 [P] [US1] Create `scripts/generate-agent-inventory.js` with ES module structure, imports (fs, path, js-yaml)
-- [ ] T006 [US1] Implement slug-mapping heuristic function (ba-product-agent → ba-agent, developer-agent → dev-agent, qa-test-agent → qa-agent)
-- [ ] T007 [US1] Implement parser for `quorumkit.yml` to extract agents.universal + agents.domain/industrial
-- [ ] T008 [P] [US1] Implement parser for `src/agent-identities.yml` to build slug → logins map
-- [ ] T009 [P] [US1] Implement parser for `src/runtimes.yml` to build slug → runtime map (default_runtime + agent_defaults)
-- [ ] T010 [US1] Implement scanner for `src/pipelines/*.yml` to collect unique agent slugs from steps[].agent
-- [ ] T011 [US1] Implement union logic to merge all discovered agent slugs (quorumkit + identities + runtimes + pipelines)
-- [ ] T012 [US1] Implement artifact checker: for each slug, check existence of definition, instruction, prompt, skill, workflows
-- [ ] T013 [US1] Implement missing-marker logic: mark non-existent files with `❌ MISSING`
-- [ ] T014 [US1] Implement pipeline-usage aggregator: scan all pipelines, report which steps use each agent
-- [ ] T015 [US1] Implement markdown table renderer with columns: slug, definition, instruction, prompt, skill, Claude workflow, Copilot workflow, identity logins, runtime, pipeline usage
-- [ ] T016 [US1] Add ISO timestamp header "Last updated: [timestamp]" to generated markdown
-- [ ] T017 [US1] Write output to `docs/AGENT_INVENTORY.md`
-- [ ] T018 [US1] Add script usage instructions in comments at top of `scripts/generate-agent-inventory.js`
-- [ ] T019 [US1] Add executable shebang `#!/usr/bin/env node` to script
-- [ ] T020 [US1] Make script executable: `chmod +x scripts/generate-agent-inventory.js`
+- [x] T005 [P] [US1] Create `scripts/generate-agent-inventory.js` with ES module structure, imports (fs, path, js-yaml)
+- [x] T006 [US1] Implement slug-mapping heuristic function (ba-product-agent → ba-agent, developer-agent → dev-agent, qa-test-agent → qa-agent)
+- [x] T007 [US1] Implement parser for `quorumkit.yml` to extract agents.universal + agents.domain/industrial
+- [x] T008 [P] [US1] Implement parser for `src/agent-identities.yml` to build slug → logins map
+- [x] T009 [P] [US1] Implement parser for `src/runtimes.yml` to build slug → runtime map (default_runtime + agent_defaults)
+- [x] T010 [US1] Implement scanner for `src/pipelines/*.yml` to collect unique agent slugs from steps[].agent
+- [x] T011 [US1] Implement union logic to merge all discovered agent slugs (quorumkit + identities + runtimes + pipelines)
+- [x] T012 [US1] Implement artifact checker: for each slug, check existence of definition, instruction, prompt, skill, workflows
+- [x] T013 [US1] Implement missing-marker logic: mark non-existent files with `❌ MISSING`
+- [x] T014 [US1] Implement pipeline-usage aggregator: scan all pipelines, report which steps use each agent
+- [x] T015 [US1] Implement markdown table renderer with columns: slug, definition, instruction, prompt, skill, Claude workflow, Copilot workflow, identity logins, runtime, pipeline usage
+- [x] T016 [US1] Add ISO timestamp header "Last updated: [timestamp]" to generated markdown
+- [x] T017 [US1] Write output to `docs/AGENT_INVENTORY.md`
+- [x] T018 [US1] Add script usage instructions in comments at top of `scripts/generate-agent-inventory.js`
+- [x] T019 [US1] Add executable shebang `#!/usr/bin/env node` to script
+- [x] T020 [US1] Make script executable: `chmod +x scripts/generate-agent-inventory.js`
 
 **Checkpoint**: At this point, running `node scripts/generate-agent-inventory.js` should produce `docs/AGENT_INVENTORY.md` with a complete inventory table
 
