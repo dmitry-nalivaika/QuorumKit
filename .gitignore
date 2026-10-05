@@ -53,3 +53,6 @@ engine/node_modules/
 *.tgz
 
 engine/tests/.vite/
+
+# vitest --coverage output
+engine/orchestrator/coverage/
