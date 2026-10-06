@@ -87,7 +87,7 @@ function readSafe(p) {
 // attacker-influenced workflow_dispatch input if this workflow is invoked
 // directly (bypassing the Orchestrator). Restrict it to known Azure OpenAI /
 // Azure AI Foundry hostnames so it cannot be used as an SSRF primitive.
-const ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+const ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES = ['.openai.azure.com', '.cognitiveservices.azure.com', '.services.ai.azure.com'];
 function isAllowedRuntimeEndpoint(raw) {
   try {
     const u = new URL(raw);
@@ -508,6 +508,12 @@ async function runCopilot({ system, user }) {
   if (runtimeEndpoint && !getDeclaredRuntimeEndpoints().has(runtimeEndpoint)) {
     throw new Error(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
   }
+  // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
+  // request/response shape than chat/completions (flat tool defs, `input` items,
+  // `function_call` / `function_call_output` items). Dispatch to a dedicated loop.
+  if (runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname)) {
+    return runResponses({ system, user, runtimeEndpoint, runtimeModel, runtimeApiVersion, runtimeCredential });
+  }
   let hostname       = 'models.inference.ai.azure.com';
   let requestPath    = '/chat/completions';
   let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
@@ -557,6 +563,65 @@ async function runCopilot({ system, user }) {
       const result = await executeTool(call.function.name, args);
       console.log(`[runner]   result: ${String(result).slice(0, 200)}`);
       messages.push({ role: 'tool', tool_call_id: call.id, content: String(result).slice(0, 8000) });
+    }
+  }
+}
+
+// Azure AI Foundry / OpenAI "Responses" API loop (ADR-332).
+async function runResponses({ system, user, runtimeEndpoint, runtimeModel, runtimeApiVersion, runtimeCredential }) {
+  const tools = toolDefs.map(t => ({
+    type: 'function', name: t.name, description: t.description, parameters: t.schema,
+  }));
+  const u = new URL(runtimeEndpoint);
+  // The /openai/v1/ surface is versionless; do not send a dated api-version there.
+  const sendApiVersion = runtimeApiVersion && !u.pathname.startsWith('/openai/v1/');
+  const requestPath = `${u.pathname}${sendApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
+  let input = [{ role: 'user', content: user }];
+
+  for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
+    console.log(`[runner] iteration ${i + 1} (copilot/responses)`);
+    const body = JSON.stringify({
+      model: runtimeModel,
+      instructions: system,
+      input,
+      tools,
+      // Reasoning models spend output budget on reasoning tokens; leave headroom.
+      max_output_tokens: 16384,
+      store: false,
+    });
+    const res = await httpsRequest({
+      hostname: u.hostname,
+      path: requestPath,
+      method: 'POST',
+      headers: {
+        'api-key': runtimeCredential,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      body,
+    });
+    if (res.status !== 200) {
+      console.error(`[runner] Responses API ${res.status}: ${res.body.slice(0, 500)}`);
+      return;
+    }
+    const data   = JSON.parse(res.body);
+    const output = Array.isArray(data.output) ? data.output : [];
+    if (output.length === 0) { console.error('[runner] no output in response'); return; }
+
+    // Replay the full output (including reasoning items) so the model keeps its context.
+    input = input.concat(output);
+
+    const calls = output.filter(item => item.type === 'function_call');
+    if (calls.length === 0) {
+      console.log('[runner] no tool calls; finishing');
+      return;
+    }
+    for (const call of calls) {
+      const args = (() => { try { return JSON.parse(call.arguments); } catch { return {}; } })();
+      console.log(`[runner] tool ${call.name}: ${JSON.stringify(args).slice(0, 160)}`);
+      const result = await executeTool(call.name, args);
+      console.log(`[runner]   result: ${String(result).slice(0, 200)}`);
+      input.push({ type: 'function_call_output', call_id: call.call_id, output: String(result).slice(0, 8000) });
     }
   }
 }

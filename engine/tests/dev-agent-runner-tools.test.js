@@ -178,6 +178,14 @@ describe('isAllowedRuntimeEndpoint', () => {
     expect(isAllowedRuntimeEndpoint('https://my-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o')).toBe(true);
   });
 
+  it('allows an https Azure AI Foundry endpoint (Responses API)', () => {
+    expect(isAllowedRuntimeEndpoint('https://my-resource.services.ai.azure.com/openai/v1/responses')).toBe(true);
+  });
+
+  it('rejects a lookalike Foundry host', () => {
+    expect(isAllowedRuntimeEndpoint('https://services.ai.azure.com.attacker.example.com/openai/v1/responses')).toBe(false);
+  });
+
   it('rejects a non-Azure host (SSRF attempt)', () => {
     expect(isAllowedRuntimeEndpoint('https://attacker.example.com/collect')).toBe(false);
   });

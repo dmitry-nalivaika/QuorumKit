@@ -88,7 +88,7 @@ jobs:
             // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
             // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
             // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
-            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com', '.services.ai.azure.com'];
             const isAllowedRuntimeEndpoint = raw => {
               try {
                 const u = new URL(raw);
@@ -112,9 +112,18 @@ jobs:
               core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
-            const requestUrl = runtimeEndpoint
-              ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
-              : 'https://models.inference.ai.azure.com/chat/completions';
+            // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
+            // request/response shape than chat/completions; the legacy deployment-style
+            // endpoints and the GitHub Models default keep using chat/completions.
+            const useResponsesApi = !!runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname);
+            // The /openai/v1/ surface is versionless; do not send a dated api-version there.
+            const sendApiVersion = runtimeApiVersion && !/\/openai\/v1\//.test(runtimeEndpoint);
+            const apiVersionQuery = sendApiVersion ? `?api-version=${runtimeApiVersion}` : '';
+            const requestUrl = !runtimeEndpoint
+              ? 'https://models.inference.ai.azure.com/chat/completions'
+              : useResponsesApi
+                ? `${runtimeEndpoint}${apiVersionQuery}`
+                : `${runtimeEndpoint}/chat/completions${apiVersionQuery}`;
             const authHeaders = runtimeEndpoint
               ? { 'api-key': runtimeCredential }
               : { 'Authorization': `Bearer ${runtimeCredential}` };
@@ -125,14 +134,22 @@ jobs:
                 ...authHeaders,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                model: runtimeModel,
-                messages: [
-                  { role: 'system', content: systemContent },
-                  { role: 'user',   content: userContent },
-                ],
-                max_tokens: 2048,
-              }),
+              body: JSON.stringify(useResponsesApi
+                ? {
+                    model: runtimeModel,
+                    instructions: systemContent,
+                    input: userContent,
+                    // Reasoning models spend output budget on reasoning tokens, so leave headroom.
+                    max_output_tokens: 8192,
+                  }
+                : {
+                    model: runtimeModel,
+                    messages: [
+                      { role: 'system', content: systemContent },
+                      { role: 'user',   content: userContent },
+                    ],
+                    max_tokens: 2048,
+                  }),
             });
 
             if (!res.ok) {
@@ -141,8 +158,18 @@ jobs:
               return;
             }
 
+            const extractText = d => (useResponsesApi
+              ? (d.output_text ?? (d.output ?? [])
+                  .filter(item => item.type === 'message')
+                  .flatMap(item => item.content ?? [])
+                  .filter(c => c.type === 'output_text')
+                  .map(c => c.text)
+                  .join(''))
+              : d.choices?.[0]?.message?.content
+            )?.trim() || undefined;
+
             const data  = await res.json();
-            const reply = data.choices?.[0]?.message?.content?.trim()
+            const reply = extractText(data)
               ?? '⚠️ QA agent produced no output.';
 
             await github.rest.issues.createComment({
