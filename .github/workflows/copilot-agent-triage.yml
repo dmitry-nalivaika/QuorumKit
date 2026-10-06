@@ -24,6 +24,22 @@ on:
       issue_number:
         description: 'Issue number to triage (manual re-triage)'
         required: true
+      run_id:
+        description: 'Orchestrator run ID (traceability; echoed in the result marker)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'triage'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
 
 permissions:
   contents: read

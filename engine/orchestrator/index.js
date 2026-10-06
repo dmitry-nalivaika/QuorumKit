@@ -25,7 +25,7 @@ import { resolveTransition } from './router-v2.js';
 import { evaluate as evaluateLoopBudget, mergeBudget } from './loop-budget.js';
 import { resolveRuntime, loadRuntimeRegistry } from './runtime-registry.js';
 import { parseApmMsg, validateContext as validateMsgContext, OUTCOMES } from './apm-msg-parser.js';
-import { resolveLogin, loadIdentities } from './identity-registry.js';
+import { resolveLogin, loginMapsToAgent, loadIdentities } from './identity-registry.js';
 
 const APPROVAL_TIMEOUT_DEFAULT_HOURS = 72;
 const STEP_TIMEOUT_DEFAULT_MINUTES = 60;     // FR-019, ADR-007 §4
@@ -499,8 +499,7 @@ async function findReportedOutcome({ client, owner, repo, issueNumber, state, st
     if (runId !== state.runId || step !== state.currentStep) continue;
     if (Number(iteration) !== Number(state.currentIteration)) continue;
     if (!OUTCOMES.includes(outcome)) continue;
-    const agent = resolveLogin(identities, c.user?.login ?? c.user);
-    if (!agent || !(agent === expected || agent === `${expected}-agent` || agent.replace(/-agent$/, '') === expected)) continue;
+    if (!loginMapsToAgent(identities, c.user?.login ?? c.user, expected)) continue;
     candidates.push({ outcome, summary: markerSummary(c.body), at: c.created_at });
   }
   candidates.sort((a, b) => new Date(b.at) - new Date(a.at));

@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runOrchestrator, issueNumberFromRunTitle } from '../orchestrator/index.js';
+import { loadIdentities } from '../orchestrator/identity-registry.js';
 
 globalThis.__APM_TEST_NO_FS = true;
 
@@ -194,5 +195,32 @@ describe('workflow_run.completed ingests the agent result marker (#378)', () => 
     const before = latestState(client);
     await resume(client, finished(378, 'failure', 'copilot-agent-qa.yml', 'QA/Test Agent (Copilot)'));
     expect(latestState(client)).toEqual(before);
+  });
+});
+
+describe('with the shipped identity registry (shared github-actions[bot] login)', () => {
+  it('accepts the dev agent marker even though github-actions[bot] is listed under many agents', async () => {
+    const real = await loadIdentities(new URL('../..', import.meta.url).pathname);
+    expect(real.errors).toEqual([]);
+    const client = makeClient();
+    const s = await start(client);
+    client.postAs('github-actions[bot]', marker(s, 'blocker'));
+    await runOrchestrator({
+      client, event: finished(378, 'failure'), pipelines: [bugFix], owner: 'o', repo: 'r',
+      runtimeRegistry, identities: real.byLogin, env, clock,
+    });
+    expect(latestState(client).outcome).toBe('blocker');
+  });
+
+  it('still rejects a login that is not mapped to the expected agent', async () => {
+    const real = await loadIdentities(new URL('../..', import.meta.url).pathname);
+    const client = makeClient();
+    const s = await start(client);
+    client.postAs('apm-qa-bot', marker(s, 'success'));
+    await runOrchestrator({
+      client, event: finished(378, 'failure'), pipelines: [bugFix], owner: 'o', repo: 'r',
+      runtimeRegistry, identities: real.byLogin, env, clock,
+    });
+    expect(latestState(client).outcome).toBe('runtime-error');
   });
 });
