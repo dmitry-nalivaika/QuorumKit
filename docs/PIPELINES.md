@@ -302,6 +302,44 @@ until a per-kind ADR is merged.
 
 ---
 
+## Scheduled documentation audit
+
+The Docs Agent normally reviews one merged change. The scheduled audit complements it by re-checking the **whole** documentation set, so drift that builds up across several merges, or in a file nobody touched, is still caught. It is not a pipeline: the Orchestrator does not route it.
+
+| | |
+|---|---|
+| Workflows | `copilot-agent-docs-audit.yml` (Copilot) and `agent-docs-audit.yml` (Claude Code) |
+| Schedule | Mondays 06:00 UTC, plus **Run workflow** (`workflow_dispatch`) for an on-demand run. Installed by `init.sh` with the other agent workflows, no configuration needed |
+| Scope | Root `*.md`, `docs/` (including ADRs), `specs/`, `CHANGELOG.md` |
+| Definition of drift | The checklist in `src/agents/docs-agent.md` (section "Scheduled Audit Mode"). Items about "the merged PR" are read as the current state of the repository. Code-level items (API doc comments, TODO hygiene) are not part of the audit |
+| Permissions | `contents: read`, `issues: write`. It never edits files or opens a PR |
+
+**What is checked.**
+
+- *Cross-references (by code):* relative links and `#anchors` in every document, and external links. An external link is reported only if it is definitively gone (404, 410 or an unresolvable host) on 3 attempts; 429, 5xx and timeouts are never reported. Ignore patterns come from `.markdown-link-check.json`.
+- *CHANGELOG (by code):* the latest release is not behind the version in `quorumkit.yml`.
+- *README currency, CHANGELOG accuracy, missing ADRs (by the model):* judged against the facts the code collects. A closed issue whose spec has no `docs/architecture/adr-NNN-*` file is a candidate, matched by issue number. The model returns findings as JSON; code rejects any finding that does not name a real file and a real heading or line.
+
+**What you get.** Findings go into one tracking issue, labelled `docs-drift` and carrying a hidden marker. Each finding gives its category, file, section (or line) and severity (`DOCS-BLOCKER` or `DOCS-SUGGESTION`). A missing ADR names the feature (`#NNN`) and the expected path.
+
+| Situation | Result |
+|-----------|--------|
+| No drift | Nothing is posted, created, edited or closed. The run log and step summary say how many files were covered |
+| New drift, no open tracking issue | A new issue is created |
+| New drift, tracking issue open | One comment with only the new findings, plus a "No longer detected" list for findings that were fixed |
+| Same drift as last time | Nothing is posted |
+| Very large first report | Grouped by category and split across comments marked "Part i of n"; nothing is dropped |
+| The audit cannot complete | The run fails (red) and its summary says `AUDIT FAILED - this is not a clean result` |
+| A check cannot run (for example the issue-state lookup for the missing-ADR check fails because of a rate limit, an outage or a missing token) | Same: the run fails and names the specs that were not checked. It is never reported as "0 findings" |
+
+**Acting on a report.** Confirm each finding, fix it in a normal PR (or ask `@docs-agent`), and close the tracking issue when you are done. The audit never closes it for you. If drift remains after you close it, the next run opens a new one.
+
+**Known limits.** A run that only finds *fixed* items posts nothing, so the "No longer detected" list appears in the next comment that has something new. README and CHANGELOG judgements are the model's: they are checked for form, not truth, so confirm before acting. The first run on a long-neglected repository can be large.
+
+- *The two runtimes see different evidence.* The Claude judge can read the whole repository. The Copilot judge sees the facts packet, the first 30,000 characters of `README.md` and the first 12,000 of `CHANGELOG.md`. The checklist, the validation and the publishing are identical, but the model findings can differ between runtimes. Compare them when you change runtime.
+- *One model finding per category, file and section.* A model finding is identified by those three values, not by its wording. A second, different problem in a section that already has a reported finding is treated as already reported until the first one is fixed or the tracking issue is closed. Findings from the code checks (links, version lag) are identified individually and are not affected.
+- *Model text is published as plain text.* Images, links, raw HTML and bare URLs in a finding are removed or made inert, so a poisoned document cannot plant a tracking pixel or a clickable link in the tracking issue. Paths and commands in `backticks` are kept.
+
 ## CI gates
 
 All four checks are required status checks on `main`, wired into

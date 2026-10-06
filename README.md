@@ -1,6 +1,6 @@
 # QuorumKit
 
-QuorumKit installs a complete autonomous development workflow into any GitHub repository. One command sets up 15 specialised AI agents, an event-driven orchestrator, and 26 GitHub Actions workflows. Once running, the full SDLC (Software Development Lifecycle) — triage, spec writing, implementation, testing, security review, and release — proceeds without human intervention on routine work.
+QuorumKit installs a complete autonomous development workflow into any GitHub repository. One command sets up 15 specialised AI agents, an event-driven orchestrator, and 28 GitHub Actions workflows. Once running, the full SDLC (Software Development Lifecycle) — triage, spec writing, implementation, testing, security review, and release — proceeds without human intervention on routine work.
 
 > **"Dark Factory"** — the software factory runs itself.
 > The loop: Triage → Spec → Plan → Implement → Test → Review → Security → Merge → Release → Document → Deploy → Monitor → Feedback → new Issue.
@@ -67,7 +67,7 @@ bash ~/quorumkit/scripts/init.sh --ai=both --domain=industrial
 `init.sh` copies the following into your repository without touching your existing source code:
 
 - Agent definitions for all selected agents
-- 26 GitHub Actions workflows (12 for Claude + 12 for Copilot + the `orchestrator` + an `alert-to-issue` converter)
+- 28 GitHub Actions workflows (13 for Claude + 13 for Copilot + the `orchestrator` + an `alert-to-issue` converter)
 - Orchestrator pipeline YAML files (feature, bug-fix, release)
 - PR template with per-agent sign-off checklists
 - Issue templates: bug report, feature request, security vulnerability
@@ -111,7 +111,7 @@ These 11 agents are installed in every QuorumKit project.
 | Security | `/security-agent` | `@security-agent` in PR | Runs an OWASP Top 10 scan and checks for known dependency vulnerabilities |
 | Triage | `/triage-agent` | Auto on new issues | Classifies, labels, routes, and deduplicates incoming issues |
 | Release | `/release-agent` | Auto on push to `main` | Bumps semantic version, updates CHANGELOG, creates a GitHub Release |
-| Docs | `/docs-agent` | `@docs-agent` / on merge | Updates README, API reference, and syncs documentation |
+| Docs | `/docs-agent` | `@docs-agent` / on merge / weekly audit | Updates README, API reference, and syncs documentation; a weekly read-only audit reports drift across the whole documentation set |
 | Tech-Debt | `/tech-debt-agent` | Monthly schedule | Identifies code hotspots, dead code, and outdated dependencies |
 
 ### Industrial domain agents
@@ -262,6 +262,7 @@ These agents fire without any manual action:
 | `triage-agent` | Any new issue is opened |
 | `release-agent` | Any commit is pushed to `main` |
 | `tech-debt-agent` | First Monday of every month |
+| `docs-agent` (audit) | Every Monday 06:00 UTC; reports in one `docs-drift` issue only when it finds drift. See [Scheduled documentation audit](docs/PIPELINES.md#scheduled-documentation-audit) |
 
 ---
 

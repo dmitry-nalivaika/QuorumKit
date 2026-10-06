@@ -190,6 +190,7 @@ required_workflows=(
   "agent-incident.yml"
   "agent-release.yml"
   "agent-docs.yml"
+  "agent-docs-audit.yml"
   "agent-tech-debt.yml"
   "alert-to-issue.yml"
   "copilot-agent-qa.yml"
@@ -204,6 +205,7 @@ required_workflows=(
   "copilot-agent-incident.yml"
   "copilot-agent-release.yml"
   "copilot-agent-docs.yml"
+  "copilot-agent-docs-audit.yml"
   "copilot-agent-tech-debt.yml"
 )
 for wf in "${required_workflows[@]}"; do

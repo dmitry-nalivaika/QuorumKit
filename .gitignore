@@ -7,6 +7,7 @@
 .github/workflows/agent-architect.yml
 .github/workflows/agent-dev.yml
 .github/workflows/agent-docs.yml
+.github/workflows/agent-docs-audit.yml
 .github/workflows/agent-qa.yml
 .github/workflows/agent-release.yml
 .github/workflows/agent-reviewer.yml
