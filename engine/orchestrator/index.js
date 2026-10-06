@@ -739,7 +739,11 @@ async function main() {
     rawEvent = JSON.parse(await readFile(eventPath, 'utf8'));
   }
 
-  const event = normaliseEvent(eventName, rawEvent);
+  const client = createGitHubClient(token);
+
+  const event = eventName === 'workflow_dispatch'
+    ? await normaliseDispatchEvent({ client, owner, repo, payload: rawEvent })
+    : normaliseEvent(eventName, rawEvent);
   if (!event) {
     console.log(`[orchestrator] Unsupported event type: ${eventName} — skipping`);
     return;
@@ -796,7 +800,6 @@ async function main() {
   }
   const identities = identityReg.found ? identityReg.byLogin : null;
 
-  const client = createGitHubClient(token);
   await runOrchestrator({
     client, event, pipelines, owner, repo, aiTool,
     runtimeRegistry, identities,
@@ -820,6 +823,40 @@ async function broadcastToDashboard(issueNumber, owner, repo, client) {
   } catch (err) {
     console.warn(`[orchestrator] Dashboard broadcast failed: ${err.message}`);
   }
+}
+
+/**
+ * Turn a `workflow_dispatch` payload into a synthetic `issues.labeled` event.
+ *
+ * Why this exists: labels applied with GITHUB_TOKEN (e.g. the Triage Agent adding
+ * `triaged`) never emit `issues.labeled` workflow runs, so the router would never
+ * see the `triaged` + `type:*` label set. `workflow_dispatch` is the one event
+ * GITHUB_TOKEN may trigger, so the Triage Agent dispatches the orchestrator with
+ * an `issue_number` input. The dispatch payload carries no issue data, so labels
+ * are re-read from the live issue and routed exactly like a human-applied label.
+ *
+ * Returns null (event skipped) when the input is missing/invalid or the target
+ * is a pull request.
+ */
+export async function normaliseDispatchEvent({ client, owner, repo, payload }) {
+  const raw = String(payload?.inputs?.issue_number ?? '').trim();
+  if (!/^[1-9]\d*$/.test(raw)) {
+    console.error(`[orchestrator] workflow_dispatch requires a numeric issue_number input (got '${raw}')`);
+    return null;
+  }
+  const issueNumber = Number(raw);
+  const issue = await client.getIssue(owner, repo, issueNumber);
+  if (issue.pull_request) {
+    console.log(`[orchestrator] #${issueNumber} is a pull request — dispatch routing applies to issues only`);
+    return null;
+  }
+  const labels = (issue.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
+  return {
+    type: 'issues.labeled',
+    labels,
+    issueNumber,
+    ref: payload?.repository?.default_branch ?? payload?.ref?.replace(/^refs\/heads\//, '') ?? 'main',
+  };
 }
 
 function normaliseEvent(eventName, payload) {

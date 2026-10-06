@@ -1,6 +1,16 @@
 name: QuorumKit Orchestrator
 
 on:
+  # workflow_dispatch: the Triage Agent applies `triaged` with GITHUB_TOKEN, which GitHub
+  # never turns into an `issues.labeled` run. It dispatches this workflow instead (the one
+  # event GITHUB_TOKEN may trigger); the engine re-reads the issue's labels and routes it
+  # exactly like a human-applied label. Requires an engine release that supports it
+  # (>= v3.3.0); older engines log "Unsupported event type" and skip harmlessly.
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to route through the pipeline router'
+        required: true
   issues:
     types: [opened, labeled]
   issue_comment:
@@ -43,7 +53,7 @@ permissions:
 # parallel deliveries (e.g. label spam) race on the audit channel and can
 # produce two state comments for the same transition.
 concurrency:
-  group: apm-orchestrator-${{ github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.id || 'global' }}
+  group: apm-orchestrator-${{ github.event.issue.number || github.event.pull_request.number || github.event.inputs.issue_number || github.event.workflow_run.id || 'global' }}
   cancel-in-progress: false
 
 jobs:
@@ -54,8 +64,10 @@ jobs:
     # The final step posts an `outcome: orchestrator-failure` audit comment
     # if any earlier step failed.
     continue-on-error: false
-    # Don't run when triggered by a bot (prevents cascades from automated commits)
-    if: ${{ github.event.sender.type != 'Bot' || github.event_name == 'workflow_run' }}
+    # Don't run when triggered by a bot (prevents cascades from automated commits).
+    # workflow_run and workflow_dispatch are exempt: both are explicit hand-offs (dispatch
+    # needs write access or an actions:write token, and is idempotent per issue via run state).
+    if: ${{ github.event.sender.type != 'Bot' || github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,7 +92,7 @@ jobs:
         if: steps.run_orchestrator.outcome == 'failure'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || github.event.inputs.issue_number }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |

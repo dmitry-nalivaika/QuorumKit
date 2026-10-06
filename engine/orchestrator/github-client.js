@@ -98,6 +98,18 @@ export function createGitHubClient(token) {
   }
 
   /**
+   * Fetch a single issue (used to recover labels for workflow_dispatch events,
+   * which carry no issue payload).
+   * @returns {{number: number, labels: Array<string|{name: string}>, pull_request?: object}}
+   */
+  async function getIssue(owner, repo, issueNumber) {
+    const { data } = await withRetry(() =>
+      octokit.rest.issues.get({ owner, repo, issue_number: issueNumber })
+    );
+    return data;
+  }
+
+  /**
    * Trigger a repository workflow_dispatch event.
    */
   async function triggerWorkflow(owner, repo, workflow, ref, inputs = {}) {
@@ -117,7 +129,7 @@ export function createGitHubClient(token) {
     return data.permission;
   }
 
-  return { listComments, createComment, updateComment, addLabels, triggerWorkflow, getCollaboratorPermission };
+  return { listComments, createComment, updateComment, addLabels, getIssue, triggerWorkflow, getCollaboratorPermission };
 }
 
 function sleep(ms) {
