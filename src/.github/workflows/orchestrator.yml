@@ -83,6 +83,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DASHBOARD_WEBHOOK_URL: ${{ vars.DASHBOARD_WEBHOOK_URL }}
+          # ADR-332: the engine resolves a runtime's `credential_ref` from process.env and
+          # fails the step with `runtime-credential-missing` if it is absent. It only checks
+          # presence; the value is never logged or forwarded (the dispatched agent workflow
+          # reads its own secret). Required while `default_runtime` is azure-foundry-standard.
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
 
       # FR-029, ADR-007 §6: if the orchestrator itself crashed, post a
       # canonical orchestrator-failure audit comment so the run is observable
