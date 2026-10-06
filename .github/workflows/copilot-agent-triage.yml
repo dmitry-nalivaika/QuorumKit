@@ -338,4 +338,24 @@ jobs:
               } catch (e) {
                 core.setFailed(`Could not dispatch BA enrichment for #${issueNumber}: ${e.message}`);
               }
+            } else {
+              // Same GITHUB_TOKEN limitation applies to every other pipeline trigger
+              // (`triaged` + `type:bug|feature|release`): no `issues.labeled` run is ever emitted.
+              // Hand the issue to the Orchestrator via workflow_dispatch; the engine re-reads the
+              // issue's labels and routes it like a human-applied label. Issues with no matching
+              // pipeline (e.g. type:docs) log `no-rule-match` and nothing else happens. `agent:ba`
+              // is excluded above: the enrichment dispatch already covers it, and
+              // ba-enrichment-pipeline would otherwise route the same issue a second time.
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  workflow_id: 'orchestrator.yml',
+                  ref:         context.payload.repository?.default_branch ?? 'main',
+                  inputs:      { issue_number: String(issueNumber) },
+                });
+                console.log(`Dispatched orchestrator.yml for issue #${issueNumber}`);
+              } catch (e) {
+                core.setFailed(`Could not dispatch the Orchestrator for #${issueNumber}: ${e.message}`);
+              }
             }
