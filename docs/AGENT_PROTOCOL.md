@@ -143,7 +143,7 @@ continue to pass schema validation.
 
 - Token counts come from the provider's `usage` response field. `estimated_cost_usd` is computed from `src/model-pricing.yml` and is `null` when the model has no entry. It is an **estimate only**, not billing-grade.
 - The object holds counts and identifiers only, never prompt or completion text.
-- Workflow agents without a pipeline outcome (triage, qa, reviewer, security, architect, docs, release, tech-debt, ba-enrich) append a **usage-only** `apm-msg` block with no `outcome` or `event_type`. It is not a pipeline status and the Orchestrator ignores it.
+- Every agent that calls a model reports usage through `.github/scripts/agent-report.cjs` (§3.0): the workflow agents call `report.recordUsage(...)` after each model response and the totals ride in the final `complete` / `fail` `apm-msg` block, which stays schema-valid (`runId`, `iteration`, `outcome`). There is no separate usage-only block.
 - The dashboard reads `usage` only from comments authored by a bot or a repo OWNER, MEMBER or COLLABORATOR, so a pasted block from an outside commenter cannot change the totals.
 
 ### 2.2 Outcomes

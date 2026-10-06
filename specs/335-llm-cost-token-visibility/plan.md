@@ -30,15 +30,19 @@ store, or external dependency.
 - `.github/scripts/dev-agent-runner.cjs` (dev agent; `copilot` / `claude` / `azure-openai`).
 - Every `copilot-agent-*.yml` workflow that performs a `chat/completions` call
   (`ba`, `ba-enrich`, `architect`, `qa`, `reviewer`, `security`, `triage`,
-  `docs`, `release`, `tech-debt`). `ba` extends its existing `apm-msg`; the
-  others append a **usage-only** `apm-msg` block to the comment/issue they
-  already post, built by `usageApmBlock()` in `model-pricing.cjs`.
+  `docs`, `release`, `tech-debt`). Each calls `report.recordUsage(...)` after
+  the model response; the totals are published as the `usage` step output and
+  the final `agent-report.cjs` step (#378) adds them to the one `apm-msg` block
+  it posts. That block is schema-valid (`runId`, `iteration`, `outcome`,
+  `event_type`), so the orchestrator treats it like any other agent message.
+  An earlier design appended a separate usage-only block built by
+  `usageApmBlock()`; it was removed because it failed schema validation
+  (reviewer B1).
 
-The usage-only block carries no `outcome` / `event_type`: a free-text reply
-cannot prove one, and the dashboard would otherwise read it as a pipeline
-status. It is not orchestrator-protocol-conformant (no `runId`), same as the
-existing `ba` block. `usage.runtime` is `azure-openai` when an endpoint
-override is in use, otherwise `copilot-default`.
+`usage.runtime` is the resolved runtime entry name (`azure-openai` when an
+endpoint override is in use). The dashboard only counts comments authored by a
+bot or a repo OWNER, MEMBER or COLLABORATOR, so a pasted block cannot forge
+totals.
 
 The dashboard "Cost & Tokens" view is both a summary panel in the per-issue
 Timeline and a main-nav tab backed by `GET /api/cost-tokens`, which reads the
@@ -87,10 +91,10 @@ consumer repos (never overwriting a maintainer-edited copy).
   call made during the run; on `signal_outcome`, compute the `usage` object
   via `model-pricing.cjs` and append it as an additive fenced ```apm-msg```
   block to the comment already posted (existing text/marker untouched).
-- Every other `copilot-agent-*.yml` workflow (azure-openai-capable): append
-  `usageApmBlock({ response, model, agent, issueNumber, runtime })` to the
-  posted body; returns `''` when the response has no usage (FR-005) and never
-  throws.
+- Every other `copilot-agent-*.yml` workflow (azure-openai-capable): call
+  `report.recordUsage({ response, model, runtime })` after each model call; the
+  final reporter step adds the totals to its `apm-msg` block. No usage on the
+  response means no `usage` field (FR-005); it never throws.
 - If a response omits `usage` entirely, the field is omitted rather than
   fabricated (FR-005); the run still completes.
 
@@ -137,8 +141,8 @@ identifiers.
 | `engine/tests/cost-tokens.test.js`, `dashboard-cost-tokens.test.js` | New — aggregation unit + end-to-end |
 | `engine/dashboard/index.html` | Cost & Tokens summary panel in Timeline view + main-nav Cost & Tokens tab |
 | `engine/tests/dashboard-cost-panel.test.js` | New — structural + read-only checks (panel and tab) |
-| `.github/scripts/model-pricing.cjs` (+ `src/` mirror) | `usageApmBlock()` helper |
-| `.github/workflows/copilot-agent-{architect,qa,reviewer,security,triage,docs,release,tech-debt,ba-enrich}.yml` (+ `src/` mirrors, except `ba-enrich`) | Append usage-only `apm-msg` block |
+| `.github/scripts/model-pricing.cjs` (+ `src/` mirror) | `tokensFromResponse`, `usageFromResponse`, `normalizeUsage` helpers |
+| `.github/workflows/copilot-agent-{architect,qa,reviewer,security,triage,docs,release,tech-debt,ba-enrich}.yml` (+ `src/` mirrors, except `ba-enrich`) | Call `report.recordUsage(...)`; pass `USAGE` to the final reporter step |
 | `engine/tests/copilot-agent-usage-wiring.test.js` | New — structural wiring + mirror parity + runtime labels |
 | `engine/dashboard/cost-tokens.js`, `server.js` | Cross-feature aggregation + `GET /api/cost-tokens` |
 | `engine/tests/dashboard-cost-overview.test.js` | New — end-to-end `/api/cost-tokens` |
@@ -147,8 +151,7 @@ identifiers.
 ## Out of Scope (mirrors spec.md)
 
 - Billing-grade cost, budgets/alerts, third-party LLM gateway/proxy.
-- Making the non-`ba` workflows fully orchestrator-protocol-conformant
-  (`run_id`/`step`/`iteration` inputs, `outcome`) — pre-existing gap; only a
-  usage-only block is added here.
+- Changing the reporting protocol itself; usage only adds an optional field to
+  the block `agent-report.cjs` already posts.
 - Docs Agent's `AGENT_PROTOCOL.md` update (ADR-335 Follow-Up Work item 2) and
   Security Agent's independent PII audit (item 4) — separate agent roles.
