@@ -29,6 +29,8 @@ agent_defaults: {}
 
 
 runtimes:
+  # DEPRECATED: GitHub Models was retired on 2026-07-30. models.github.ai now answers 200 "OK" (text/plain)
+  # on every path, so this runtime cannot produce a completion. Do not select it as default_runtime.
   copilot-default:
     kind: copilot
     endpoint: https://models.github.ai/inference

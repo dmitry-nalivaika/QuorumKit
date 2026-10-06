@@ -9,6 +9,16 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Eight agent workflows called the retired GitHub Models host** (#326, #327, #328). GitHub Models was retired on 2026-07-30 and `models.inference.ai.azure.com` no longer resolves. Architect, BA, Docs, QA, Release, Reviewer, Security and Tech-Debt fell back to it whenever no `runtime_endpoint` input was given, which is every push, schedule and comment trigger (the Docs and Release failures on the #324 merge, the Tech-Debt scheduled run, and the QA `ENOTFOUND` seen in the v3.3.2 smoke test). They now resolve `default_runtime` from `src/runtimes.yml` exactly as Triage and BA-Enrich already did, use its `credential_ref` (`AZURE_OPENAI_API_KEY`), and no longer default `RUNTIME_CREDENTIAL` to `GITHUB_TOKEN`.
+- **No silent fallback.** If no endpoint resolves, the agent workflows and `dev-agent-runner.cjs` now fail loudly (ADR-332 section 5) instead of calling a hardcoded host. The dead fallback is removed from Triage, BA-Enrich and the dev runner too.
+- `models.github.ai` is not a replacement: it is also retired and answers `200 OK` (`text/plain`) on every path, including `/inference/chat/completions`, so pointing at it would turn a clear failure into an empty-output one. The `copilot-default` runtime entry is annotated accordingly.
+
+### 🧪 Tests
+
+- `engine/tests/agent-workflow-runtime.test.js` guards every inline agent workflow: no executable reference to the retired host, runtime resolved from the registry, abort when no endpoint resolves, and `.github/` identical to the `src/.github/` mirror.
+
 ---
 
 ## [3.3.2] — 2026-10-06 · Issue #378 follow-up

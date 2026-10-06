@@ -553,7 +553,11 @@ async function runCopilot({ system, user }) {
   const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
   const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
   const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
-  if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
+  if (!runtimeEndpoint) {
+    // GitHub Models (models.inference.ai.azure.com) was retired on 2026-07-30: no hardcoded fallback host.
+    throw new Error('No runtime endpoint: RUNTIME_ENDPOINT must be set to a runtime declared in src/runtimes.yml.');
+  }
+  if (!isAllowedRuntimeEndpoint(runtimeEndpoint)) {
     throw new Error(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.join(' or ')}): ${runtimeEndpoint}`);
   }
   if (runtimeEndpoint && !getDeclaredRuntimeEndpoints().has(runtimeEndpoint)) {
@@ -565,15 +569,10 @@ async function runCopilot({ system, user }) {
   if (runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname)) {
     return runResponses({ system, user, runtimeEndpoint, runtimeModel, runtimeApiVersion, runtimeCredential });
   }
-  let hostname       = 'models.inference.ai.azure.com';
-  let requestPath    = '/chat/completions';
-  let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
-  if (runtimeEndpoint) {
-    const u = new URL(runtimeEndpoint);
-    hostname       = u.hostname;
-    requestPath    = `${u.pathname.replace(/\/$/, '')}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
-    requestHeaders = { 'api-key': runtimeCredential };
-  }
+  const u            = new URL(runtimeEndpoint);
+  const hostname     = u.hostname;
+  const requestPath  = `${u.pathname.replace(/\/$/, '')}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
+  const requestHeaders = { 'api-key': runtimeCredential };
 
   for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
     console.log(`[runner] iteration ${i + 1} (copilot)`);
