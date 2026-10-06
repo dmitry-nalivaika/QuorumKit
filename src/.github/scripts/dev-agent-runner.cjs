@@ -58,6 +58,7 @@ const STEP           = process.env.STEP   || 'dev';
 const ITERATION      = process.env.ITERATION || '1';
 const RUNTIME_NAME   = process.env.RUNTIME_NAME || '';
 const MAX_ITERATIONS = Number(process.env.MAX_ITERATIONS || 20);
+const CLAUDE_MODEL   = process.env.CLAUDE_MODEL || 'claude-opus-4-5';
 
 if (!ISSUE_NUMBER || !OWNER || !REPO || !process.env.GITHUB_TOKEN) {
   if (require.main === module) {
@@ -163,6 +164,35 @@ const manifests = {
 // nothing, so the stamps came out with empty fields and no apm-msg block. The runner knows every
 // value, so it posts them directly through the REST API, where there is no shell.
 const agentReport = require('./agent-report.cjs');
+const modelPricing = require('./model-pricing.cjs');
+
+// Token usage accumulated across every LLM call in this run (#335). Reported in the apm-msg block
+// of the final footprint; omitted when the provider returned no counts (FR-005).
+const usageTotals = { model: '', prompt: 0, completion: 0, seen: false };
+
+/** Add one API response's token counts (chat, Responses or Anthropic shape). Never throws. */
+function recordUsage(model, response) {
+  try {
+    const t = modelPricing.tokensFromResponse(response);
+    if (!t) return;
+    usageTotals.model = model;
+    usageTotals.prompt += t.promptTokens;
+    usageTotals.completion += t.completionTokens;
+    usageTotals.seen = true;
+  } catch { /* usage must never fail a run */ }
+}
+
+/** The `usage` object for the footprint, or undefined when nothing was reported. */
+function currentUsage() {
+  if (!usageTotals.seen) return undefined;
+  return modelPricing.computeUsage({
+    runtime: RUNTIME_NAME || RUNTIME_KIND,
+    model: usageTotals.model,
+    promptTokens: usageTotals.prompt,
+    completionTokens: usageTotals.completion,
+    pricing: modelPricing.loadPricing(process.cwd()).pricing,
+  });
+}
 
 function currentBranch() {
   const b = exec('git rev-parse --abbrev-ref HEAD');
@@ -180,6 +210,7 @@ function buildFootprint(kind, { prNumber = null, ...details } = {}) {
     step: STEP,
     iteration: ITERATION,
     runtime: RUNTIME_NAME || RUNTIME_KIND,
+    usage: currentUsage(),
     ...details,
   });
 }
@@ -598,6 +629,7 @@ async function runCopilot({ system, user }) {
       return;
     }
     const data    = JSON.parse(res.body);
+    recordUsage(runtimeModel, data);
     const message = data.choices?.[0]?.message;
     if (!message) { console.error('[runner] no message in response'); return; }
 
@@ -655,6 +687,7 @@ async function runResponses({ system, user, runtimeEndpoint, runtimeModel, runti
       return;
     }
     const data   = JSON.parse(res.body);
+    recordUsage(runtimeModel, data);
     const output = Array.isArray(data.output) ? data.output : [];
     if (output.length === 0) { console.error('[runner] no output in response'); return; }
 
@@ -683,7 +716,7 @@ async function runClaude({ system, user }) {
   for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
     console.log(`[runner] iteration ${i + 1} (claude)`);
     const body = JSON.stringify({
-      model: 'claude-opus-4-5',
+      model: CLAUDE_MODEL,
       max_tokens: 4096,
       system,
       tools,
@@ -706,6 +739,13 @@ async function runClaude({ system, user }) {
       return;
     }
     const data = JSON.parse(res.body);
+    // Cache reads/writes are billed prompt tokens too; count them so cost is not understated.
+    recordUsage(CLAUDE_MODEL, data.usage && {
+      usage: {
+        input_tokens: (data.usage.input_tokens ?? 0) + (data.usage.cache_read_input_tokens ?? 0) + (data.usage.cache_creation_input_tokens ?? 0),
+        output_tokens: data.usage.output_tokens,
+      },
+    });
     messages.push({ role: 'assistant', content: data.content });
 
     if (data.stop_reason === 'end_turn') { console.log('[runner] end_turn'); return; }
@@ -763,5 +803,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs, buildFootprint, stripFootprintInstructions, buildSystemPrompt, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
+  module.exports = { executeTool, toolDefs, recordUsage, currentUsage, buildFootprint, stripFootprintInstructions, buildSystemPrompt, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
 }

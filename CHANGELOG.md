@@ -9,6 +9,13 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **Per-feature and per-agent LLM cost and token visibility** (#335). Every agent that calls `chat/completions` (Developer runner plus the triage, ba, ba-enrich, architect, qa, reviewer, security, docs, release and tech-debt workflows) records the response `usage` (`prompt_tokens`, `completion_tokens`, `total_tokens`) and an `estimated_cost_usd` in its `apm-msg` block. The workflow agents record usage with `report.recordUsage(...)` and the totals ride in the final reporter block, so every block stays schema-valid. Rates live in the maintainer-editable `src/model-pricing.yml`; a model with no entry reports tokens and a `null` cost, and pricing problems never fail a run. Costs are estimates, not billing data.
+- **Dashboard "Cost & Tokens"** view: a main-nav tab backed by `GET /api/cost-tokens` (per-feature and per-agent tables, partial and not-tracked indicators), plus a summary panel in the per-issue Timeline. Only bot or OWNER/MEMBER/COLLABORATOR comments are counted, so a pasted `apm-msg` block cannot forge totals.
+- `init.sh` installs `src/model-pricing.yml`, `src/runtimes.yml` and `src/agent-identities.yml` into consumer repos without overwriting maintainer edits.
+- Documented in `docs/AGENT_PROTOCOL.md` (`usage` field) and `docs/DASHBOARD.md` (`/api/cost-tokens`). Known limit: `release`, `tech-debt` and `docs` (no-issue path) post report issues the dashboard does not read, so their usage is auditable in GitHub but not aggregated.
+
 ### 🐛 Fixed
 
 - **Eight agent workflows called the retired GitHub Models host** (#326, #327, #328). GitHub Models was retired on 2026-07-30 and `models.inference.ai.azure.com` no longer resolves. Architect, BA, Docs, QA, Release, Reviewer, Security and Tech-Debt fell back to it whenever no `runtime_endpoint` input was given, which is every push, schedule and comment trigger (the Docs and Release failures on the #324 merge, the Tech-Debt scheduled run, and the QA `ENOTFOUND` seen in the v3.3.2 smoke test). They now resolve `default_runtime` from `src/runtimes.yml` exactly as Triage and BA-Enrich already did, use its `credential_ref` (`AZURE_OPENAI_API_KEY`), and no longer default `RUNTIME_CREDENTIAL` to `GITHUB_TOKEN`.

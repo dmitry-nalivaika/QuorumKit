@@ -83,6 +83,20 @@
     "timestamp": {
       "type": "string",
       "description": "v2 extension — UTC timestamp of emission in ISO-8601 format (YYYY-MM-DDTHH:MM:SSZ). Optional for backward-compatibility."
+    },
+    "usage": {
+      "type": "object",
+      "description": "Optional LLM token usage and estimated cost for the invocation (#335, ADR-335). Counts and identifiers only — never prompt/completion content. estimated_cost_usd is null when no pricing entry exists.",
+      "required": ["runtime", "model", "prompt_tokens", "completion_tokens", "total_tokens", "estimated_cost_usd"],
+      "additionalProperties": false,
+      "properties": {
+        "runtime": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "prompt_tokens": { "type": "integer", "minimum": 0 },
+        "completion_tokens": { "type": "integer", "minimum": 0 },
+        "total_tokens": { "type": "integer", "minimum": 0 },
+        "estimated_cost_usd": { "type": ["number", "null"], "minimum": 0 }
+      }
     }
   }
 }

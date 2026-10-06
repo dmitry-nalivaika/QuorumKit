@@ -103,10 +103,10 @@ run_mode_test() {
     h1 "Claude Code files"
     if [[ "$domain" == "industrial" ]]; then
       check_dir  ".claude/agents"  15
-      check_dir  ".claude/skills"  20
+      check_dir  ".claude/skills"  16
     else
       check_dir  ".claude/agents"  11
-      check_dir  ".claude/skills"  16
+      check_dir  ".claude/skills"  12
     fi
     check_file "CLAUDE.md"
   fi
@@ -160,6 +160,13 @@ run_mode_test() {
   check_file "src/pipelines/bug-fix-pipeline.yml"
   check_file "src/pipelines/release-pipeline.yml"
 
+  h1 "LLM pricing table (#335)"
+  check_file "src/model-pricing.yml"
+
+  h1 "Runtime registry"
+  check_file "src/runtimes.yml"
+  check_file "src/agent-identities.yml"
+
   # ── Verify: Guide copies at root ─────────────────────────────────────────
   h1 "Root-level guide docs"
   check_file "BROWNFIELD_GUIDE.md"
@@ -206,6 +213,12 @@ run_mode_test() {
   local custom_script_sentinel="# hand-edited script sentinel $(date +%s)"
   echo "$custom_pipeline_sentinel" >> "$tmpdir/src/pipelines/feature-pipeline.yml"
   echo "$custom_script_sentinel" >> "$tmpdir/scripts/pipeline.sh"
+  local custom_pricing_sentinel="# hand-edited pricing sentinel $(date +%s)"
+  echo "$custom_pricing_sentinel" >> "$tmpdir/src/model-pricing.yml"
+  local custom_runtimes_sentinel="# hand-edited runtimes sentinel $(date +%s)"
+  echo "$custom_runtimes_sentinel" >> "$tmpdir/src/runtimes.yml"
+  local custom_identities_sentinel="# hand-edited identities sentinel $(date +%s)"
+  echo "$custom_identities_sentinel" >> "$tmpdir/src/agent-identities.yml"
 
   cd "$tmpdir"
   QUORUMKIT_PACKAGE_DIR="$REPO_ROOT" \
@@ -221,6 +234,21 @@ run_mode_test() {
     ok "hand-edited scripts/pipeline.sh survives re-run (byte-identical)"
   else
     fail "hand-edited scripts/pipeline.sh was OVERWRITTEN by re-run"
+  fi
+  if grep -qF "$custom_pricing_sentinel" "$tmpdir/src/model-pricing.yml"; then
+    ok "hand-edited src/model-pricing.yml survives re-run (byte-identical)"
+  else
+    fail "hand-edited src/model-pricing.yml was OVERWRITTEN by re-run"
+  fi
+  if grep -qF "$custom_runtimes_sentinel" "$tmpdir/src/runtimes.yml"; then
+    ok "hand-edited src/runtimes.yml survives re-run (byte-identical)"
+  else
+    fail "hand-edited src/runtimes.yml was OVERWRITTEN by re-run"
+  fi
+  if grep -qF "$custom_identities_sentinel" "$tmpdir/src/agent-identities.yml"; then
+    ok "hand-edited src/agent-identities.yml survives re-run (byte-identical)"
+  else
+    fail "hand-edited src/agent-identities.yml was OVERWRITTEN by re-run"
   fi
 
   # ── Summary ───────────────────────────────────────────────────────────────

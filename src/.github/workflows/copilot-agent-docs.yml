@@ -399,6 +399,8 @@ jobs:
             )?.trim() || undefined;
 
             const data  = await res.json();
+            // Token usage + estimated cost for the audit trail (#335); never fails the run.
+            report.recordUsage({ response: data, model: runtimeModel, runtime: defaultRuntimeName || 'azure-openai' });
             const reply = extractText(data);
             if (!reply) {
               report.abort('Docs agent produced no output.');
@@ -432,6 +434,7 @@ jobs:
           PR_NUMBER: ${{ steps.agent.outputs.pr }}
           BRANCH: ${{ steps.agent.outputs.branch }}
           PAYLOAD: ${{ steps.agent.outputs.payload }}
+          USAGE: ${{ steps.agent.outputs.usage }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

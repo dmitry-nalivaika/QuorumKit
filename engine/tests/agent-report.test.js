@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import yaml from 'js-yaml';
+import { parseApmMsg } from '../orchestrator/apm-msg-parser.js';
 
 const ROOT = path.resolve(new URL(import.meta.url).pathname, '../../..');
 const requireCjs = createRequire(import.meta.url);
@@ -409,5 +410,100 @@ describe('manifests (local agents)', () => {
       if (firstTemplate !== -1) expect(cli, f).toBeLessThan(firstTemplate);
       expect(t, f).toMatch(/reference, not text to copy/);
     }
+  });
+});
+
+// ── LLM token usage + estimated cost (#335) ────────────────────────────────────────────────
+describe('usage in the apm-msg block (#335)', () => {
+  const USAGE = { runtime: 'azure-foundry-standard', model: 'gpt-4o', prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500, estimated_cost_usd: 0.0075 };
+  const base = { agent: 'qa', issue: 12, branch: '012-fix', timestamp: '2026-10-06T10:00:00.000Z', ...RUN };
+
+  it('buildFootprint adds a schema-valid usage object and keeps the result marker', () => {
+    const b = report.buildFootprint('complete', { ...base, outcome: 'success', summary: 'ok', usage: USAGE });
+    expect(parseMsg(b).usage).toEqual(USAGE);
+    expect(b).toContain('apm:run_id=');
+    for (const k of schema.properties.usage.required) expect(parseMsg(b).usage).toHaveProperty(k);
+  });
+
+  it('omits usage when none was reported, and when what was passed is not a valid usage object (FR-005)', () => {
+    for (const usage of [undefined, null, {}, { ...USAGE, total_tokens: 'x' }, 'SECRET']) {
+      const b = report.buildFootprint('complete', { ...base, outcome: 'success', summary: 'ok', usage });
+      expect(parseMsg(b)).not.toHaveProperty('usage');
+    }
+  });
+
+  it('carries only counts and identifiers (FR-015)', () => {
+    const b = report.buildFootprint('complete', { ...base, outcome: 'success', summary: 'ok', usage: { ...USAGE, prompt: 'SECRET PROMPT' } });
+    expect(b).not.toContain('SECRET PROMPT');
+  });
+
+  it('an apm-msg carrying usage still parses against the orchestrator schema', () => {
+    const b = report.buildFootprint('complete', { ...base, outcome: 'success', summary: 'ok', usage: USAGE });
+    expect(parseApmMsg(b)).toMatchObject({ ok: true });
+  });
+
+  it('a start footprint never carries usage', () => {
+    expect(report.buildFootprint('start', { ...base, usage: USAGE })).not.toContain('"usage"');
+  });
+});
+
+describe('workflow reporter recordUsage (#335)', () => {
+  const INPUTS = { run_id: RUN.runId, step: 'qa', iteration: '2', runtime_name: 'azure-foundry-standard' };
+
+  it('publishes a running usage total as the `usage` step output', () => {
+    const h = harness('qa', INPUTS);
+    h.wf.recordUsage({ response: { usage: { prompt_tokens: 100, completion_tokens: 50 } }, model: 'gpt-4o' });
+    h.wf.recordUsage({ response: { usage: { prompt_tokens: 100, completion_tokens: 50 } }, model: 'gpt-4o' });
+    const u = JSON.parse(h.outputs.usage);
+    expect(u).toMatchObject({ runtime: 'azure-foundry-standard', model: 'gpt-4o', prompt_tokens: 200, completion_tokens: 100, total_tokens: 300 });
+  });
+
+  it('reads the Responses API shape', () => {
+    const h = harness('qa', INPUTS);
+    h.wf.recordUsage({ response: { usage: { input_tokens: 4, output_tokens: 6 } }, model: 'gpt-4o' });
+    expect(JSON.parse(h.outputs.usage)).toMatchObject({ prompt_tokens: 4, completion_tokens: 6, total_tokens: 10 });
+  });
+
+  it('sets no output when the response has no usage, and never throws (FR-005)', () => {
+    const h = harness('qa', INPUTS);
+    for (const response of [undefined, null, {}, { usage: {} }, { usage: { prompt_tokens: 'x' } }]) {
+      expect(() => h.wf.recordUsage({ response, model: 'gpt-4o' })).not.toThrow();
+    }
+    expect(() => h.wf.recordUsage()).not.toThrow();
+    expect(h.outputs).not.toHaveProperty('usage');
+  });
+
+  it('falls back to the supplied runtime label when no runtime_name was dispatched', () => {
+    const h = harness('qa', {});
+    h.wf.recordUsage({ response: { usage: { prompt_tokens: 1, completion_tokens: 1 } }, model: 'gpt-4o', runtime: 'azure-foundry-standard' });
+    expect(JSON.parse(h.outputs.usage).runtime).toBe('azure-foundry-standard');
+  });
+
+  it('end to end: usage recorded in the agent step lands in the complete footprint comment', async () => {
+    const h = harness('qa', INPUTS);
+    await h.wf.start({ issueNumber: 12 });
+    h.wf.recordUsage({ response: { usage: { prompt_tokens: 1000, completion_tokens: 500 } }, model: 'gpt-4o' });
+    await h.wf.reply({ issueNumber: 12, reply: 'ok\nSUMMARY: done\nOUTCOME: success' });
+    await h.wf.conclude({ env: { ISSUE_NUMBER: '12', JOB_STATUS: 'success', OUTCOME: h.outputs.outcome, SUMMARY: h.outputs.summary, USAGE: h.outputs.usage } });
+    const last = h.comments[h.comments.length - 1].body;
+    expect(parseMsg(last).usage).toMatchObject({ model: 'gpt-4o', prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 });
+    expect(parseApmMsg(last)).toMatchObject({ ok: true });
+    expect(last).toContain('apm:run_id=');
+  });
+
+  it('a crashed run still reports the tokens it spent, with no result marker', async () => {
+    const h = harness('qa', INPUTS);
+    h.wf.recordUsage({ response: { usage: { prompt_tokens: 10, completion_tokens: 5 } }, model: 'gpt-4o' });
+    await h.wf.conclude({ env: { ISSUE_NUMBER: '12', JOB_STATUS: 'failure', ERROR: 'boom', USAGE: h.outputs.usage } });
+    const b = h.comments[0].body;
+    expect(parseMsg(b).usage.total_tokens).toBe(15);
+    expect(b).not.toContain('apm:run_id');
+  });
+
+  it('a malformed USAGE env is ignored rather than breaking the report', async () => {
+    const h = harness('qa', INPUTS);
+    await h.wf.conclude({ env: { ISSUE_NUMBER: '12', JOB_STATUS: 'success', OUTCOME: 'success', SUMMARY: 's', USAGE: '{not json' } });
+    expect(h.comments).toHaveLength(1);
+    expect(parseMsg(h.comments[0].body)).not.toHaveProperty('usage');
   });
 });

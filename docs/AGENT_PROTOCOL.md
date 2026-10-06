@@ -132,6 +132,19 @@ continue to pass schema validation.
 | `pr` | string \| null | — | *v2 extension.* GitHub PR URL or number string; `null` when no PR is open. |
 | `branch` | string | — | *v2 extension.* Git branch name at the time of emission. |
 | `timestamp` | string (ISO-8601) | — | *v2 extension.* UTC emission time in `YYYY-MM-DDTHH:MM:SSZ` format. |
+| `usage` | object | — | *Issue #335.* LLM token usage and estimated cost for this invocation (see below). Omitted when the call returned no usage. |
+
+#### `usage` object (Issue #335)
+
+```json
+{ "runtime": "azure-openai", "model": "gpt-4o", "prompt_tokens": 1200,
+  "completion_tokens": 300, "total_tokens": 1500, "estimated_cost_usd": 0.0105 }
+```
+
+- Token counts come from the provider's `usage` response field. `estimated_cost_usd` is computed from `src/model-pricing.yml` and is `null` when the model has no entry. It is an **estimate only**, not billing-grade.
+- The object holds counts and identifiers only, never prompt or completion text.
+- Every agent that calls a model reports usage through `.github/scripts/agent-report.cjs` (§3.0): the workflow agents call `report.recordUsage(...)` after each model response and the totals ride in the final `complete` / `fail` `apm-msg` block, which stays schema-valid (`runId`, `iteration`, `outcome`). There is no separate usage-only block.
+- The dashboard reads `usage` only from comments authored by a bot or a repo OWNER, MEMBER or COLLABORATOR, so a pasted block from an outside commenter cannot change the totals.
 
 ### 2.2 Outcomes
 

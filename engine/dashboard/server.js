@@ -41,6 +41,7 @@ const crypto     = require('crypto');
 const { exec, spawn }  = require('child_process');
 const { WebSocketServer } = require('ws');
 const os         = require('os');
+const { aggregateCostTokens, aggregateCostTokensByFeature, normalizeFeature, parsePaginatedJson } = require('./cost-tokens.js');
 
 // ─── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -584,6 +585,8 @@ function parseCommentToEvent(comment) {
         step:      parsed.step,
         iteration: parsed.iteration,
         pipelineId: parsed.pipeline_id,
+        feature:   normalizeFeature(parsed.issue) || normalizeFeature(parsed.pipeline_id) || normalizeFeature(comment.issue_url),
+        usage:     parsed.usage ?? null,
         commentId: comment.id,
         commentUrl: comment.html_url || '',
         body:      safeBody,
@@ -716,10 +719,16 @@ async function fetchTimeline(issueNumber, cfg) {
   const events = comments
     .map(c => parseCommentToEvent(c))
     .filter(Boolean);
+  // Only cost figures from trusted authors count toward the totals (see isTrustedCommentAuthor).
+  const trustedEvents = comments
+    .filter(isTrustedCommentAuthor)
+    .map(c => parseCommentToEvent(c))
+    .filter(Boolean);
 
   const data = {
     events,
     status: derivePipelineStatus(events),
+    costTokens: aggregateCostTokens(trustedEvents),
     meta: {
       issueNumber,
       totalComments:    comments.length,
@@ -729,6 +738,83 @@ async function fetchTimeline(issueNumber, cfg) {
   };
 
   _timelineCache.set(issueNumber, { data, fetchedAt: now });
+  return data;
+}
+
+// ─── Cross-feature Cost & Tokens overview (#335, US-3) ───────────────────────
+/** In-memory overview cache: days → { data, fetchedAt } */
+const _costOverviewCache = new Map();
+const COST_OVERVIEW_CACHE_TTL = 60_000; // ms
+const COST_OVERVIEW_DEFAULT_DAYS = 90;
+const COST_OVERVIEW_MAX_DAYS = 365;
+
+/**
+ * Roll up apm-msg `usage` from repo-wide issue/PR comments, grouped by feature
+ * and by agent. Read-only: a single GET against the existing comments API.
+ */
+/**
+ * Cost figures come from free-text comments, so only count those written by the repo's own
+ * automation (a bot, e.g. github-actions[bot]) or by someone with write access. Without this
+ * any commenter could inflate or hide spend by pasting an apm-msg block.
+ */
+function isTrustedCommentAuthor(comment) {
+  if (comment.user?.type === 'Bot') return true;
+  return ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(comment.author_association);
+}
+
+async function fetchCostOverview(days, cfg) {
+  const now = Date.now();
+  const cached = _costOverviewCache.get(days);
+  if (cached && (now - cached.fetchedAt) < COST_OVERVIEW_CACHE_TTL) return cached.data;
+
+  const repoUrl = cfg.repoUrl || process.env.QUORUMKIT_REPO_URL || '';
+  const repoMatch = repoUrl.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+  if (!repoMatch) {
+    throw new Error('Repository URL not configured — open Settings and set the GitHub repo URL');
+  }
+  const owner = repoMatch[1];
+  const repo  = repoMatch[2].replace(/\.git$/, '');
+
+  // days is a validated integer, so the ISO timestamp is the only interpolated value.
+  const since = new Date(now - days * 86_400_000).toISOString();
+  const apiPath = `repos/${owner}/${repo}/issues/comments?per_page=100&since=${since}`;
+  const rawJson = await new Promise((resolve, reject) => {
+    const ghBin = process.env.QUORUMKIT_TEST_GH_BIN || resolveBin('gh');
+    const proc  = require('child_process').spawn(
+      ghBin, ['api', apiPath, '--paginate'],
+      { env: spawnEnv(), stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let out = '', err = '';
+    proc.stdout.on('data', d => { out += d; });
+    proc.stderr.on('data', d => { err += d; });
+    proc.on('close', code => {
+      if (code === 0) resolve(out);
+      else reject(new Error(`gh api failed (${code}): ${err.trim().slice(0, 200)}`));
+    });
+    proc.on('error', reject);
+  });
+
+  let comments;
+  try { comments = parsePaginatedJson(rawJson); }
+  catch { throw new Error('Failed to parse GitHub API response'); }
+
+  const events = comments
+    .filter(c => c && typeof c.body === 'string' && c.body.includes('```apm-msg') && isTrustedCommentAuthor(c))
+    .map(c => parseCommentToEvent(c))
+    .filter(e => e && e.source === 'apm-msg');
+
+  const data = {
+    ...aggregateCostTokensByFeature(events),
+    meta: {
+      days,
+      since,
+      scannedComments:  comments.length,
+      structuredEvents: events.length,
+      fetchedAt:        new Date().toISOString(),
+    },
+  };
+
+  _costOverviewCache.set(days, { data, fetchedAt: now });
   return data;
 }
 
@@ -1048,6 +1134,22 @@ async function handleRequest(req, res) {
     try {
       const result = await fetchTimeline(n, cfg);
       json(res, 200, result);
+    } catch (err) {
+      json(res, 502, { error: err.message });
+    }
+    return;
+  }
+
+  // ── GET /api/cost-tokens[?days=N] ──────────────────────────────
+  // Read-only cross-feature rollup of apm-msg `usage` (#335, FR-009–FR-014).
+  if (method === 'GET' && url.pathname === '/api/cost-tokens') {
+    const raw = url.searchParams.get('days');
+    const days = raw === null ? COST_OVERVIEW_DEFAULT_DAYS : Number(raw);
+    if (!/^\d+$/.test(String(raw ?? days)) || days < 1 || days > COST_OVERVIEW_MAX_DAYS) {
+      json(res, 400, { error: `days must be an integer between 1 and ${COST_OVERVIEW_MAX_DAYS}` }); return;
+    }
+    try {
+      json(res, 200, await fetchCostOverview(days, loadConfig()));
     } catch (err) {
       json(res, 502, { error: err.message });
     }

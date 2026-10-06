@@ -1,0 +1,24 @@
+# Model Pricing (Issue #335, ADR-335)
+#
+# Maintainer-editable $/1K-token rates used to compute `estimated_cost_usd`
+# in the `usage` object of `apm-msg` comments (FR-006, FR-007).
+#
+# ESTIMATES ONLY — NOT billing-grade or reconciled against actual provider
+# invoices (FR-016). Update entries here when provider pricing changes; a
+# stale rate is a normal, reviewable config-drift item, not a defect.
+#
+# A model/deployment with no entry below degrades gracefully: token counts
+# are still reported and `estimated_cost_usd` is `null` (FR-008) — it never
+# fails an agent run.
+
+pricing:
+  gpt-4o:
+    prompt_per_1k_usd: 0.0025
+    completion_per_1k_usd: 0.01
+  gpt-4o-mini:
+    prompt_per_1k_usd: 0.00015
+    completion_per_1k_usd: 0.0006
+  # Claude Opus 4.5 list price: $5 / $25 per million tokens (the $15 / $75 rate is Opus 4 / 4.1).
+  claude-opus-4-5:
+    prompt_per_1k_usd: 0.005
+    completion_per_1k_usd: 0.025

@@ -42,6 +42,9 @@
  *   EOF
  *   Add --dry-run to print the comment instead of posting it.
  *
+ * Usage (#335): workflows call report.recordUsage({ response, model, runtime }) after each LLM call and pass
+ *   USAGE: ${{ steps.agent.outputs.usage }} to the final step; buildFootprint adds it to the apm-msg block.
+ *
  * Environment (CLI): ISSUE_NUMBER, RUN_ID, STEP, ITERATION, RUNTIME_NAME, GITHUB_REPOSITORY,
  *   GITHUB_TOKEN or GH_TOKEN (otherwise the `gh` CLI is used; owner/repo falls back to `origin`).
  * -----------------------------------------------------------------------------
@@ -52,6 +55,10 @@
 const https = require('https');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
+
+// Token usage + estimated cost (#335). Optional: a missing helper must never break a report.
+let pricing = null;
+try { pricing = require('./model-pricing.cjs'); } catch { /* usage is then simply not reported */ }
 
 // ---- Registry ---------------------------------------------------------------
 // key   : workflow slug (copilot-agent-<key>.yml)
@@ -154,6 +161,7 @@ function buildFootprint(kind, c = {}) {
 
   if (kind !== 'start') {
     const outcome = c.outcome || (kind === 'complete' ? 'success' : 'fail');
+    // A run of three backticks in the summary would close the ```apm-msg fence early and corrupt the block.
     const msg = {
       version: '2',
       runId: c.runId || UNASSIGNED_RUN,
@@ -161,15 +169,19 @@ function buildFootprint(kind, c = {}) {
       agent: a.msg,
       iteration,
       outcome,
-      summary,
+      summary: summary.replace(/`{3,}/g, "'''"),
       event_type: kind,
       pipeline_id: null,
       issue: String(c.issue),
       pr: c.pr ? String(c.pr) : null,
-      branch: branch || null,
       timestamp,
     };
+    // The schema types `branch` as a string, so omit it when unknown (detached HEAD, no git) rather than send null.
+    if (branch) msg.branch = branch;
     if (c.payload && typeof c.payload === 'object') msg.payload = c.payload;
+    // Counts and identifiers only (FR-015); omitted entirely when the run reported none (FR-005).
+    const usage = pricing && pricing.normalizeUsage(c.usage);
+    if (usage) msg.usage = usage;
     lines.push('', '```apm-msg', JSON.stringify(msg, null, 2), '```');
 
     if (c.marker !== false) {
@@ -370,7 +382,7 @@ function createReporter(o) {
       state.reported = true;
       return safePost(issue, buildFootprint(kind, {
         ...base(d), issue, pr: d.pr, outcome, summary,
-        nextAction: d.nextAction, payload: d.payload, marker: d.marker,
+        nextAction: d.nextAction, payload: d.payload, marker: d.marker, usage: d.usage,
       }));
     },
 
@@ -380,7 +392,7 @@ function createReporter(o) {
       state.reported = true;
       if (!issue) { log.info('[agent-report] no issue/PR to report on; fail footprint skipped'); return false; }
       return safePost(issue, buildFootprint('fail', {
-        ...base(d), issue, pr: d.pr, outcome: 'fail', summary: message, marker: false,
+        ...base(d), issue, pr: d.pr, outcome: 'fail', summary: message, marker: false, usage: d.usage,
       }));
     },
   };
@@ -415,6 +427,7 @@ function forGithubScript({ agent, github, context, core }) {
   const runUrl = `${context.serverUrl || 'https://github.com'}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
   let linkedPr = null;
   let linkedBranch = '';
+  const usageTotals = { runtime: '', model: '', prompt: 0, completion: 0, seen: false };
 
   return {
     agent: reporter.agent,
@@ -453,6 +466,32 @@ function forGithubScript({ agent, github, context, core }) {
       return r;
     },
 
+    /**
+     * Record the token usage of one LLM response (#335). Call after every model call; the totals of
+     * all calls in the step are published as the `usage` step output and ride in the final apm-msg.
+     * Reads chat/completions (prompt_tokens/completion_tokens) and Responses (input_tokens/output_tokens)
+     * shapes. A response without usage is ignored; never throws.
+     */
+    recordUsage({ response, model, runtime } = {}) {
+      try {
+        const t = pricing && pricing.tokensFromResponse(response);
+        if (!t || !model) return;
+        usageTotals.model = String(model);
+        usageTotals.runtime = String(inputs.runtime_name || runtime || 'unknown');
+        usageTotals.prompt += t.promptTokens;
+        usageTotals.completion += t.completionTokens;
+        usageTotals.seen = true;
+        const u = pricing.computeUsage({
+          runtime: usageTotals.runtime, model: usageTotals.model,
+          promptTokens: usageTotals.prompt, completionTokens: usageTotals.completion,
+          pricing: pricing.loadPricing().pricing,
+        });
+        out('usage', JSON.stringify(u));
+      } catch (e) {
+        if (core) core.warning(`Usage capture skipped: ${e && e.message}`);
+      }
+    },
+
     /** Record a verdict decided by code (no model prose to post). */
     verdict({ outcome, summary, pr, branch, payload }) {
       out('outcome', outcome);
@@ -478,16 +517,18 @@ function forGithubScript({ agent, github, context, core }) {
       const branch = env.BRANCH || undefined;
       let payload;
       try { payload = env.PAYLOAD ? JSON.parse(env.PAYLOAD) : undefined; } catch { payload = undefined; }
+      let usage;
+      try { usage = env.USAGE ? JSON.parse(env.USAGE) : undefined; } catch { usage = undefined; }
       if (!jobOk) {
         return reporter.fail(
           `${env.ERROR || 'The workflow failed before the agent reported a result.'} See ${runUrl}`,
-          { issueNumber: issue, pr, branch },
+          { issueNumber: issue, pr, branch, usage },
         );
       }
       if (!outcome) {
-        return reporter.fail(`The workflow ended without a result. See ${runUrl}`, { issueNumber: issue, pr, branch });
+        return reporter.fail(`The workflow ended without a result. See ${runUrl}`, { issueNumber: issue, pr, branch, usage });
       }
-      return reporter.finish({ issueNumber: issue, outcome, summary: env.SUMMARY, pr, branch, payload, nextAction });
+      return reporter.finish({ issueNumber: issue, outcome, summary: env.SUMMARY, pr, branch, payload, nextAction, usage });
     },
   };
 }

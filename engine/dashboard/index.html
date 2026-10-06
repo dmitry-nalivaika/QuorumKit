@@ -154,6 +154,7 @@ button { cursor: pointer; font-family: var(--font); }
 /* Timeline and Board standalone views */
 #timeline-view { display: none; flex: 1; overflow: hidden; flex-direction: column; }
 #board-view    { display: none; flex: 1; overflow: hidden; align-items: center; justify-content: center; }
+#cost-view     { display: none; flex: 1; overflow: hidden; flex-direction: column; }
 
 /* Agents view active */
 #workspace.view-agents #pm-view  { display: none; }
@@ -165,6 +166,9 @@ button { cursor: pointer; font-family: var(--font); }
 /* Board view active */
 #workspace.view-board #pm-view    { display: none; }
 #workspace.view-board #board-view { display: flex; }
+/* Cost & Tokens view active */
+#workspace.view-cost #pm-view   { display: none; }
+#workspace.view-cost #cost-view { display: flex; }
 #workspace.console-closed { bottom: 0; }
 
 /* ─── Toolbar ─────────────────────────────────────────────────────────────── */
@@ -743,6 +747,15 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
 .tl-new-badge { font-size: 10px; font-weight: 700; background: var(--amber); color: #0d1117; padding: 1px 7px; border-radius: 8px; }
 #tl-agent-filter { background: var(--surface3); border: 1px solid var(--border); border-radius: var(--r-xs); color: var(--text); font-size: 11px; padding: 3px 6px; outline: none; }
 .tl-events { display: flex; flex-direction: column; gap: 4px; }
+.tl-cost { border: 1px solid var(--border, #30363d); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text2); }
+.tl-cost[hidden] { display: none; }
+.tl-cost-head { font-weight: 600; color: var(--text); }
+.tl-cost-note { font-size: 11px; margin-top: 2px; }
+.tl-cost-warn { color: #d29922; }
+.tl-cost-table { border-collapse: collapse; margin-top: 6px; }
+.tl-cost-table td, .tl-cost-table th { padding: 1px 12px 1px 0; text-align: left; font-weight: normal; }
+#cost-body { display: flex; flex-direction: column; gap: 10px; padding: 8px 12px; overflow-y: auto; height: 100%; }
+.co-section { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--textMute); margin-top: 6px; }
 .tl-event { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--r-xs); padding: 6px 10px; cursor: pointer; transition: border-color .15s; }
 .tl-event:hover { border-color: var(--blue); }
 .tl-event.te-complete { border-left-color: var(--green); }
@@ -793,6 +806,7 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
     <button class="mnav-tab on" data-mv="pipelines">🌿 Pipelines</button>
     <button class="mnav-tab"    data-mv="agents">🤖 Agents</button>
     <button class="mnav-tab"    data-mv="timeline">📊 Timeline</button>
+    <button class="mnav-tab"    data-mv="cost">💰 Cost &amp; Tokens</button>
     <button class="mnav-tab"    data-mv="board">📋 Board</button>
   </div>
 
@@ -852,8 +866,23 @@ kbd { background: var(--surface3); border: 1px solid var(--border); padding: 1px
         <select id="tl-agent-filter" hidden><option value="">All agents</option></select>
         <span class="tl-new-badge" id="tl-new-badge" hidden></span>
       </div>
+      <div id="tl-cost" class="tl-cost" hidden></div>
       <div id="tl-events" class="tl-events"><span class="lp-empty">Enter an issue number and click Load.</span></div>
     </div>
+  </div>
+
+  <!-- ── Cost & Tokens main view (#335, US-3) — read-only cross-feature rollup ── -->
+  <div id="cost-view">
+    <div class="tl-toolbar" style="padding:8px 12px">
+      <label for="cost-days" style="font-size:11px;color:var(--text3);font-weight:600">Window:</label>
+      <select id="cost-days">
+        <option value="30">Last 30 days</option>
+        <option value="90" selected>Last 90 days</option>
+        <option value="365">Last 365 days</option>
+      </select>
+      <button class="pipe-btn pipe-btn-ghost" id="cost-refresh-btn" title="Refresh">↺</button>
+    </div>
+    <div id="cost-body"><span class="lp-empty">Loading…</span></div>
   </div>
 
   <!-- ── Board main view (FR-019) — placeholder for this release ── -->
@@ -1903,16 +1932,18 @@ function switchTab(id) {
 
 // ─── Main view switching (FR-001, FR-012, FR-018, FR-019) ────────────────────
 /**
- * Switch between the four primary views: 'pipelines' (default), 'agents',
- * 'timeline', and 'board'.
+ * Switch between the five primary views: 'pipelines' (default), 'agents',
+ * 'timeline', 'cost', and 'board'.
  */
 function switchMainView(view) {
   const ws = document.getElementById('workspace');
   ws.classList.toggle('view-agents',   view === 'agents');
   ws.classList.toggle('view-timeline', view === 'timeline');
+  ws.classList.toggle('view-cost',     view === 'cost');
   ws.classList.toggle('view-board',    view === 'board');
   document.querySelectorAll('.mnav-tab').forEach(b =>
     b.classList.toggle('on', b.dataset.mv === view));
+  if (view === 'cost') loadCostOverview();
   if (view === 'pipelines') {
     loadLocalPipelines();
     renderSuggestions();
@@ -3004,6 +3035,97 @@ function statusBadgeClass(status) {
   return map[status] || 'tl-status-unknown';
 }
 
+function renderCostTokens(ct) {
+  const el = document.getElementById('tl-cost');
+  if (!el) return;
+  el.replaceChildren();
+  const t = ct && ct.total;
+  if (!t || (t.trackedInvocations === 0 && t.untrackedInvocations === 0)) { el.setAttribute('hidden', ''); return; }
+  el.removeAttribute('hidden');
+
+  const fmtCost = c => (c === null || c === undefined) ? 'unknown' : `$${c.toFixed(4)}`;
+  const add = (parent, tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    n.textContent = text;
+    parent.appendChild(n);
+    return n;
+  };
+
+  add(el, 'div', 'tl-cost-head', `💰 Cost & Tokens — ${t.totalTokens.toLocaleString()} tokens, est. ${fmtCost(t.estimatedCostUsd)}`);
+  if (t.untrackedInvocations > 0) add(el, 'div', 'tl-cost-note tl-cost-warn', `${t.untrackedInvocations} invocation(s) not tracked — total is incomplete.`);
+  if (t.costUnknownInvocations > 0) add(el, 'div', 'tl-cost-note tl-cost-warn', `${t.costUnknownInvocations} invocation(s) have unknown cost (no pricing entry) — cost total is incomplete.`);
+
+  const table = add(el, 'table', 'tl-cost-table', '');
+  for (const [agent, b] of Object.entries(ct.byAgent || {})) {
+    const tr = add(table, 'tr', '', '');
+    add(tr, 'th', '', agentLabel(agent));
+    add(tr, 'td', '', `${b.totalTokens.toLocaleString()} tokens`);
+    add(tr, 'td', '', `est. ${fmtCost(b.estimatedCostUsd)}`);
+    add(tr, 'td', '', b.untrackedInvocations > 0 ? `${b.untrackedInvocations} not tracked` : '');
+  }
+  add(el, 'div', 'tl-cost-note', ct.disclaimer || 'Estimates only.');
+}
+
+function renderCostOverview(data) {
+  const el = document.getElementById('cost-body');
+  if (!el) return;
+  el.replaceChildren();
+  const add = (parent, tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    n.textContent = text;
+    parent.appendChild(n);
+    return n;
+  };
+  const fmtCost = c => (c === null || c === undefined) ? 'unknown' : `$${c.toFixed(4)}`;
+  const t = data && data.total;
+  if (!t || (t.trackedInvocations === 0 && t.untrackedInvocations === 0)) {
+    add(el, 'span', 'lp-empty', 'No agent invocations with an apm-msg block found in this window.');
+    return;
+  }
+
+  const box = add(el, 'div', 'tl-cost', '');
+  add(box, 'div', 'tl-cost-head', `💰 Cost & Tokens — ${t.totalTokens.toLocaleString()} tokens, est. ${fmtCost(t.estimatedCostUsd)}`);
+  if (t.untrackedInvocations > 0) add(box, 'div', 'tl-cost-note tl-cost-warn', `${t.untrackedInvocations} invocation(s) not tracked — total is incomplete.`);
+  if (t.costUnknownInvocations > 0) add(box, 'div', 'tl-cost-note tl-cost-warn', `${t.costUnknownInvocations} invocation(s) have unknown cost (no pricing entry) — cost total is incomplete.`);
+  const m = data.meta || {};
+  add(box, 'div', 'tl-cost-note', `Last ${m.days} days · ${m.structuredEvents || 0} agent invocations across ${m.scannedComments || 0} comments.`);
+
+  const section = (title, buckets, label) => {
+    add(el, 'div', 'co-section', title);
+    const table = add(el, 'table', 'tl-cost-table', '');
+    const rows = Object.entries(buckets || {}).sort((a, b) =>
+      (b[1].estimatedCostUsd ?? -1) - (a[1].estimatedCostUsd ?? -1) || b[1].totalTokens - a[1].totalTokens);
+    for (const [key, b] of rows) {
+      const tr = add(table, 'tr', '', '');
+      add(tr, 'th', '', label(key));
+      add(tr, 'td', '', `${b.totalTokens.toLocaleString()} tokens`);
+      add(tr, 'td', '', `est. ${fmtCost(b.estimatedCostUsd)}`);
+      const notes = [];
+      if (b.untrackedInvocations > 0) notes.push(`${b.untrackedInvocations} not tracked`);
+      if (b.costUnknownInvocations > 0) notes.push(`${b.costUnknownInvocations} cost unknown`);
+      add(tr, 'td', notes.length ? 'tl-cost-warn' : '', notes.length ? `${notes.join(', ')} — incomplete` : '');
+    }
+  };
+  section('By feature', data.byFeature, k => k === 'unknown' ? 'Unattributed' : `#${k}`);
+  section('By agent', data.byAgent, agentLabel);
+  add(el, 'div', 'tl-cost-note', data.disclaimer || 'Estimates only.');
+}
+
+function loadCostOverview() {
+  const el = document.getElementById('cost-body');
+  if (!el) return;
+  const days = document.getElementById('cost-days')?.value || '90';
+  fetch(`${SERVER}/api/cost-tokens?days=${encodeURIComponent(days)}`)
+    .then(res => res.json().catch(() => null).then(data => ({ res, data })))
+    .then(({ res, data }) => {
+      if (!res.ok || !data) { el.textContent = `Error: ${data?.error || res.status}`; return; }
+      renderCostOverview(data);
+    })
+    .catch(() => { el.textContent = 'Cannot reach server.'; });
+}
+
 function renderTimeline(data, isRefresh = false) {
   const eventsEl  = document.getElementById('tl-events');
   const badgeEl   = document.getElementById('tl-status-badge');
@@ -3024,6 +3146,8 @@ function renderTimeline(data, isRefresh = false) {
 
   // Refresh button
   refreshEl.removeAttribute('hidden');
+
+  renderCostTokens(data.costTokens);
 
   // Agent filter
   const agents = [...new Set(data.events.map(e => e.agent).filter(Boolean))];
@@ -3156,6 +3280,8 @@ function startTimelineLoad() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('cost-days')?.addEventListener('change', loadCostOverview);
+  document.getElementById('cost-refresh-btn')?.addEventListener('click', loadCostOverview);
   document.getElementById('tl-load-btn')?.addEventListener('click', startTimelineLoad);
   document.getElementById('tl-issue-input')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') startTimelineLoad();

@@ -873,6 +873,13 @@ curl http://localhost:3131/api/log/qa
 }
 ```
 
+### `GET /api/cost-tokens[?days=N]`
+Read-only cross-feature rollup of LLM token usage and **estimated** cost (Issue #335). Reads the repo's issue comments (one read-only `gh api` call) for the last `days` days (default 90, max 365; anything else returns `400`), keeps comments that contain an `apm-msg` block with a `usage` object, and groups them by feature (the block's `issue` / `pipeline_id`, else the comment's issue number) and by agent. Only comments authored by a bot or a repo OWNER, MEMBER or COLLABORATOR count. Invocations with no `usage` are reported as "not tracked", and totals that include an unknown cost are flagged `partial`. Costs come from `src/model-pricing.yml` and are estimates, not billing data. The same data drives the "Cost & Tokens" tab; the per-issue Timeline also shows a summary panel from `GET /api/timeline/:n` (`costTokens` field).
+
+```zsh
+curl "http://localhost:3131/api/cost-tokens?days=30"
+```
+
 ### WebSocket messages (server → browser)
 
 Connect to `ws://localhost:3131`. The server sends the following message types:
