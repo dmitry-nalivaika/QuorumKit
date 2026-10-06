@@ -90,3 +90,14 @@ describe('orchestrator engine pin', () => {
     });
   }
 });
+
+describe('bug-fix pipeline runtime', () => {
+  // `runtime: copilot-default` on the dev step sent the Developer Agent to the legacy
+  // GitHub Models host (models.inference.ai.azure.com), which no longer resolves
+  // (ENOTFOUND), so every bug-fix run failed at step 1. Steps must inherit the
+  // default runtime from src/runtimes.yml instead of overriding it.
+  it('src/pipelines/bug-fix-pipeline.yml: dev step does not override the runtime', () => {
+    const text = read('src/pipelines/bug-fix-pipeline.yml');
+    expect(text).not.toMatch(/^\s+runtime:\s*copilot-default/m);
+  });
+});
