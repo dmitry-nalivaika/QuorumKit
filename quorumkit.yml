@@ -2,7 +2,7 @@ name: quorumkit
 version: 3.3.2
 description: >
   Fully autonomous, lights-out software development cycle — 15 specialised AI agents,
-  25 GitHub Actions workflows, domain extension packs, and Spec Kit integration.
+  27 GitHub Actions workflows, domain extension packs, and Spec Kit integration.
   Universal core (11 agents) + industrial domain pack (4 agents, opt-in).
   Works with Claude Code, GitHub Copilot, or both simultaneously.
 author: Dmitry Nalivaika
@@ -29,7 +29,7 @@ agents:
     - incident-agent
 
 workflows:
-  count: 25  # 12 Claude + 12 Copilot + 1 alert-to-issue
+  count: 27  # 13 Claude + 13 Copilot + 1 alert-to-issue
 
 dependencies:
   apm: []
