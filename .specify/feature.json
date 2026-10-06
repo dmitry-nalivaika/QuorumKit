@@ -1,9 +1,9 @@
 {
-  "feature_directory": "specs/332-llm-keys-for-the-project-to-be-configure",
-  "issue": 332,
-  "slug": "llm-keys-for-the-project-to-be-configure",
-  "spec_dir": "specs/332-llm-keys-for-the-project-to-be-configure",
-  "branch": "332-llm-keys-for-the-project-to-be-configure",
+  "feature_directory": "specs/331-agent-that-keeps-all-the-documentation-u",
+  "issue": 331,
+  "slug": "agent-that-keeps-all-the-documentation-u",
+  "spec_dir": "specs/331-agent-that-keeps-all-the-documentation-u",
+  "branch": "331-agent-that-keeps-all-the-documentation-u",
   "status": "spec-ready",
-  "updated": "2026-08-03"
+  "updated": "2026-10-06"
 }
