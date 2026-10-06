@@ -308,6 +308,32 @@ Issues opened: 1 (chore items only)
 
 ## Agent Footprint
 
+> **How to post footprints — same output from every trigger source.** Do not write these comments by
+> hand and do not pass them through `gh issue comment "..."`: a shell treats every backtick in the body as
+> command substitution and drops it, and hand-filled templates ship placeholder values (`runId` of
+> zeros, a midnight timestamp). Use the shared reporter instead. It fills every field from the real run
+> (run id, step, iteration, branch, timestamp) and produces the exact message the GitHub workflows post.
+>
+> ```bash
+> node .github/scripts/agent-report.cjs start    --agent tech-debt --issue <ISSUE_NUMBER> [--pr <PR_NUMBER>]
+> node .github/scripts/agent-report.cjs complete --agent tech-debt --issue <ISSUE_NUMBER> [--pr <PR_NUMBER>] \
+>     --outcome <success|fail|blocker|spec_gap|needs-human> --summary-stdin <<'EOF'
+> <one-sentence summary, at most 280 characters>
+> EOF
+> node .github/scripts/agent-report.cjs fail     --agent tech-debt --issue <ISSUE_NUMBER> --summary-stdin <<'EOF'
+> <error message, no raw stack trace>
+> EOF
+> ```
+>
+> - Run `start` before any other action, and exactly one of `complete` / `fail` as the last action.
+> - `--outcome` is your verdict. `success` posts the complete footprint; any other verdict posts the fail
+>   footprint with that outcome. Both carry the `apm-msg` block and the result marker the Orchestrator reads.
+> - When the Orchestrator started you, `RUN_ID`, `STEP` and `ITERATION` are set in the environment; the
+>   reporter uses them. Run locally, they are unset and the footprint says `unassigned`.
+> - If the reporter is unavailable, say so in your session output. Never end silently.
+>
+> The templates below describe the format the reporter produces. They are a reference, not text to copy.
+
 All invocations MUST post structured GitHub comments on the **Issue** (FR-001).
 
 ### `agent-start` comment

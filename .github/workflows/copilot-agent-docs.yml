@@ -55,6 +55,7 @@ jobs:
   docs:
     if: |
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (contains(github.event.comment.body, '@docs-agent') &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
@@ -65,6 +66,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Docs Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -78,7 +80,10 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/docs-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'docs', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/docs-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const trigger =
@@ -90,6 +95,8 @@ jobs:
               ? Number(context.payload.inputs.issue_number)
               : context.payload.issue?.number;
             const commentBody = context.payload.comment?.body ?? '';
+
+            await report.start({ issueNumber });
 
             // FR-005 size limits
             const MAX_PER_FILE = 20 * 1024;   // 20 KB per file patch
@@ -247,6 +254,7 @@ jobs:
                   body: errBody, labels: ['documentation', 'agent-report'],
                 });
               }
+              report.verdict({ outcome: 'blocker', summary: apiError });
               return;
             }
 
@@ -291,7 +299,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -304,7 +312,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -349,7 +357,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -363,24 +371,43 @@ jobs:
               : d.choices?.[0]?.message?.content
             )?.trim() || undefined;
 
-            const data   = await res.json();
-            const report = extractText(data)
-              ?? '⚠️ Docs agent produced no output.';
+            const data  = await res.json();
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('Docs agent produced no output.');
+              return;
+            }
 
             // Post as comment if triggered by a comment, otherwise open an issue
             if (issueNumber) {
-              await github.rest.issues.createComment({
-                owner:        context.repo.owner,
-                repo:         context.repo.repo,
-                issue_number: issueNumber,
-                body:         report,
-              });
+              // Posts the cleaned report and records the verdict for the final step.
+              await report.reply({ issueNumber, reply });
             } else {
+              const r = report.interpret(reply);
               await github.rest.issues.create({
                 owner:  context.repo.owner,
                 repo:   context.repo.repo,
                 title:  `📄 Docs Agent Report – ${new Date().toISOString().slice(0,10)}`,
-                body:   report,
+                body:   r.body,
                 labels: ['documentation', 'agent-report'],
               });
             }
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'docs', github, context, core });
+            await report.conclude({ env: process.env });

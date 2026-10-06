@@ -71,6 +71,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Enrich Issue Body via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -89,19 +90,24 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/ba-product-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba-enrich', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/ba-product-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             // ── 1. Validate and parse issue number ────────────────────────────
             // Read from env to avoid expression injection (OWASP A03 / B1 fix).
             const issueNumber = parseInt(process.env.INPUT_ISSUE_NUMBER, 10);
             if (!Number.isFinite(issueNumber) || issueNumber <= 0) {
-              core.setFailed(`Invalid issue_number: "${process.env.INPUT_ISSUE_NUMBER}"`);
+              report.abort(`Invalid issue_number: "${process.env.INPUT_ISSUE_NUMBER}"`);
               return;
             }
 
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
+
+            await report.start({ issueNumber });
 
             // ── 2. Fetch issue data ───────────────────────────────────────────
             let issueTitle = '';
@@ -115,7 +121,7 @@ jobs:
               issueBody   = issue.data.body   ?? '';
               issueLabels = (issue.data.labels ?? []).map(l => l.name ?? l);
             } catch (e) {
-              core.setFailed(`Could not fetch issue #${issueNumber}: ${e.message}`);
+              report.abort(`Could not fetch issue #${issueNumber}: ${e.message}`);
               return;
             }
 
@@ -175,6 +181,7 @@ jobs:
                   'No update was made to the issue body.',
                 ].join('\n'),
               });
+              report.verdict({ outcome: 'success', summary: `Issue #${issueNumber} already has all four structured sections; no changes needed.` });
               return;
             }
 
@@ -258,7 +265,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -271,7 +278,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -318,7 +325,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -339,7 +346,7 @@ jobs:
             try {
               parsed = JSON.parse(rawContent);
             } catch (parseErr) {
-              core.setFailed(`BA enrichment agent returned non-JSON response: ${parseErr.message}`);
+              report.abort(`BA enrichment agent returned non-JSON response: ${parseErr.message}`);
               return;
             }
 
@@ -347,7 +354,7 @@ jobs:
             if (parsed.canEnrich === true && typeof parsed.enrichedBody === 'string') {
               const newBody = parsed.enrichedBody.trim();
               if (!newBody) {
-                core.setFailed('BA enrichment agent returned canEnrich:true but empty enrichedBody.');
+                report.abort('BA enrichment agent returned canEnrich:true but empty enrichedBody.');
                 return;
               }
 
@@ -396,6 +403,10 @@ jobs:
                 ].join('\n'),
               });
 
+              report.verdict({
+                outcome: 'success',
+                summary: `Issue #${issueNumber} enriched: ${filledSections.map(h => h.replace('## ', '')).join(', ')}.`,
+              });
               return;
             }
 
@@ -423,3 +434,27 @@ jobs:
               ].join('\n'),
             });
             // status:needs-info is NOT touched (FR-008)
+
+            report.verdict({
+              outcome: 'needs-human',
+              summary: `Issue #${issueNumber} lacks the context to infer the missing sections; ${missingInfo.length || 1} question(s) posted.`,
+            });
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba-enrich', github, context, core });
+            await report.conclude({ env: process.env });

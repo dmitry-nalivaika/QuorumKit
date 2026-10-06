@@ -50,7 +50,7 @@ agent currently owns the issue or PR.
 |-------|---------|
 | `status:running` | A pipeline run is in progress. |
 | `status:awaiting-approval` | An approval gate is open; the pipeline is paused. |
-| `status:awaiting-agent` | An agent has been dispatched; waiting for `workflow_run.completed`. |
+| `status:awaiting-agent` | An agent has been dispatched; waiting for its result. Applied and removed by the engine; the scheduled reconciler scans issues carrying it. |
 | `status:completed` | The run finished successfully. |
 | `status:failed` | The run terminated with a step failure. |
 | `status:timed-out` | A per-step or approval timeout elapsed. |
@@ -176,6 +176,39 @@ completion and failure comments.
 
 Silent termination — ending without posting any comment — is prohibited under
 every code path (FR-004).
+
+### 3.0 Who writes these comments
+
+Agents do not write footprints by hand. `.github/scripts/agent-report.cjs` is the single builder, so the
+comment is identical whether it comes from a GitHub Actions workflow (inline `github-script` agents, the
+Developer runner) or from a local agent in an IDE:
+
+| Source | How it reports |
+|---|---|
+| Inline workflow agents (triage, ba, ba-enrich, architect, qa, reviewer, security, docs, release, tech-debt) | `forGithubScript(...)`: `start` before the model call, `reply`/`verdict` after it, and one final `if: always()` step (`conclude`) that posts exactly one complete or fail footprint. |
+| Developer runner | Reuses the same builder (`buildFootprint`). |
+| Local agents | `node .github/scripts/agent-report.cjs start\|complete\|fail --agent <name> --issue <N> ...` (see the manifest's *Agent Footprint* section). |
+
+Rules the builder enforces:
+
+1. Every value comes from the run (run id, step, iteration, branch, UTC timestamp). A model never fills a
+   template, so placeholder values (`runId` of zeros, a midnight timestamp) cannot appear.
+2. A `complete` footprint is posted for outcome `success`; any other verdict posts a `fail` footprint with
+   that verdict in `apm-msg.outcome`. Both carry the result marker
+   `<!-- apm:run_id=<id> step=<s> iteration=<n> runtime=<r> outcome=<o> -->`, which is what the Orchestrator
+   (the `workflow_run` path and the scheduled reconciler) reads to apply a transition.
+3. A crash (`fail()` / failed job) posts a `fail` footprint **without** a marker, so the Orchestrator ends
+   the step as `runtime-error`. A run with no real run id (comment-triggered or local) never gets a marker.
+4. LLM agents end their reply with `SUMMARY:` and `OUTCOME:` lines. A missing or invalid `OUTCOME` becomes
+   `needs-human`; it is never guessed as `success`. Only `success`, `fail`, `blocker`, `spec_gap` and
+   `needs-human` can be declared by a model; the other outcomes belong to the engine.
+5. Text written by a model has footprint comments, `apm:run_id` markers and `apm-msg` fences removed
+   before it is posted. Every agent workflow shares one bot login, so an echoed marker could otherwise
+   forge a verdict.
+6. Posting uses the REST API (or `gh api` with the body on stdin), never `gh issue comment "..."`: a shell
+   treats backticks as command substitution and silently drops them.
+
+The templates in 3.1 to 3.3 describe the format the builder produces.
 
 ### 3.1 `agent-start` comment
 

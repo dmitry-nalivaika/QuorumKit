@@ -11,6 +11,31 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ---
 
+## [3.3.2] — 2026-10-06 · Issue #378 follow-up
+
+### ✨ Added
+
+- **Scheduled reconciler** (#378). `orchestrator.yml` gains a `schedule:` trigger (every 5 minutes). The engine finds issues labelled `status:awaiting-agent` and settles each one: if the agent's result marker is present and its workflow run has finished, the outcome goes through the normal transition code; if the run ended `failure`/`cancelled`/`timed_out` without reporting, the run ends with `runtime-error` (the run is found with `listWorkflowRuns` by workflow file, creation time ≥ dispatch, and the `#<issue>` run-name); otherwise the step's `timeout_minutes` is enforced. Before this, `maybeTimeoutStep` only ran when an event arrived, so a silent agent never timed out. Latency is up to ~5-10 minutes because scheduled runs are best-effort; the sweep is a no-op when nothing is awaiting.
+- The engine now applies/removes `status:awaiting-agent` as a run enters/leaves `awaiting-agent`, and records `dispatchedAt` in the run state. A `workflow_run` created before the current dispatch is ignored, so a late event from an earlier iteration cannot end a re-dispatched run.
+- **One reporter for every agent message** (#378 follow-up). New `.github/scripts/agent-report.cjs` builds the `agent-start|complete|fail` footprints, the `apm-msg` block and the `apm:run_id=…` result marker, and posts them through the REST API. The Developer runner, all ten inline workflow agents (triage, ba, ba-enrich, architect, qa, reviewer, security, docs, release, tech-debt) and local agents (`node .github/scripts/agent-report.cjs start|complete|fail …`, documented in every manifest) use it, so the message looks the same from every trigger source. See `docs/AGENT_PROTOCOL.md` section 3.0.
+- Inline agents declare their verdict with `SUMMARY:` / `OUTCOME:` lines. A missing or invalid `OUTCOME` becomes `needs-human`; it is never guessed. A final `if: always()` step posts exactly one footprint, so a crash anywhere still leaves a `fail` footprint.
+- The QA, Reviewer, Security and Architect workflows load the pull request diff (the PR named by the dispatched issue, matched by `Refs/Closes/Fixes #N` or an `NNN-` branch) instead of judging with no context.
+
+### 🐛 Fixed
+
+- **No agent other than Developer posted the `apm:run_id=…` marker** (#378). A dispatched QA, Reviewer or Architect run that succeeded waited until it timed out, and a failed one ended as `runtime-error`. Every inline agent now posts the marker with the verdict it declared.
+- **Dispatched runs were skipped.** The job guards of the comment-driven agent workflows (QA, Reviewer, Security, Architect, ...) only matched `@agent` comments, so a `workflow_dispatch` from the Orchestrator started no job. They now let dispatched runs through, and every inline agent declares `issue_number`, `run_id`, `step`, `iteration`, `runtime_name`.
+- **Placeholder footprints.** Triage stamps carried `runId 00000000-…` and `T00:00:00Z` because the model copied the manifest template. The footprint sections are removed from the model's prompt and code fills every field from the run.
+- **Forged verdicts.** Model text is stripped of footprint comments, result markers and `apm-msg` fences before posting; all agent workflows share one bot login, so an echoed marker could otherwise forge a verdict.
+- **Agent footprint stamps were empty and had no `apm-msg` block** (#378). The Developer Agent manifest told the model to post `agent-start|complete|fail` comments with `gh issue comment "…"` through `run_command`, i.e. through `/bin/sh`, where every backtick in the body is command substitution. `` `developer-agent` ``, `` `agent-start` `` and the `` ```apm-msg `` fence all expanded to nothing. The runner now builds and posts the footprints itself via the REST API with the real run id, step, iteration, branch and timestamp; the manifest's footprint sections are removed from the model's prompt and replaced with an instruction to call `signal_outcome` only.
+
+### ⚠️ Upgrade notes
+
+- Pin `engine@v3.3.2` in `orchestrator.yml`. Runs already stuck in `awaiting-agent` have no label: add `status:awaiting-agent` to each such issue once, and the next sweep settles it.
+- Create the `status:awaiting-agent` label in the repository if label creation on first use is restricted.
+
+---
+
 ## [3.3.1] — 2026-10-06 · Issue #378
 
 ### 🐛 Fixed

@@ -56,6 +56,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run BA / Product Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,10 +70,14 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/ba-product-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/ba-product-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');
+            await report.start({ issueNumber });
 
             let issueTitle = '';
             let issueBody  = '';
@@ -94,11 +99,11 @@ jobs:
             ].filter(Boolean).join('\n\n---\n\n')
               || 'You are a helpful GitHub BA/product agent.';
 
-            const userContent =
+            const userContent = report.withOutcome(
               `You are acting as the BA / Product Agent for issue #${issueNumber}.\n` +
               `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
               `Analyse requirements, identify acceptance criteria, flag any ambiguities, ` +
-              `and post a structured requirements summary as a comment.`;
+              `and post a structured requirements summary as a comment.`);
 
             // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
             // Foundry deployment when the Orchestrator's azure-openai runtime
@@ -119,7 +124,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -132,7 +137,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -177,7 +182,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -192,17 +197,16 @@ jobs:
             )?.trim() || undefined;
 
             const data  = await res.json();
-            const reply = extractText(data)
-              ?? '⚠️ BA agent produced no output.';
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('BA agent produced no output.');
+              return;
+            }
 
-            await github.rest.issues.createComment({
-              owner:        context.repo.owner,
-              repo:         context.repo.repo,
-              issue_number: issueNumber,
-              body:         reply,
-            });
+            await report.reply({ issueNumber, reply });
 
       - name: Push spec branch and open PR
+        id: publish
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -211,6 +215,9 @@ jobs:
           script: |
             const { execSync, spawnSync } = require('child_process');
             const fs = require('fs');
+
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba', github, context, core });
 
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');
             const owner = context.repo.owner;
@@ -227,6 +234,7 @@ jobs:
             }
             if (!specDir) {
               core.warning(`No specs/${nnn}-* directory found; skipping branch/PR step.`);
+              report.verdict({ outcome: 'spec_gap', summary: `No specs/${nnn}-* directory exists, so no spec was published for #${issueNumber}.` });
               return;
             }
             const branchName = specDir;
@@ -234,6 +242,7 @@ jobs:
 
             if (!fs.existsSync(specPath)) {
               core.warning(`${specPath} not found; skipping branch/PR step.`);
+              report.verdict({ outcome: 'spec_gap', summary: `${specPath} was not found, so no spec was published for #${issueNumber}.` });
               return;
             }
 
@@ -252,7 +261,7 @@ jobs:
                 owner, repo, issue_number: issueNumber,
                 body: `**BA Agent — Publish Error**\n\nAborting: the working tree has uncommitted changes to files outside the expected spec paths:\n\n${fileList}\n\nPlease resolve these before re-running the BA agent.`,
               });
-              core.setFailed('Dirty working tree — aborting spec publish.');
+              report.abort('Dirty working tree — aborting spec publish.');
               return;
             }
 
@@ -267,14 +276,14 @@ jobs:
                 // Branch already exists — check it out without resetting (FR-003)
                 const coResult = spawnSync('git', ['checkout', branchName], { encoding: 'utf8' });
                 if (coResult.status !== 0) {
-                  core.setFailed(`Failed to checkout branch ${branchName}: ${coResult.stderr}`);
+                  report.abort(`Failed to checkout branch ${branchName}: ${coResult.stderr}`);
                   return;
                 }
               } else {
                 // Branch is new — create from HEAD
                 const coResult = spawnSync('git', ['checkout', '-b', branchName], { encoding: 'utf8' });
                 if (coResult.status !== 0) {
-                  core.setFailed(`Failed to create branch ${branchName}: ${coResult.stderr}`);
+                  report.abort(`Failed to create branch ${branchName}: ${coResult.stderr}`);
                   return;
                 }
               }
@@ -322,10 +331,10 @@ jobs:
                     owner, repo, issue_number: issueNumber,
                     body: `**BA Agent — Permission Error**\n\nFailed to push branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`contents: write\` scope. Please grant this permission in the workflow file and re-run.`,
                   });
-                  core.setFailed('Missing contents: write permission.');
+                  report.abort('Missing contents: write permission.');
                   return;
                 }
-                core.setFailed(`git push failed: ${pushStderr}`);
+                report.abort(`git push failed: ${pushStderr}`);
                 return;
               }
             }
@@ -379,22 +388,13 @@ jobs:
                   owner, repo, issue_number: issueNumber,
                   body: `**BA Agent — Permission Error**\n\nFailed to create/update PR for branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`pull-requests: write\` scope. Please grant this permission in the workflow file and re-run.`,
                 });
-                core.setFailed('Missing pull-requests: write permission.');
+                report.abort('Missing pull-requests: write permission.');
                 return;
               }
               throw e;
             }
 
-            // ── 12. Post PR URL + apm-msg on originating issue ────────────────
-            const apmMsg = JSON.stringify({
-              version: '2',
-              step: 'ba',
-              agent: 'ba-agent',
-              outcome: 'spec-ready',
-              summary: `Spec published for #${issueNumber}. PR: ${prUrl}`,
-              payload: { specPath, branch: branchName, prUrl },
-            }, null, 2);
-
+            // ── 12. Post PR URL on the originating issue; the footprint (with the real apm-msg) follows ──
             await github.rest.issues.createComment({
               owner, repo, issue_number: issueNumber,
               body: [
@@ -403,9 +403,32 @@ jobs:
                 `Spec for issue #${issueNumber} has been committed to branch \`${branchName}\` and a PR is ready for review.`,
                 '',
                 `**PR:** ${prUrl}`,
-                '',
-                '```apm-msg',
-                apmMsg,
-                '```',
               ].join('\n'),
             });
+
+            report.verdict({
+              outcome: 'success',
+              summary: `Spec published for #${issueNumber}. PR: ${prUrl}`,
+              pr: (prUrl.match(/\/pull\/(\d+)/) ?? [])[1] ?? '',
+              branch: branchName,
+              payload: { specPath, branch: branchName, prUrl },
+            });
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.publish.outputs.outcome || steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.publish.outputs.summary || steps.agent.outputs.summary }}
+          ERROR: ${{ steps.publish.outputs.error || steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.publish.outputs.pr || steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.publish.outputs.branch || steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.publish.outputs.payload || steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba', github, context, core });
+            await report.conclude({ env: process.env });
