@@ -77,3 +77,16 @@ describe('mirror parity (ADR-006)', () => {
     });
   }
 });
+
+describe('orchestrator engine pin', () => {
+  // The floating `v3` tag was left on v3.0.0 (May 2026), an engine that cannot route
+  // v2 pipelines: every `triaged` + `type:bug` event ended in `no-rule-match`.
+  // Pin to an exact release so a stale floating tag cannot silently downgrade routing.
+  for (const rel of ['.github/workflows/orchestrator.yml', 'src/.github/workflows/orchestrator.yml']) {
+    it(`${rel}: pins the engine to an exact release, not a floating major tag`, () => {
+      const line = read(rel).split('\n').find(l => /uses:\s*dmitry-nalivaika\/quorumkit\/engine@/.test(l));
+      expect(line, 'engine uses: line present').toBeDefined();
+      expect(line).toMatch(/engine@v\d+\.\d+\.\d+\s/);
+    });
+  }
+});
