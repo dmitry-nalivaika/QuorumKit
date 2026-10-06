@@ -22,7 +22,6 @@ loop_budget:
 steps:
   - name: dev
     agent: dev-agent
-    runtime: copilot-default     # explicit runtime override (see src/runtimes.yml)
     timeout_minutes: 90
 
   - name: qa
