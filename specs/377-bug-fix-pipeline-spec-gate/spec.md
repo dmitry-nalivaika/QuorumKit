@@ -1,9 +1,9 @@
 # Spec: Bug-Fix Pipeline Produces a Spec Before Development — Issue #377
 
 **Issue:** #377
-**Branch:** `377-bug-fix-pipeline-spec-gate`
+**Branch:** `377-dev-agent-blocks-bug-fix-pipeline-spec-f` (generated from the issue title by the pipeline tooling; the spec directory slug is shorter, see Assumptions)
 **Type:** bug-fix (Template C — Bug Fix)
-**Status:** draft
+**Status:** ready (amended after review of PR #395; merge gated on ADR-377, see Assumptions)
 **Decision record:** [ADR-377](../../docs/architecture/adr-377-bug-fix-pipeline-spec-gate.md) (Proposed)
 
 ---
@@ -21,6 +21,12 @@ This change makes the bug-fix pipeline satisfy the spec-first rule on its own: a
 written by the BA/Product Agent, using a short bug-specific format, before development
 starts, and a missing spec is routed to the BA/Product Agent instead of back to the
 Developer Agent.
+
+The first review of the implementation (PR #395) showed that changing the pipeline file alone is
+not enough, because the two automated agents involved cannot yet do what the new routes
+assume: the Developer Agent, when run automatically, cannot report `spec_gap`, and the BA/Product
+Agent, when run automatically, posts a requirements summary as a comment but never creates the
+spec file. This change therefore also covers those two capabilities (FR-024 to FR-032).
 
 ---
 
@@ -56,6 +62,11 @@ specs by hand.
   Then its first step is the BA/Product Agent and the Developer Agent has not yet run.
 - Given the BA/Product Agent finishes successfully, When the pipeline advances,
   Then the next step is the Developer Agent and a spec for the issue exists.
+- Given the BA/Product Agent step runs as an automated workflow on a `type:bug` issue that has
+  no spec, When it finishes successfully, Then a bug-fix spec file for the issue has been
+  created and published (not only described in a comment).
+- Given the BA/Product Agent step runs as an automated workflow and cannot produce a spec,
+  When it finishes, Then it reports `spec_gap` and no spec file is written.
 - Given the BA/Product Agent cannot establish what the bug is from the report,
   When it finishes with `needs-human`, Then the pipeline does not advance to development
   against an invented description: it repeats the BA step (FR-004) and, once the existing
@@ -70,6 +81,9 @@ step that is forbidden from writing specs.
 **Acceptance Scenarios:**
 - Given the Developer Agent finds no spec for the issue, When it reports its result,
   Then the result is `spec_gap` and the pipeline returns to the BA/Product Agent.
+- Given the Developer Agent runs as an automated workflow and finds no spec, When it
+  finishes, Then the result the Orchestrator reads is `spec_gap` (not `blocker` or
+  `needs-human`), and no later report replaces it.
 - Given the Reviewer Agent finds the spec inadequate to verify the fix, When it reports
   `spec_gap`, Then the pipeline returns to the BA/Product Agent.
 - Given the BA/Product Agent itself reports `spec_gap` or `needs-human`, When the pipeline
@@ -111,7 +125,7 @@ exactly what changed, so that I can update my copy by hand and my bug issues sto
 - **FR-002:** The BA/Product Agent step in the bug-fix pipeline MUST have the same time limit
   as the BA/Product Agent step in the feature pipeline (60 minutes).
 - **FR-003:** A successful BA/Product Agent step MUST advance the pipeline to the Developer
-  step.
+  step. "Successful" means a spec for the issue exists and has been published (FR-025).
 
 ### Routing
 
@@ -158,11 +172,46 @@ exactly what changed, so that I can update my copy by hand and my bug issues sto
 - **FR-016:** The BA/Product Agent's existing handling of issues labelled `status:needs-info`
   (infer missing reproduction details, or stop and ask) MUST apply to bug issues unchanged.
 
+### Bug spec authoring by the automated BA/Product Agent step
+
+- **FR-024:** When the BA/Product Agent step runs on a `type:bug` issue that has no spec, it
+  MUST create the spec file for the issue in the bug-fix format and publish it (spec branch and
+  pull request, as for feature specs). This MUST hold when the step runs as an automated
+  workflow, not only when a person runs the agent interactively.
+- **FR-025:** The BA/Product Agent step MUST report `success` only when a spec file for the
+  issue exists and has been published. When no spec could be produced it MUST report
+  `spec_gap`, and when the report does not contain enough to establish the bug (FR-016) it
+  MUST report `needs-human`. It MUST NOT report `success` without a spec.
+- **FR-026:** When a spec for the issue already exists (for example one written by hand), the
+  BA/Product Agent step MUST reuse it: no second spec directory and no second pull request.
+- **FR-027:** A spec created by the automated step MUST meet the same hand-off bar as any
+  other bug-fix spec (FR-012 to FR-015) and MUST NOT contain facts that are not in, or
+  inferable from, the issue. If they cannot be established, FR-025 applies and no spec is
+  written.
+- **FR-028:** The automated BA/Product Agent step MUST write only the spec file (and the
+  active-feature pointer) to the repository; the existing rule that any other changed file
+  stops the publish remains.
+
+### Developer Agent result reporting
+
+- **FR-029:** `spec_gap` MUST be an accepted result in every way the Developer Agent can be
+  run (automated workflow and interactive), so a missing spec is reported as `spec_gap`
+  (FR-009) and is not rewritten into `blocker` or `needs-human`.
+- **FR-030:** A Developer Agent run MUST end with exactly one reported result. A run that
+  finds no spec MUST NOT report `spec_gap` and then a second, different result: the
+  Orchestrator acts on the most recent report, so a second report would override it.
+- **FR-031:** The instructions given to the Developer Agent when it runs as an automated
+  workflow MUST tell it to report a missing spec as `spec_gap` through the single reporting
+  mechanism available in that mode, and MUST NOT contradict the agent definition (FR-009).
+- **FR-032:** The Developer Agent's definition of what it may report MUST list `spec_gap`
+  consistently wherever the list of results appears.
+
 ### Dual-runtime consistency
 
-- **FR-017:** Every change to a BA/Product Agent or Developer Agent definition MUST be applied
-  to every copy of that definition (source and installed copies, Claude and Copilot variants)
-  so the two runtimes behave equivalently. The repository's existing mirror check MUST pass.
+- **FR-017:** Every change to a BA/Product Agent or Developer Agent definition, and to the
+  automated workflow or runner that executes either agent (FR-024 to FR-032), MUST be applied
+  to every copy of that file (source and installed copies, Claude and Copilot variants) so the
+  runtimes behave equivalently. The repository's existing mirror check MUST pass.
 
 ### Documentation
 
@@ -183,6 +232,15 @@ exactly what changed, so that I can update my copy by hand and my bug issues sto
   also cover Reviewer `spec_gap` → BA and BA `spec_gap`/`needs-human` → BA.
 - **FR-023:** An automated test MUST confirm the bug-fix pipeline file still passes the
   pipeline validator and that its entry step is the BA/Product Agent.
+- **FR-033:** An automated test MUST cover the Developer Agent's automated run: `spec_gap` is
+  accepted as a result, the resulting report is the one the Orchestrator reads, and that
+  report routes the bug-fix pipeline from Dev to BA. It MUST fail if `spec_gap` is removed
+  from the accepted results.
+- **FR-034:** Automated tests MUST cover the automated BA/Product Agent step: given a reply
+  containing a bug-fix spec for an issue with no spec, a spec file is written at the standard
+  location and the step reports `success`; given a reply with no usable spec, nothing is
+  written and the step reports `spec_gap`; given an existing spec, no second spec is created
+  (FR-024 to FR-027).
 
 ---
 
@@ -194,6 +252,13 @@ exactly what changed, so that I can update my copy by hand and my bug issues sto
       `spec_gap` and the pipeline's next step is the BA/Product Agent.
 - [ ] Routing tests for BA → Dev, Dev `spec_gap` → BA, Reviewer `spec_gap` → BA and BA
       self-repeat pass, and fail if the corresponding route is removed.
+- [ ] Run as an automated workflow on a `type:bug` issue with no spec, the BA/Product Agent
+      step leaves a published spec file for the issue (FR-024), not only a comment.
+- [ ] Run as an automated workflow on an issue with no spec, the Developer Agent's final
+      reported result is `spec_gap` and it is the only result reported (FR-029, FR-030).
+- [ ] Runner-level and BA-step-level tests (FR-033, FR-034) pass, and fail if `spec_gap` is
+      removed from the Developer Agent's accepted results or if the BA step stops writing the
+      spec file.
 - [ ] The bug-fix pipeline file passes the pipeline validator.
 - [ ] A bug spec produced from the bug-fix format passes the spec quality check with no
       failures and fits on roughly one page.
@@ -220,8 +285,14 @@ exactly what changed, so that I can update my copy by hand and my bug issues sto
   separate issue.
 - Adding a `timeout` route for the Developer step (ADR-377 concern 2). Recommended follow-up.
 - Changes to the feature pipeline or release pipeline.
-- Changes to the Orchestrator engine, the Developer Agent runner, workflow permissions or
-  the installer. A routing change in a pipeline file is not expected to need any of them.
+- Changes to the Orchestrator engine, workflow permissions or the installer. The existing
+  permissions of the BA/Product Agent workflow (repository content, issues, pull requests)
+  already cover FR-024 and are not widened.
+- Making the Developer Agent's automated run read a spec that exists only on an unmerged
+  spec branch (see Assumptions). Spec-handoff timing stays as in the feature pipeline.
+- Declaring bug specs to be authored only by a person running the BA agent locally. That
+  would leave the pipeline unable to finish a bug without manual work, which is the defect.
+- Changing how the BA/Product Agent writes feature specs (Templates A and B).
 - Automatically migrating consumer-owned pipeline files.
 - Recovering pipeline runs that are in flight when the change is merged (see Assumptions).
 
@@ -241,9 +312,19 @@ workflow permission grants are unchanged. No personal data is involved.
   on a human maintainer confirming the cost trade-off the ADR names: one extra BA run and one
   spec PR for every bug, including one-line fixes, adding up to about 60 minutes of latency.
   If the maintainer chooses a constitution amendment instead, this spec is superseded.
-- The BA/Product Agent's existing spec branch, spec pull request and hand-off behaviour,
-  proven in the feature pipeline, is reused for bug specs without modification beyond the new
-  format.
+- The BA/Product Agent's existing spec branch, spec pull request and hand-off behaviour
+  (publish step, dirty-tree guard, create-or-update pull request) is reused for bug specs.
+  Review of PR #395 showed that the automated step does not yet author the spec file itself;
+  that gap is closed by FR-024 to FR-028 and is no longer assumed away.
+- The Developer Agent's automated run reads the repository as checked out by its workflow
+  (default branch). As in the feature pipeline today, a spec published on its own branch is
+  seen by development once its pull request is merged or the run is dispatched against that
+  branch. This change does not alter that timing; if it proves to block bug fixes in practice
+  it is a separate issue.
+- The spec directory slug (`bug-fix-pipeline-spec-gate`) is intentionally more descriptive than
+  the branch name the pipeline tooling generated from the issue title. Renaming either would
+  break existing references (tests, ADR, changelog) and is not worth a rename; the active
+  feature pointer records the real branch.
 - The existing 20-step budget for the bug-fix pipeline leaves enough headroom for one extra
   step; no budget change is needed.
 - When the BA/Product Agent runs as a pipeline step, it reports `success` after publishing a

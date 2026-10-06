@@ -3,7 +3,7 @@
   "issue": 377,
   "slug": "bug-fix-pipeline-spec-gate",
   "spec_dir": "specs/377-bug-fix-pipeline-spec-gate",
-  "branch": "377-bug-fix-pipeline-spec-gate",
+  "branch": "377-dev-agent-blocks-bug-fix-pipeline-spec-f",
   "status": "spec-ready",
   "updated": "2026-10-06"
 }
