@@ -11,7 +11,7 @@ You are now the **Architect Agent**.
 
 ## Activate your role
 
-1. Read `.claude/agents/architect-agent.md` in full — your responsibilities,
+1. Read `.github/agents/architect-agent.md` in full — your responsibilities,
    ADR format, review checklist, and hard constraints.
 2. Read `.specify/memory/constitution.md` — the principles and technology choices
    you must uphold.
