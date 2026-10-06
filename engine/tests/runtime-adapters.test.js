@@ -35,7 +35,7 @@ describe('runtimes/copilot', () => {
     });
     expect(r).toEqual({ dispatched: true, retries: 0, workflow: 'copilot-agent-qa.yml' });
     expect(client.triggerWorkflow).toHaveBeenCalledWith('o', 'r', 'copilot-agent-qa.yml', 'main', expect.objectContaining({
-      issue_number: '10', run_id: 'run-1', step: 'qa', iteration: '2',
+      issue_number: '10', run_id: 'run-1', step: 'qa', iteration: '2', runtime_name: 'copilot-default',
     }));
     // `runtime` must NOT be sent: agent workflows do not declare it as an input.
     const sentInputs = client.triggerWorkflow.mock.calls[0][4];
@@ -129,6 +129,7 @@ describe('runtimes/azure-openai', () => {
       run_id: 'run-1',
       step: 'qa',
       iteration: '2',
+      runtime_name: 'azure-foundry-standard',
       runtime_endpoint: AZURE_RT.endpoint,
       runtime_model: AZURE_RT.model,
       runtime_credential_ref: AZURE_RT.credential_ref,

@@ -331,7 +331,7 @@ bash scripts/quality-check.sh
 | `protocol-violation` audit comment | The agent's `apm-msg` block is missing, malformed, or has a mismatched `runId`, `step`, or `iteration`. Check the agent's workflow log. |
 | `status:loop-budget-exceeded` label applied | A backward edge crossed `max_iterations_per_edge`. Human intervention is required; increase the budget in the pipeline YAML or resolve the underlying issue manually. |
 | Step stuck at `status:awaiting-approval` | Post `/approve` on the issue. Requires `write`, `maintain`, or `admin` permission on the repository. |
-| Step stuck at `status:awaiting-agent` past `timeout_minutes` | The next GitHub event auto-synthesises a `timeout` outcome (FR-019). If no event is imminent, re-trigger by adding a comment or label. |
+| Step stuck at `status:awaiting-agent` | Since engine v3.3.2 a scheduled sweep (`orchestrator.yml`, every 5 minutes) settles it without needing an event: it applies the outcome the agent reported, ends the run with `runtime-error` if the agent's workflow failed or was cancelled without reporting, and enforces `timeout_minutes`. GitHub's cron is best-effort, so allow 5-10 minutes. The label is managed by the engine; for a run stuck from before the upgrade, add `status:awaiting-agent` to the issue once. |
 | Agent comment ignored | The comment author's login is not listed in `src/agent-identities.yml` for that agent slug. Add the login or correct the agent's workflow to post under the expected identity. |
 | `dedup hit … skipping` in workflow logs | The same GitHub webhook delivery was received more than once. This is expected behaviour — the Orchestrator deduplicates by delivery ID (FR-016, FR-026). |
 

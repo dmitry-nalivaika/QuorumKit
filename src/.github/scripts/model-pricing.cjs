@@ -48,7 +48,8 @@ function loadPricing(rootDir = process.cwd()) {
 
 function computeUsage({ runtime, model, promptTokens, completionTokens, pricing }) {
   const entry = pricing && pricing[model];
-  const estimated_cost_usd = entry
+  const priced = entry && Number.isFinite(entry.prompt_per_1k_usd) && Number.isFinite(entry.completion_per_1k_usd);
+  const estimated_cost_usd = priced
     ? (promptTokens / 1000) * entry.prompt_per_1k_usd + (completionTokens / 1000) * entry.completion_per_1k_usd
     : null;
   return {
@@ -62,34 +63,59 @@ function computeUsage({ runtime, model, promptTokens, completionTokens, pricing 
 }
 
 /**
- * Fenced usage-only `apm-msg` block to append to a workflow's reply comment.
- * Returns '' when the response reported no usable usage (FR-005). Never throws.
- * Deliberately omits `outcome`/`event_type`: a free-text reply cannot prove one.
+ * Token counts from one LLM response, whichever API shape it used:
+ *   chat/completions  usage.prompt_tokens / completion_tokens
+ *   Responses API     usage.input_tokens  / output_tokens
+ * Returns null when the provider reported no usable counts (FR-005). Never throws.
  */
-function usageApmBlock({ response, runtime, model, agent, issueNumber, pricing } = {}) {
+function tokensFromResponse(response) {
+  const u = response && response.usage;
+  if (!u || typeof u !== 'object') return null;
+  const finite = n => Number.isFinite(n) && n >= 0;
+  const prompt = finite(u.prompt_tokens) ? u.prompt_tokens : (finite(u.input_tokens) ? u.input_tokens : null);
+  const completion = finite(u.completion_tokens) ? u.completion_tokens : (finite(u.output_tokens) ? u.output_tokens : null);
+  if (prompt === null && completion === null) return null;
+  return { promptTokens: prompt ?? 0, completionTokens: completion ?? 0 };
+}
+
+/**
+ * The `usage` object for an apm-msg block built from one LLM response, or null when the
+ * response carried no usage. Never throws: pricing problems degrade to estimated_cost_usd null.
+ */
+function usageFromResponse({ response, runtime, model, pricing, rootDir } = {}) {
   try {
-    const u = response && response.usage;
-    const finite = n => Number.isFinite(n);
-    if (!u || (!finite(u.prompt_tokens) && !finite(u.completion_tokens))) return '';
-    const msg = {
-      version: '2',
-      step: String(agent).replace(/-agent$/, ''),
-      agent,
-      summary: `LLM usage recorded for ${agent}.`,
-      ...(issueNumber ? { pipeline_id: String(issueNumber).padStart(3, '0'), issue: String(issueNumber) } : {}),
-      timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-      usage: computeUsage({
-        runtime,
-        model,
-        promptTokens: finite(u.prompt_tokens) ? u.prompt_tokens : 0,
-        completionTokens: finite(u.completion_tokens) ? u.completion_tokens : 0,
-        pricing: pricing ?? loadPricing().pricing,
-      }),
-    };
-    return '\n\n```apm-msg\n' + JSON.stringify(msg, null, 2) + '\n```';
+    const t = tokensFromResponse(response);
+    if (!t || !runtime || !model) return null;
+    return computeUsage({ runtime, model, ...t, pricing: pricing ?? loadPricing(rootDir).pricing });
   } catch {
-    return '';
+    return null;
   }
 }
 
-module.exports = { PRICING_PATH, loadPricing, computeUsage, usageApmBlock };
+/**
+ * Validate an untrusted `usage` object (e.g. a step output) against the apm-msg schema and return
+ * a copy holding only the schema fields, or null when it is not usable. Never throws.
+ */
+function normalizeUsage(u) {
+  try {
+    if (!u || typeof u !== 'object') return null;
+    const count = n => Number.isInteger(n) && n >= 0;
+    const text = v => typeof v === 'string' && v.length > 0;
+    if (!text(u.runtime) || !text(u.model)) return null;
+    if (!count(u.prompt_tokens) || !count(u.completion_tokens) || !count(u.total_tokens)) return null;
+    const cost = u.estimated_cost_usd;
+    if (cost !== null && !(typeof cost === 'number' && Number.isFinite(cost) && cost >= 0)) return null;
+    return {
+      runtime: u.runtime,
+      model: u.model,
+      prompt_tokens: u.prompt_tokens,
+      completion_tokens: u.completion_tokens,
+      total_tokens: u.total_tokens,
+      estimated_cost_usd: cost,
+    };
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { PRICING_PATH, loadPricing, computeUsage, tokensFromResponse, usageFromResponse, normalizeUsage };

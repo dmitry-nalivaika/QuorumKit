@@ -719,11 +719,16 @@ async function fetchTimeline(issueNumber, cfg) {
   const events = comments
     .map(c => parseCommentToEvent(c))
     .filter(Boolean);
+  // Only cost figures from trusted authors count toward the totals (see isTrustedCommentAuthor).
+  const trustedEvents = comments
+    .filter(isTrustedCommentAuthor)
+    .map(c => parseCommentToEvent(c))
+    .filter(Boolean);
 
   const data = {
     events,
     status: derivePipelineStatus(events),
-    costTokens: aggregateCostTokens(events),
+    costTokens: aggregateCostTokens(trustedEvents),
     meta: {
       issueNumber,
       totalComments:    comments.length,
@@ -747,6 +752,16 @@ const COST_OVERVIEW_MAX_DAYS = 365;
  * Roll up apm-msg `usage` from repo-wide issue/PR comments, grouped by feature
  * and by agent. Read-only: a single GET against the existing comments API.
  */
+/**
+ * Cost figures come from free-text comments, so only count those written by the repo's own
+ * automation (a bot, e.g. github-actions[bot]) or by someone with write access. Without this
+ * any commenter could inflate or hide spend by pasting an apm-msg block.
+ */
+function isTrustedCommentAuthor(comment) {
+  if (comment.user?.type === 'Bot') return true;
+  return ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(comment.author_association);
+}
+
 async function fetchCostOverview(days, cfg) {
   const now = Date.now();
   const cached = _costOverviewCache.get(days);
@@ -784,7 +799,7 @@ async function fetchCostOverview(days, cfg) {
   catch { throw new Error('Failed to parse GitHub API response'); }
 
   const events = comments
-    .filter(c => c && typeof c.body === 'string' && c.body.includes('```apm-msg'))
+    .filter(c => c && typeof c.body === 'string' && c.body.includes('```apm-msg') && isTrustedCommentAuthor(c))
     .map(c => parseCommentToEvent(c))
     .filter(e => e && e.source === 'apm-msg');
 

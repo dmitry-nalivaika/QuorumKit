@@ -1,46 +1,41 @@
 /**
- * Usage capture for every chat/completions workflow reachable via the
- * azure-openai runtime kind (Issue #335, FR-001, FR-002, FR-005, FR-015).
+ * Usage capture for every inline chat/completions + Responses workflow (Issue #335, FR-001, FR-002, FR-004, FR-005, FR-015).
+ *
+ * Usage rides in the single apm-msg block that agent-report.cjs posts in the agent's own
+ * complete/fail footprint (schema-valid, orchestrator-conformant). Workflows never write their own
+ * apm-msg: they hand the response to the reporter and pass its `usage` output to the final step.
  * Structural checks only: embedded github-script bodies cannot run outside Actions.
  */
 import { describe, it, expect } from 'vitest';
 import fs   from 'fs';
 import path from 'path';
+import yaml from 'js-yaml';
 
 const REPO_ROOT = path.resolve(new URL(import.meta.url).pathname, '../../..');
 const read = rel => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
 
-// workflow slug -> agent identifier recorded in the apm-msg block
-const WORKFLOWS = {
-  architect: 'architect-agent',
-  qa: 'qa-agent',
-  reviewer: 'reviewer-agent',
-  security: 'security-agent',
-  triage: 'triage-agent',
-  docs: 'docs-agent',
-  release: 'release-agent',
-  'tech-debt': 'tech-debt-agent',
-  'ba-enrich': 'ba-agent',
-};
+const SLUGS = ['triage', 'ba', 'ba-enrich', 'architect', 'qa', 'reviewer', 'security', 'docs', 'release', 'tech-debt'];
 
-describe.each(Object.entries(WORKFLOWS))('copilot-agent-%s.yml usage wiring', (slug, agent) => {
+describe.each(SLUGS)('copilot-agent-%s.yml usage wiring', slug => {
   const rel = `.github/workflows/copilot-agent-${slug}.yml`;
   const wf = read(rel);
+  const steps = Object.values(yaml.load(wf).jobs)[0].steps;
+  const agentStep  = steps.find(s => s.id === 'agent');
+  const reportStep = steps.find(s => s.name === 'Report result');
 
-  it('builds the usage block from the chat/completions response via the shared helper', () => {
-    expect(wf).toContain('model-pricing.cjs');
-    expect(wf).toContain('usageApmBlock(');
-    expect(wf).toContain('response: data');
-    expect(wf).toContain(`agent: '${agent}'`);
+  it('records the parsed LLM response with the reporter, labelled with the resolved runtime and model', () => {
+    const script = agentStep.with.script;
+    expect(script).toMatch(/report\.recordUsage\(\{ response: data, model: runtimeModel, runtime: defaultRuntimeName \|\| 'azure-openai' \}\)/);
+    expect(script.indexOf('recordUsage')).toBeGreaterThan(script.indexOf('await res.json()'));
   });
 
-  it('labels the runtime azure-openai when an endpoint override is in use', () => {
-    expect(wf).toContain("runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default'");
+  it('passes the usage step output to the final reporting step', () => {
+    expect(reportStep.env.USAGE).toBe('${{ steps.agent.outputs.usage }}');
   });
 
-  it('appends the block to the posted body and never lets capture fail the run (FR-005)', () => {
-    expect(wf).toMatch(/\+ usageBlock/);
-    expect(wf).toMatch(/catch \(e\) \{ core\.warning\(`Usage capture skipped/);
+  it('never writes its own apm-msg block (the reporter owns the protocol)', () => {
+    expect(wf).not.toContain('usageApmBlock');
+    expect(wf).not.toMatch(/```apm-msg/);
   });
 
   if (slug !== 'ba-enrich') {
@@ -50,17 +45,27 @@ describe.each(Object.entries(WORKFLOWS))('copilot-agent-%s.yml usage wiring', (s
   }
 });
 
-describe('copilot-agent-ba.yml runtime label', () => {
-  it('labels azure-openai runs rather than hardcoding copilot-default', () => {
-    const wf = read('.github/workflows/copilot-agent-ba.yml');
-    expect(wf).toContain("runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default'");
-    expect(wf).not.toMatch(/runtime: 'copilot-default',/);
-  });
-});
+describe('dev-agent-runner.cjs usage capture', () => {
+  const runner = read('.github/scripts/dev-agent-runner.cjs');
 
-describe('dev-agent-runner.cjs runtime label', () => {
-  it('reports azure-openai as the usage runtime when RUNTIME_ENDPOINT is set', () => {
-    const runner = read('.github/scripts/dev-agent-runner.cjs');
-    expect(runner).toContain("process.env.RUNTIME_ENDPOINT ? 'azure-openai'");
+  it('records usage after every LLM call: chat, Responses and Anthropic loops', () => {
+    expect(runner.match(/recordUsage\(/g).length).toBeGreaterThanOrEqual(4); // definition + 3 loops
+    expect(runner).toContain('recordUsage(runtimeModel, data)');
+    expect(runner).toContain('recordUsage(CLAUDE_MODEL,');
+  });
+
+  it('labels the usage runtime with the named runtime from the registry', () => {
+    expect(runner).toContain('runtime: RUNTIME_NAME || RUNTIME_KIND');
+  });
+
+  it('does not hardcode the Claude model in the request', () => {
+    expect(runner).toContain('model: CLAUDE_MODEL');
+    expect(runner).not.toMatch(/model: 'claude-opus-4-5'/);
+  });
+
+  it('keeps the src/ distribution copies byte-identical', () => {
+    for (const f of ['dev-agent-runner.cjs', 'model-pricing.cjs', 'agent-report.cjs']) {
+      expect(read(`src/.github/scripts/${f}`)).toBe(read(`.github/scripts/${f}`));
+    }
   });
 });

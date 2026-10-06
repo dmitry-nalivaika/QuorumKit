@@ -48,7 +48,6 @@ const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 const { execSync } = require('child_process');
-const { loadPricing, computeUsage } = require('./model-pricing.cjs');
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 const RUNTIME_KIND   = (process.env.RUNTIME_KIND || 'copilot').toLowerCase();
@@ -59,6 +58,7 @@ const STEP           = process.env.STEP   || 'dev';
 const ITERATION      = process.env.ITERATION || '1';
 const RUNTIME_NAME   = process.env.RUNTIME_NAME || '';
 const MAX_ITERATIONS = Number(process.env.MAX_ITERATIONS || 20);
+const CLAUDE_MODEL   = process.env.CLAUDE_MODEL || 'claude-opus-4-5';
 
 if (!ISSUE_NUMBER || !OWNER || !REPO || !process.env.GITHUB_TOKEN) {
   if (require.main === module) {
@@ -88,7 +88,7 @@ function readSafe(p) {
 // attacker-influenced workflow_dispatch input if this workflow is invoked
 // directly (bypassing the Orchestrator). Restrict it to known Azure OpenAI /
 // Azure AI Foundry hostnames so it cannot be used as an SSRF primitive.
-const ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+const ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES = ['.openai.azure.com', '.cognitiveservices.azure.com', '.services.ai.azure.com'];
 function isAllowedRuntimeEndpoint(raw) {
   try {
     const u = new URL(raw);
@@ -156,6 +156,84 @@ const manifests = {
   skill:        readSafe('.github/instructions/dev-agent.instructions.md'),
   constitution: readSafe('.specify/memory/constitution.md'),
 };
+
+// ─── Footprints (posted by the runner, never by the model) ──────────────────
+// The manifest asks the agent to post `agent-start|complete|fail` comments with `gh issue comment`
+// through run_command. That goes through /bin/sh, where every unescaped backtick in the body
+// (`developer-agent`, `agent-start`, the ```apm-msg fence) is command substitution and expands to
+// nothing, so the stamps came out with empty fields and no apm-msg block. The runner knows every
+// value, so it posts them directly through the REST API, where there is no shell.
+const agentReport = require('./agent-report.cjs');
+const modelPricing = require('./model-pricing.cjs');
+
+// Token usage accumulated across every LLM call in this run (#335). Reported in the apm-msg block
+// of the final footprint; omitted when the provider returned no counts (FR-005).
+const usageTotals = { model: '', prompt: 0, completion: 0, seen: false };
+
+/** Add one API response's token counts (chat, Responses or Anthropic shape). Never throws. */
+function recordUsage(model, response) {
+  try {
+    const t = modelPricing.tokensFromResponse(response);
+    if (!t) return;
+    usageTotals.model = model;
+    usageTotals.prompt += t.promptTokens;
+    usageTotals.completion += t.completionTokens;
+    usageTotals.seen = true;
+  } catch { /* usage must never fail a run */ }
+}
+
+/** The `usage` object for the footprint, or undefined when nothing was reported. */
+function currentUsage() {
+  if (!usageTotals.seen) return undefined;
+  return modelPricing.computeUsage({
+    runtime: RUNTIME_NAME || RUNTIME_KIND,
+    model: usageTotals.model,
+    promptTokens: usageTotals.prompt,
+    completionTokens: usageTotals.completion,
+    pricing: modelPricing.loadPricing(process.cwd()).pricing,
+  });
+}
+
+function currentBranch() {
+  const b = exec('git rev-parse --abbrev-ref HEAD');
+  return b && !b.startsWith('ERROR:') && b !== 'HEAD' ? b : '';
+}
+
+// One builder for every agent (agent-report.cjs): the dev runner, the inline workflows and local
+// agents all produce the same footprint, apm-msg block and result marker.
+function buildFootprint(kind, { prNumber = null, ...details } = {}) {
+  return agentReport.buildFootprint(kind, {
+    pr: prNumber,
+    agent: 'dev',
+    issue: ISSUE_NUMBER,
+    runId: RUN_ID,
+    step: STEP,
+    iteration: ITERATION,
+    runtime: RUNTIME_NAME || RUNTIME_KIND,
+    usage: currentUsage(),
+    ...details,
+  });
+}
+
+async function postFootprint(kind, { prNumber = null, ...details } = {}) {
+  try {
+    const body = buildFootprint(kind, { branch: currentBranch(), prNumber, ...details });
+    const r = await ghApi(`/repos/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}/comments`, {
+      method: 'POST', body: { body },
+    });
+    if (r.status < 200 || r.status >= 300) {
+      console.warn(`[runner] footprint '${kind}' not posted: HTTP ${r.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[runner] footprint '${kind}' not posted: ${err.message}`);
+    return false;
+  }
+}
+
+/** Remove the manifest sections that tell the model to post footprints itself (see above). */
+const stripFootprintInstructions = agentReport.stripFootprintInstructions;
 
 // ─── Tool definitions (shared shape; runtimes adapt to API differences) ─────
 const toolDefs = [
@@ -249,48 +327,6 @@ const toolDefs = [
 let prUrl = '';
 let finalOutcome = null; // populated by signal_outcome
 const repoRoot = process.cwd();
-
-// Token usage accumulated across every LLM call in this run (#335).
-const usageTotals = { model: '', prompt: 0, completion: 0, seen: false };
-
-/** Add one API response's token counts; ignored when the provider reported none. */
-function recordUsage(model, promptTokens, completionTokens) {
-  const p = Number.isFinite(promptTokens) ? promptTokens : null;
-  const c = Number.isFinite(completionTokens) ? completionTokens : null;
-  if (p === null && c === null) return;
-  usageTotals.model = model;
-  usageTotals.prompt += p ?? 0;
-  usageTotals.completion += c ?? 0;
-  usageTotals.seen = true;
-}
-
-/** Fenced apm-msg block for signal_outcome; empty when not orchestrator-driven. */
-function buildApmBlock(outcome, summary) {
-  if (!RUN_ID) return '';
-  const msg = {
-    version: '2',
-    runId: RUN_ID,
-    step: STEP,
-    agent: 'dev-agent',
-    iteration: Number(ITERATION) || 1,
-    outcome,
-    summary: (String(summary).replace(/`/g, "'").replace(/\s+/g, ' ').trim() || outcome).slice(0, 280),
-    event_type: outcome === 'success' ? 'complete' : 'fail',
-    pipeline_id: String(ISSUE_NUMBER).padStart(3, '0'),
-    issue: String(ISSUE_NUMBER),
-    timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-  };
-  if (usageTotals.seen) {
-    msg.usage = computeUsage({
-      runtime: process.env.RUNTIME_ENDPOINT ? 'azure-openai' : (RUNTIME_NAME || RUNTIME_KIND),
-      model: usageTotals.model,
-      promptTokens: usageTotals.prompt,
-      completionTokens: usageTotals.completion,
-      pricing: loadPricing(repoRoot).pricing,
-    });
-  }
-  return '```apm-msg\n' + JSON.stringify(msg, null, 2) + '\n```';
-}
 
 async function executeTool(name, input) {
   switch (name) {
@@ -401,20 +437,16 @@ async function executeTool(name, input) {
     }
     case 'signal_outcome': {
       finalOutcome = input.outcome;
-      const apmMsg = [
-        `**[QuorumKit Orchestrator]** Developer Agent (${RUNTIME_KIND}) -- outcome: \`${input.outcome}\``,
-        '',
-        input.summary,
-        input.pr_url || prUrl ? `\nPR: ${input.pr_url || prUrl}` : '',
-        RUN_ID
-          ? `\n<!-- apm:run_id=${RUN_ID} step=${STEP} iteration=${ITERATION} runtime=${RUNTIME_NAME || RUNTIME_KIND} outcome=${input.outcome} -->`
-          : '',
-        buildApmBlock(input.outcome, input.summary),
-      ].join('\n').trim();
-      const r = await ghApi(`/repos/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}/comments`, {
-        method: 'POST', body: { body: apmMsg },
+      const finalPr = input.pr_url || prUrl;
+      const prRef = (finalPr || '').match(/\/pull\/(\d+)/);
+      // One message: footprint + apm-msg + the result marker the Orchestrator acts on.
+      const ok = await postFootprint(input.outcome === 'success' ? 'complete' : 'fail', {
+        outcome: input.outcome,
+        summary: finalPr ? `${input.summary} PR: ${finalPr}` : input.summary,
+        prNumber: prRef ? prRef[1] : null,
+        nextAction: input.outcome === 'success' ? 'QA Agent review requested' : '',
       });
-      return r.status >= 200 && r.status < 300 ? `Outcome ${input.outcome} signalled.` : `ERROR: ${r.status}`;
+      return ok ? `Outcome ${input.outcome} signalled.` : 'ERROR: could not post the outcome comment';
     }
     default:
       return `Unknown tool: ${name}`;
@@ -459,7 +491,7 @@ function detectRepoTopology() {
 function buildSystemPrompt() {
   const topology = detectRepoTopology();
   return [
-    manifests.agent        && `## Developer Agent Manifest\n${manifests.agent}`,
+    manifests.agent        && `## Developer Agent Manifest\n${stripFootprintInstructions(manifests.agent)}`,
     manifests.skill        && `## Activation Skill\n${manifests.skill}`,
     manifests.constitution && `## Project Constitution\n${manifests.constitution}`,
     `## Runtime Context`,
@@ -476,6 +508,12 @@ function buildSystemPrompt() {
     ``,
     `Branch naming: zero-pad the issue number to 3 digits (e.g. issue 78 -> "078-short-slug").`,
     `MUST NOT commit to \`main\`. MUST NOT open a PR while tests are failing.`,
+    ``,
+    `## Footprints and shell safety`,
+    `The runner posts the agent-start / agent-complete / agent-fail footprint comments for you.`,
+    `Do NOT post them yourself. Report your result only by calling \`signal_outcome\`.`,
+    `\`run_command\` runs through /bin/sh: never put backticks or \`$(...)\` in a command, they are`,
+    `executed as command substitution. To comment on the issue use the \`post_issue_comment\` tool, not \`gh issue comment\`.`,
     ``,
     `## Working strategy — minimum viable change`,
     `Always prefer the **smallest diff that resolves the issue**. Before writing any`,
@@ -546,21 +584,26 @@ async function runCopilot({ system, user }) {
   const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
   const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
   const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
-  if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
+  if (!runtimeEndpoint) {
+    // GitHub Models (models.inference.ai.azure.com) was retired on 2026-07-30: no hardcoded fallback host.
+    throw new Error('No runtime endpoint: RUNTIME_ENDPOINT must be set to a runtime declared in src/runtimes.yml.');
+  }
+  if (!isAllowedRuntimeEndpoint(runtimeEndpoint)) {
     throw new Error(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${ALLOWED_RUNTIME_ENDPOINT_HOST_SUFFIXES.join(' or ')}): ${runtimeEndpoint}`);
   }
   if (runtimeEndpoint && !getDeclaredRuntimeEndpoints().has(runtimeEndpoint)) {
     throw new Error(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
   }
-  let hostname       = 'models.inference.ai.azure.com';
-  let requestPath    = '/chat/completions';
-  let requestHeaders = { Authorization: 'Bearer ' + runtimeCredential };
-  if (runtimeEndpoint) {
-    const u = new URL(runtimeEndpoint);
-    hostname       = u.hostname;
-    requestPath    = `${u.pathname.replace(/\/$/, '')}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
-    requestHeaders = { 'api-key': runtimeCredential };
+  // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
+  // request/response shape than chat/completions (flat tool defs, `input` items,
+  // `function_call` / `function_call_output` items). Dispatch to a dedicated loop.
+  if (runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname)) {
+    return runResponses({ system, user, runtimeEndpoint, runtimeModel, runtimeApiVersion, runtimeCredential });
   }
+  const u            = new URL(runtimeEndpoint);
+  const hostname     = u.hostname;
+  const requestPath  = `${u.pathname.replace(/\/$/, '')}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
+  const requestHeaders = { 'api-key': runtimeCredential };
 
   for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
     console.log(`[runner] iteration ${i + 1} (copilot)`);
@@ -586,7 +629,7 @@ async function runCopilot({ system, user }) {
       return;
     }
     const data    = JSON.parse(res.body);
-    recordUsage(runtimeModel, data.usage?.prompt_tokens, data.usage?.completion_tokens);
+    recordUsage(runtimeModel, data);
     const message = data.choices?.[0]?.message;
     if (!message) { console.error('[runner] no message in response'); return; }
 
@@ -606,6 +649,66 @@ async function runCopilot({ system, user }) {
   }
 }
 
+// Azure AI Foundry / OpenAI "Responses" API loop (ADR-332).
+async function runResponses({ system, user, runtimeEndpoint, runtimeModel, runtimeApiVersion, runtimeCredential }) {
+  const tools = toolDefs.map(t => ({
+    type: 'function', name: t.name, description: t.description, parameters: t.schema,
+  }));
+  const u = new URL(runtimeEndpoint);
+  // The /openai/v1/ surface is versionless; do not send a dated api-version there.
+  const sendApiVersion = runtimeApiVersion && !u.pathname.startsWith('/openai/v1/');
+  const requestPath = `${u.pathname}${sendApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`;
+  let input = [{ role: 'user', content: user }];
+
+  for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
+    console.log(`[runner] iteration ${i + 1} (copilot/responses)`);
+    const body = JSON.stringify({
+      model: runtimeModel,
+      instructions: system,
+      input,
+      tools,
+      // Reasoning models spend output budget on reasoning tokens; leave headroom.
+      max_output_tokens: 16384,
+      store: false,
+    });
+    const res = await httpsRequest({
+      hostname: u.hostname,
+      path: requestPath,
+      method: 'POST',
+      headers: {
+        'api-key': runtimeCredential,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      body,
+    });
+    if (res.status !== 200) {
+      console.error(`[runner] Responses API ${res.status}: ${res.body.slice(0, 500)}`);
+      return;
+    }
+    const data   = JSON.parse(res.body);
+    recordUsage(runtimeModel, data);
+    const output = Array.isArray(data.output) ? data.output : [];
+    if (output.length === 0) { console.error('[runner] no output in response'); return; }
+
+    // Replay the full output (including reasoning items) so the model keeps its context.
+    input = input.concat(output);
+
+    const calls = output.filter(item => item.type === 'function_call');
+    if (calls.length === 0) {
+      console.log('[runner] no tool calls; finishing');
+      return;
+    }
+    for (const call of calls) {
+      const args = (() => { try { return JSON.parse(call.arguments); } catch { return {}; } })();
+      console.log(`[runner] tool ${call.name}: ${JSON.stringify(args).slice(0, 160)}`);
+      const result = await executeTool(call.name, args);
+      console.log(`[runner]   result: ${String(result).slice(0, 200)}`);
+      input.push({ type: 'function_call_output', call_id: call.call_id, output: String(result).slice(0, 8000) });
+    }
+  }
+}
+
 async function runClaude({ system, user }) {
   const tools = toolDefs.map(t => ({ name: t.name, description: t.description, input_schema: t.schema }));
   let messages = [{ role: 'user', content: user }];
@@ -613,7 +716,7 @@ async function runClaude({ system, user }) {
   for (let i = 0; i < MAX_ITERATIONS && finalOutcome === null; i++) {
     console.log(`[runner] iteration ${i + 1} (claude)`);
     const body = JSON.stringify({
-      model: 'claude-opus-4-5',
+      model: CLAUDE_MODEL,
       max_tokens: 4096,
       system,
       tools,
@@ -636,7 +739,13 @@ async function runClaude({ system, user }) {
       return;
     }
     const data = JSON.parse(res.body);
-    recordUsage('claude-opus-4-5', data.usage?.input_tokens, data.usage?.output_tokens);
+    // Cache reads/writes are billed prompt tokens too; count them so cost is not understated.
+    recordUsage(CLAUDE_MODEL, data.usage && {
+      usage: {
+        input_tokens: (data.usage.input_tokens ?? 0) + (data.usage.cache_read_input_tokens ?? 0) + (data.usage.cache_creation_input_tokens ?? 0),
+        output_tokens: data.usage.output_tokens,
+      },
+    });
     messages.push({ role: 'assistant', content: data.content });
 
     if (data.stop_reason === 'end_turn') { console.log('[runner] end_turn'); return; }
@@ -661,6 +770,8 @@ if (require.main === module) {
     exec('git config user.name  "github-actions[bot]"');
     exec('git config user.email "github-actions[bot]@users.noreply.github.com"');
 
+    await postFootprint('start');
+
     const system = buildSystemPrompt();
     const user   = await buildUserMessage();
 
@@ -681,11 +792,16 @@ if (require.main === module) {
 
     console.log(`[runner] final outcome: ${finalOutcome}`);
     process.exitCode = finalOutcome === 'success' ? 0 : 1;
-  })().catch(err => {
+  })().catch(async err => {
     console.error('[runner] FATAL:', err && err.stack || err);
+    // Crashed before signalling: leave a visible stamp (no result marker, so the orchestrator
+    // treats the finished run as a crash and ends it with runtime-error).
+    if (finalOutcome === null) {
+      await postFootprint('fail', { outcome: 'fail', marker: false, summary: `Runner crashed: ${(err && err.message) || err}` });
+    }
     process.exit(1);
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs, recordUsage, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
+  module.exports = { executeTool, toolDefs, recordUsage, currentUsage, buildFootprint, stripFootprintInstructions, buildSystemPrompt, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
 }

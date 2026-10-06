@@ -26,7 +26,15 @@ export async function loadPricing(rootDir = process.cwd()) {
     if (!parsed || typeof parsed !== 'object' || typeof parsed.pricing !== 'object' || parsed.pricing === null) {
       return { pricing: {} };
     }
-    return { pricing: parsed.pricing };
+    // Keep only entries with two finite rates, as the CJS loader does, so a partial entry
+    // is "unknown model" (null cost) rather than NaN.
+    const pricing = {};
+    for (const [model, entry] of Object.entries(parsed.pricing)) {
+      if (entry && Number.isFinite(entry.prompt_per_1k_usd) && Number.isFinite(entry.completion_per_1k_usd)) {
+        pricing[model] = entry;
+      }
+    }
+    return { pricing };
   } catch {
     // Missing file, unreadable, or malformed YAML — degrade gracefully.
     return { pricing: {} };
@@ -46,7 +54,8 @@ export async function loadPricing(rootDir = process.cwd()) {
  */
 export function computeUsage({ runtime, model, promptTokens, completionTokens, pricing }) {
   const entry = pricing?.[model];
-  const estimated_cost_usd = entry
+  const priced = entry && Number.isFinite(entry.prompt_per_1k_usd) && Number.isFinite(entry.completion_per_1k_usd);
+  const estimated_cost_usd = priced
     ? (promptTokens / 1000) * entry.prompt_per_1k_usd + (completionTokens / 1000) * entry.completion_per_1k_usd
     : null;
 

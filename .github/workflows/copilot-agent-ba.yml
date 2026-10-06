@@ -1,4 +1,7 @@
 name: BA / Product Agent (Copilot)
+# Issue number in the run title lets the Orchestrator map a finished run (workflow_run carries no inputs)
+# back to its issue (#378). The engine parses the trailing `#<n>`.
+run-name: "BA / Product Agent (Copilot) #${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number }}"
 
 on:
   workflow_dispatch:
@@ -22,6 +25,22 @@ on:
       issue_number:
         description: 'Issue or PR number triggering this agent'
         required: true
+      run_id:
+        description: 'Orchestrator run ID (traceability; echoed in the result marker)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'ba'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -37,24 +56,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run BA / Product Agent via GitHub Models
-        id: llm
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
+          # Only set when a dispatch explicitly selects the Azure key. Otherwise leave empty so the script
+          # resolves the credential from the runtime's credential_ref in src/runtimes.yml.
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || '' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/ba-product-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/ba-product-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');
+            await report.start({ issueNumber });
 
             let issueTitle = '';
             let issueBody  = '';
@@ -76,24 +102,52 @@ jobs:
             ].filter(Boolean).join('\n\n---\n\n')
               || 'You are a helpful GitHub BA/product agent.';
 
-            const userContent =
+            const userContent = report.withOutcome(
               `You are acting as the BA / Product Agent for issue #${issueNumber}.\n` +
               `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
               `Analyse requirements, identify acceptance criteria, flag any ambiguities, ` +
-              `and post a structured requirements summary as a comment.`;
+              `and post a structured requirements summary as a comment.`);
 
-            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
-            // Foundry deployment when the Orchestrator's azure-openai runtime
-            // adapter supplied these inputs; otherwise fall back to the
-            // existing GitHub Models default (byte-for-byte unchanged).
-            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
-            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
-            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
-            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // ADR-332: resolve the runtime from src/runtimes.yml (default_runtime) unless a
+            // dispatch supplied explicit inputs. GitHub Models (models.inference.ai.azure.com)
+            // was retired on 2026-07-30 and no longer resolves, so there is NO hardcoded
+            // fallback host: a missing or unreachable runtime fails loudly (ADR-332 section 5).
+            const runtimesYaml = readSafe('src/runtimes.yml');
+            const defaultRuntimeName = runtimesYaml.match(/^default_runtime:\s*(\S+)/m)?.[1] || '';
+            const parseRuntime = (yaml, name) => {
+              if (!name) return null;
+              const head = new RegExp(`^\\s*${name}:\\s*$`, 'm').exec(yaml);
+              if (!head) return null;
+              const rest = yaml.slice(head.index + head[0].length);
+              const end = rest.match(/^\s*\w[\w-]*:\s*$/m);
+              const block = end ? rest.slice(0, end.index) : rest;
+              return {
+                endpoint: block.match(/^\s+endpoint:\s*(\S+)/m)?.[1] || '',
+                model: block.match(/^\s+model:\s*(\S+)/m)?.[1] || 'gpt-4o',
+                credentialRef: block.match(/^\s+credential_ref:\s*(\S+)/m)?.[1] || 'GITHUB_TOKEN',
+                apiVersion: block.match(/api_version:\s*["']([^"']+)["']/)?.[1] || '',
+              };
+            };
+            const defaultRuntime = parseRuntime(runtimesYaml, defaultRuntimeName);
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || defaultRuntime?.endpoint || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || defaultRuntime?.model || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || defaultRuntime?.apiVersion || '';
+            const runtimeCredentialRef = defaultRuntime?.credentialRef || 'GITHUB_TOKEN';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL ||
+              (runtimeCredentialRef === 'AZURE_OPENAI_API_KEY' ? process.env.AZURE_OPENAI_API_KEY : process.env.GITHUB_TOKEN);
+            console.log(`Using runtime: ${defaultRuntimeName || '(none)'}; endpoint: ${runtimeEndpoint || '(none)'}; model: ${runtimeModel}; credential: ${runtimeCredentialRef}`);
+            if (!runtimeEndpoint) {
+              report.abort('No runtime endpoint: set default_runtime in src/runtimes.yml or dispatch with runtime_endpoint.');
+              return;
+            }
+            if (!runtimeCredential) {
+              report.abort(`Runtime credential ${runtimeCredentialRef} is not available to this workflow.`);
+              return;
+            }
             // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
             // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
             // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
-            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com', '.services.ai.azure.com'];
             const isAllowedRuntimeEndpoint = raw => {
               try {
                 const u = new URL(raw);
@@ -101,7 +155,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -114,15 +168,20 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
-            const requestUrl = runtimeEndpoint
-              ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
-              : 'https://models.inference.ai.azure.com/chat/completions';
-            const authHeaders = runtimeEndpoint
-              ? { 'api-key': runtimeCredential }
-              : { 'Authorization': `Bearer ${runtimeCredential}` };
+            // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
+            // request/response shape than chat/completions; the legacy deployment-style
+            // endpoints and the GitHub Models default keep using chat/completions.
+            const useResponsesApi = !!runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname);
+            // The /openai/v1/ surface is versionless; do not send a dated api-version there.
+            const sendApiVersion = runtimeApiVersion && !/\/openai\/v1\//.test(runtimeEndpoint);
+            const apiVersionQuery = sendApiVersion ? `?api-version=${runtimeApiVersion}` : '';
+            const requestUrl = useResponsesApi
+              ? `${runtimeEndpoint}${apiVersionQuery}`
+              : `${runtimeEndpoint}/chat/completions${apiVersionQuery}`;
+            const authHeaders = { 'api-key': runtimeCredential };
 
             const res = await fetch(requestUrl, {
               method: 'POST',
@@ -130,59 +189,64 @@ jobs:
                 ...authHeaders,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                model: runtimeModel,
-                messages: [
-                  { role: 'system', content: systemContent },
-                  { role: 'user',   content: userContent },
-                ],
-                max_tokens: 2048,
-              }),
+              body: JSON.stringify(useResponsesApi
+                ? {
+                    model: runtimeModel,
+                    instructions: systemContent,
+                    input: userContent,
+                    // Reasoning models spend output budget on reasoning tokens, so leave headroom.
+                    max_output_tokens: 8192,
+                  }
+                : {
+                    model: runtimeModel,
+                    messages: [
+                      { role: 'system', content: systemContent },
+                      { role: 'user',   content: userContent },
+                    ],
+                    max_tokens: 2048,
+                  }),
             });
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
-            const data  = await res.json();
-            const reply = data.choices?.[0]?.message?.content?.trim()
-              ?? '⚠️ BA agent produced no output.';
+            const extractText = d => (useResponsesApi
+              ? (d.output_text ?? (d.output ?? [])
+                  .filter(item => item.type === 'message')
+                  .flatMap(item => item.content ?? [])
+                  .filter(c => c.type === 'output_text')
+                  .map(c => c.text)
+                  .join(''))
+              : d.choices?.[0]?.message?.content
+            )?.trim() || undefined;
 
-            // Token usage + estimated cost for the audit trail (#335). Never fails the run.
-            if (Number.isFinite(data.usage?.prompt_tokens) || Number.isFinite(data.usage?.completion_tokens)) {
-              try {
-                const { loadPricing, computeUsage } = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`);
-                core.setOutput('usage', JSON.stringify(computeUsage({
-                  runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
-                  model: runtimeModel,
-                  promptTokens: data.usage.prompt_tokens ?? 0,
-                  completionTokens: data.usage.completion_tokens ?? 0,
-                  pricing: loadPricing().pricing,
-                })));
-              } catch (e) {
-                core.warning(`Usage capture skipped: ${e.message}`);
-              }
+            const data  = await res.json();
+            // Token usage + estimated cost for the audit trail (#335); never fails the run.
+            report.recordUsage({ response: data, model: runtimeModel, runtime: defaultRuntimeName || 'azure-openai' });
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('BA agent produced no output.');
+              return;
             }
 
-            await github.rest.issues.createComment({
-              owner:        context.repo.owner,
-              repo:         context.repo.repo,
-              issue_number: issueNumber,
-              body:         reply,
-            });
+            await report.reply({ issueNumber, reply });
 
       - name: Push spec branch and open PR
+        id: publish
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LLM_USAGE: ${{ steps.llm.outputs.usage }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { execSync, spawnSync } = require('child_process');
             const fs = require('fs');
+
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba', github, context, core });
 
             const issueNumber = Number('${{ github.event.inputs.issue_number }}');
             const owner = context.repo.owner;
@@ -199,6 +263,7 @@ jobs:
             }
             if (!specDir) {
               core.warning(`No specs/${nnn}-* directory found; skipping branch/PR step.`);
+              report.verdict({ outcome: 'spec_gap', summary: `No specs/${nnn}-* directory exists, so no spec was published for #${issueNumber}.` });
               return;
             }
             const branchName = specDir;
@@ -206,6 +271,7 @@ jobs:
 
             if (!fs.existsSync(specPath)) {
               core.warning(`${specPath} not found; skipping branch/PR step.`);
+              report.verdict({ outcome: 'spec_gap', summary: `${specPath} was not found, so no spec was published for #${issueNumber}.` });
               return;
             }
 
@@ -224,7 +290,7 @@ jobs:
                 owner, repo, issue_number: issueNumber,
                 body: `**BA Agent — Publish Error**\n\nAborting: the working tree has uncommitted changes to files outside the expected spec paths:\n\n${fileList}\n\nPlease resolve these before re-running the BA agent.`,
               });
-              core.setFailed('Dirty working tree — aborting spec publish.');
+              report.abort('Dirty working tree — aborting spec publish.');
               return;
             }
 
@@ -239,14 +305,14 @@ jobs:
                 // Branch already exists — check it out without resetting (FR-003)
                 const coResult = spawnSync('git', ['checkout', branchName], { encoding: 'utf8' });
                 if (coResult.status !== 0) {
-                  core.setFailed(`Failed to checkout branch ${branchName}: ${coResult.stderr}`);
+                  report.abort(`Failed to checkout branch ${branchName}: ${coResult.stderr}`);
                   return;
                 }
               } else {
                 // Branch is new — create from HEAD
                 const coResult = spawnSync('git', ['checkout', '-b', branchName], { encoding: 'utf8' });
                 if (coResult.status !== 0) {
-                  core.setFailed(`Failed to create branch ${branchName}: ${coResult.stderr}`);
+                  report.abort(`Failed to create branch ${branchName}: ${coResult.stderr}`);
                   return;
                 }
               }
@@ -294,10 +360,10 @@ jobs:
                     owner, repo, issue_number: issueNumber,
                     body: `**BA Agent — Permission Error**\n\nFailed to push branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`contents: write\` scope. Please grant this permission in the workflow file and re-run.`,
                   });
-                  core.setFailed('Missing contents: write permission.');
+                  report.abort('Missing contents: write permission.');
                   return;
                 }
-                core.setFailed(`git push failed: ${pushStderr}`);
+                report.abort(`git push failed: ${pushStderr}`);
                 return;
               }
             }
@@ -351,26 +417,13 @@ jobs:
                   owner, repo, issue_number: issueNumber,
                   body: `**BA Agent — Permission Error**\n\nFailed to create/update PR for branch \`${branchName}\`. The \`GITHUB_TOKEN\` is missing the \`pull-requests: write\` scope. Please grant this permission in the workflow file and re-run.`,
                 });
-                core.setFailed('Missing pull-requests: write permission.');
+                report.abort('Missing pull-requests: write permission.');
                 return;
               }
               throw e;
             }
 
-            // ── 12. Post PR URL + apm-msg on originating issue ────────────────
-            const apmPayload = {
-              version: '2',
-              step: 'ba',
-              agent: 'ba-agent',
-              outcome: 'spec-ready',
-              summary: `Spec published for #${issueNumber}. PR: ${prUrl}`,
-              payload: { specPath, branch: branchName, prUrl },
-            };
-            let usage = null;
-            try { usage = process.env.LLM_USAGE ? JSON.parse(process.env.LLM_USAGE) : null; } catch { /* ignore malformed usage */ }
-            if (usage) apmPayload.usage = usage;
-            const apmMsg = JSON.stringify(apmPayload, null, 2);
-
+            // ── 12. Post PR URL on the originating issue; the footprint (with the real apm-msg) follows ──
             await github.rest.issues.createComment({
               owner, repo, issue_number: issueNumber,
               body: [
@@ -379,9 +432,33 @@ jobs:
                 `Spec for issue #${issueNumber} has been committed to branch \`${branchName}\` and a PR is ready for review.`,
                 '',
                 `**PR:** ${prUrl}`,
-                '',
-                '```apm-msg',
-                apmMsg,
-                '```',
               ].join('\n'),
             });
+
+            report.verdict({
+              outcome: 'success',
+              summary: `Spec published for #${issueNumber}. PR: ${prUrl}`,
+              pr: (prUrl.match(/\/pull\/(\d+)/) ?? [])[1] ?? '',
+              branch: branchName,
+              payload: { specPath, branch: branchName, prUrl },
+            });
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.publish.outputs.outcome || steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.publish.outputs.summary || steps.agent.outputs.summary }}
+          ERROR: ${{ steps.publish.outputs.error || steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.publish.outputs.pr || steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.publish.outputs.branch || steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.publish.outputs.payload || steps.agent.outputs.payload }}
+          USAGE: ${{ steps.agent.outputs.usage }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'ba', github, context, core });
+            await report.conclude({ env: process.env });

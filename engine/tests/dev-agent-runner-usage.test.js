@@ -1,5 +1,5 @@
 /**
- * dev-agent-runner.cjs — usage capture in the signal_outcome apm-msg block.
+ * dev-agent-runner.cjs — usage capture in the signal_outcome footprint (single reporter, agent-report.cjs).
  * Issue #335, ADR-335 — FR-001, FR-002, FR-003, FR-005, FR-015.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -65,11 +65,13 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('signal_outcome apm-msg block with usage', () => {
-  it('includes a schema-valid usage object with estimated cost when usage was recorded', async () => {
+const chat = (p, c) => ({ usage: { prompt_tokens: p, completion_tokens: c } });
+
+describe('signal_outcome footprint with usage', () => {
+  it('adds a schema-valid usage object with estimated cost, summed over every LLM call', async () => {
     const runner = loadRunner();
-    runner.recordUsage('gpt-4o', 1000, 500);
-    runner.recordUsage('gpt-4o', 1000, 500);
+    runner.recordUsage('gpt-4o', chat(1000, 500));
+    runner.recordUsage('gpt-4o', chat(1000, 500));
     await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
 
     const parsed = parseApmMsg(commentBody());
@@ -83,22 +85,27 @@ describe('signal_outcome apm-msg block with usage', () => {
     });
   });
 
-  it('reports the azure-openai runtime when routed to an Azure endpoint (FR-002)', async () => {
-    const runner = loadRunner({ RUNTIME_ENDPOINT: 'https://acme.openai.azure.com/openai/deployments/gpt-4o', RUNTIME_MODEL: 'gpt-4o' });
-    runner.recordUsage('gpt-4o', 1000, 500);
+  it('keeps the result marker the Orchestrator acts on next to the usage-bearing block', async () => {
+    const runner = loadRunner();
+    runner.recordUsage('gpt-4o', chat(1, 1));
     await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
-    const parsed = parseApmMsg(commentBody());
-    expect(parsed.ok).toBe(true);
-    expect(parsed.message.usage).toEqual({
-      runtime: 'azure-openai', model: 'gpt-4o',
+    expect(commentBody()).toContain('<!-- apm:run_id=run-1 step=dev iteration=2 runtime=copilot-default outcome=success -->');
+  });
+
+  it('reads the Responses API shape (input_tokens / output_tokens)', async () => {
+    const runner = loadRunner({ RUNTIME_NAME: 'azure-foundry-standard', RUNTIME_KIND: 'copilot' });
+    runner.recordUsage('gpt-4o', { usage: { input_tokens: 1000, output_tokens: 500 } });
+    await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
+    expect(parseApmMsg(commentBody()).message.usage).toEqual({
+      runtime: 'azure-foundry-standard', model: 'gpt-4o',
       prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500,
       estimated_cost_usd: 0.0075,
     });
   });
 
-  it('reports estimated_cost_usd: null when the model has no pricing entry', async () => {
+  it('reports estimated_cost_usd: null when the model has no pricing entry (FR-008)', async () => {
     const runner = loadRunner();
-    runner.recordUsage('mystery-model', 10, 5);
+    runner.recordUsage('mystery-model', chat(10, 5));
     await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
     const parsed = parseApmMsg(commentBody());
     expect(parsed.ok).toBe(true);
@@ -108,18 +115,33 @@ describe('signal_outcome apm-msg block with usage', () => {
 
   it('omits usage entirely when no API response reported any (FR-005)', async () => {
     const runner = loadRunner();
-    runner.recordUsage('gpt-4o', undefined, undefined);
+    for (const r of [undefined, null, {}, { usage: null }, { usage: {} }, { usage: { prompt_tokens: 'x' } }]) {
+      runner.recordUsage('gpt-4o', r);
+    }
     await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
     const parsed = parseApmMsg(commentBody());
     expect(parsed.ok).toBe(true);
     expect(parsed.message.usage).toBeUndefined();
   });
 
-  it('posts no apm-msg block when RUN_ID is unset (not orchestrator-driven)', async () => {
-    const runner = loadRunner({ RUN_ID: undefined });
-    runner.recordUsage('gpt-4o', 1, 1);
+  it('also reports usage on a failing outcome', async () => {
+    const runner = loadRunner();
+    runner.recordUsage('gpt-4o', chat(3, 4));
+    await runner.executeTool('signal_outcome', { outcome: 'blocker', summary: 'Stuck.' });
+    const parsed = parseApmMsg(commentBody());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.message.usage.total_tokens).toBe(7);
+  });
+
+  it('counts Anthropic cache tokens as prompt tokens and never includes content (FR-015)', async () => {
+    const runner = loadRunner({ RUNTIME_KIND: 'claude' });
+    runner.recordUsage('claude-opus-4-5', { usage: { input_tokens: 3, output_tokens: 4 }, content: 'SECRET' });
     await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
-    expect(commentBody()).not.toContain('```apm-msg');
+    const body = commentBody();
+    expect(body).not.toContain('SECRET');
+    const { usage } = parseApmMsg(body).message;
+    expect(Object.keys(usage).sort()).toEqual(
+      ['completion_tokens', 'estimated_cost_usd', 'model', 'prompt_tokens', 'runtime', 'total_tokens']);
   });
 
   it('keeps the block schema-valid for long summaries containing backticks', async () => {
@@ -128,14 +150,5 @@ describe('signal_outcome apm-msg block with usage', () => {
     const parsed = parseApmMsg(commentBody());
     expect(parsed.ok).toBe(true);
     expect(parsed.message.summary.length).toBeLessThanOrEqual(280);
-  });
-
-  it('records Claude-style usage via recordUsage and never includes prompt content (FR-015)', async () => {
-    const runner = loadRunner({ RUNTIME_KIND: 'claude' });
-    runner.recordUsage('claude-opus-4-5', 3, 4);
-    await runner.executeTool('signal_outcome', { outcome: 'success', summary: 'Done.' });
-    const { usage } = parseApmMsg(commentBody()).message;
-    expect(Object.keys(usage).sort()).toEqual(
-      ['completion_tokens', 'estimated_cost_usd', 'model', 'prompt_tokens', 'runtime', 'total_tokens']);
   });
 });

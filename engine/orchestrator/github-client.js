@@ -98,6 +98,69 @@ export function createGitHubClient(token) {
   }
 
   /**
+   * Remove one label from an issue/PR. A label that is not on the issue (404) is
+   * not an error: callers use this to converge on "label absent".
+   */
+  async function removeLabel(owner, repo, issueNumber, name) {
+    try {
+      await withRetry(() =>
+        octokit.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name })
+      );
+    } catch (err) {
+      if (err.status !== 404) throw err;
+    }
+  }
+
+  /**
+   * List open issues and PRs carrying a label (used by the scheduled reconciler to
+   * find runs that are awaiting an agent). Paginates through every page.
+   * @returns {Array<{number: number, labels: Array}>}
+   */
+  async function listIssuesByLabel(owner, repo, label) {
+    const issues = [];
+    let page = 1;
+    while (true) {
+      const { data } = await withRetry(() =>
+        octokit.rest.issues.listForRepo({
+          owner, repo, labels: label, state: 'open', per_page: 100, page,
+        })
+      );
+      issues.push(...data);
+      if (data.length < 100) break;
+      page++;
+    }
+    return issues;
+  }
+
+  /**
+   * List runs of one workflow file, newest first. `created` is a GitHub search
+   * qualifier such as `>=2026-10-06T07:49:50Z`.
+   * @returns {Array<{id, status, conclusion, display_title, created_at, html_url}>}
+   */
+  async function listWorkflowRuns(owner, repo, workflow, { created, event } = {}) {
+    const { data } = await withRetry(() =>
+      octokit.rest.actions.listWorkflowRuns({
+        owner, repo, workflow_id: workflow, per_page: 100,
+        ...(created ? { created } : {}),
+        ...(event ? { event } : {}),
+      })
+    );
+    return data.workflow_runs ?? [];
+  }
+
+  /**
+   * Fetch a single issue (used to recover labels for workflow_dispatch events,
+   * which carry no issue payload).
+   * @returns {{number: number, labels: Array<string|{name: string}>, pull_request?: object}}
+   */
+  async function getIssue(owner, repo, issueNumber) {
+    const { data } = await withRetry(() =>
+      octokit.rest.issues.get({ owner, repo, issue_number: issueNumber })
+    );
+    return data;
+  }
+
+  /**
    * Trigger a repository workflow_dispatch event.
    */
   async function triggerWorkflow(owner, repo, workflow, ref, inputs = {}) {
@@ -117,7 +180,10 @@ export function createGitHubClient(token) {
     return data.permission;
   }
 
-  return { listComments, createComment, updateComment, addLabels, triggerWorkflow, getCollaboratorPermission };
+  return {
+    listComments, createComment, updateComment, addLabels, removeLabel,
+    listIssuesByLabel, listWorkflowRuns, getIssue, triggerWorkflow, getCollaboratorPermission,
+  };
 }
 
 function sleep(ms) {

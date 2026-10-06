@@ -24,12 +24,29 @@ on:
       issue_number:
         description: 'Issue number to triage (manual re-triage)'
         required: true
+      run_id:
+        description: 'Orchestrator run ID (traceability; echoed in the result marker)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'triage'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
   issues: write
   pull-requests: read
   models: read
+  actions: write   # dispatch the BA enrichment workflow after labelling (see end of script)
 
 jobs:
   triage:
@@ -39,20 +56,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run Triage Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
+          # Only set when a dispatch explicitly selects the Azure key. Otherwise leave empty so the script
+          # resolves the credential from the runtime's credential_ref in src/runtimes.yml (falling back to
+          # GITHUB_TOKEN). A non-empty GITHUB_TOKEN here would always win and break issues-event runs.
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || '' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/triage-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'triage', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/triage-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber = context.eventName === 'workflow_dispatch'
@@ -64,6 +89,8 @@ jobs:
             const issueTitle  = issueData.title  ?? '';
             const issueBody   = issueData.body   ?? '';
             const issueAuthor = issueData.user?.login ?? '';
+
+            await report.start({ issueNumber });
 
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
@@ -87,18 +114,59 @@ jobs:
               `  Always include exactly one type:* label and exactly one priority:* label.\n` +
               `  Do NOT include "triaged" — it is applied separately.`;
 
-            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
-            // Foundry deployment when the Orchestrator's azure-openai runtime
-            // adapter supplied these inputs; otherwise fall back to the
-            // existing GitHub Models default (byte-for-byte unchanged).
-            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
-            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
-            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
-            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // ADR-332: Load default runtime from src/runtimes.yml when inputs are empty
+            // (webhook trigger). Manual workflow_dispatch can override these.
+            const runtimesYaml = readSafe('src/runtimes.yml');
+
+            // Parse default_runtime from YAML
+            const defaultRuntimeMatch = runtimesYaml.match(/^default_runtime:\s*(\S+)/m);
+            const defaultRuntimeName = defaultRuntimeMatch?.[1] || 'copilot-default';
+
+            // Parse the runtime configuration block
+            const parseRuntime = (yaml, name) => {
+              const runtimeBlockMatch = new RegExp(`^\\s*${name}:\\s*$`, 'm').exec(yaml);
+              if (!runtimeBlockMatch) return null;
+
+              const startIdx = runtimeBlockMatch.index + runtimeBlockMatch[0].length;
+              const remainingYaml = yaml.slice(startIdx);
+
+              // Extract key-value pairs until we hit another runtime definition
+              const endMatch = remainingYaml.match(/^\s*\w+:\s*$/m);
+              const block = endMatch ? remainingYaml.slice(0, endMatch.index) : remainingYaml;
+
+              const endpoint = block.match(/^\s+endpoint:\s*(\S+)/m)?.[1] || '';
+              const model = block.match(/^\s+model:\s*(\S+)/m)?.[1] || 'gpt-4o';
+              const credentialRef = block.match(/^\s+credential_ref:\s*(\S+)/m)?.[1] || 'GITHUB_TOKEN';
+              const apiVersionMatch = block.match(/api_version:\s*["']([^"']+)["']/);
+              const apiVersion = apiVersionMatch?.[1] || '';
+
+              return { endpoint, model, credentialRef, apiVersion };
+            };
+
+            const defaultRuntime = parseRuntime(runtimesYaml, defaultRuntimeName);
+
+            // Use workflow inputs if provided, otherwise use defaults from runtimes.yml
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || defaultRuntime?.endpoint || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || defaultRuntime?.model || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || defaultRuntime?.apiVersion || '';
+            const runtimeCredentialRef = defaultRuntime?.credentialRef || 'GITHUB_TOKEN';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || 
+              (runtimeCredentialRef === 'AZURE_OPENAI_API_KEY' ? process.env.AZURE_OPENAI_API_KEY : process.env.GITHUB_TOKEN) ||
+              process.env.GITHUB_TOKEN;
+
+            console.log(`Using runtime: ${defaultRuntimeName}`);
+            console.log(`Endpoint: ${runtimeEndpoint || '(GitHub Models default)'}`);
+            console.log(`Model: ${runtimeModel}`);
+            console.log(`Credential: ${runtimeCredentialRef}`);
+            if (!runtimeEndpoint) {
+              // GitHub Models (models.inference.ai.azure.com) was retired on 2026-07-30: no hardcoded fallback host.
+              report.abort('No runtime endpoint: set default_runtime in src/runtimes.yml or dispatch with runtime_endpoint.');
+              return;
+            }
             // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
             // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
             // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
-            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com', '.services.ai.azure.com'];
             const isAllowedRuntimeEndpoint = raw => {
               try {
                 const u = new URL(raw);
@@ -106,7 +174,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -119,15 +187,20 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
-            const requestUrl = runtimeEndpoint
-              ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
-              : 'https://models.inference.ai.azure.com/chat/completions';
-            const authHeaders = runtimeEndpoint
-              ? { 'api-key': runtimeCredential }
-              : { 'Authorization': `Bearer ${runtimeCredential}` };
+            // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
+            // request/response shape than chat/completions; the legacy deployment-style
+            // endpoints and the GitHub Models default keep using chat/completions.
+            const useResponsesApi = !!runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname);
+            // The /openai/v1/ surface is versionless; do not send a dated api-version there.
+            const sendApiVersion = runtimeApiVersion && !/\/openai\/v1\//.test(runtimeEndpoint);
+            const apiVersionQuery = sendApiVersion ? `?api-version=${runtimeApiVersion}` : '';
+            const requestUrl = useResponsesApi
+              ? `${runtimeEndpoint}${apiVersionQuery}`
+              : `${runtimeEndpoint}/chat/completions${apiVersionQuery}`;
+            const authHeaders = { 'api-key': runtimeCredential };
 
             const res = await fetch(requestUrl, {
               method: 'POST',
@@ -135,31 +208,53 @@ jobs:
                 ...authHeaders,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                model: runtimeModel,
-                messages: [
-                  { role: 'system', content: systemContent },
-                  { role: 'user',   content: userContent },
-                ],
-                max_tokens: 2048,
-                response_format: { type: 'json_object' },
-              }),
+              body: JSON.stringify(useResponsesApi
+                ? {
+                    model: runtimeModel,
+                    instructions: systemContent,
+                    input: userContent,
+                    // Reasoning models spend output budget on reasoning tokens, so leave headroom.
+                    max_output_tokens: 8192,
+                    text: { format: { type: 'json_object' } },
+                  }
+                : {
+                    model: runtimeModel,
+                    messages: [
+                      { role: 'system', content: systemContent },
+                      { role: 'user',   content: userContent },
+                    ],
+                    max_tokens: 2048,
+                    response_format: { type: 'json_object' },
+                  }),
             });
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
-            const data = await res.json();
-            const rawContent = data.choices?.[0]?.message?.content?.trim() ?? '{}';
+            const extractText = d => (useResponsesApi
+              ? (d.output_text ?? (d.output ?? [])
+                  .filter(item => item.type === 'message')
+                  .flatMap(item => item.content ?? [])
+                  .filter(c => c.type === 'output_text')
+                  .map(c => c.text)
+                  .join(''))
+              : d.choices?.[0]?.message?.content
+            )?.trim() || undefined;
 
-            let reply = '⚠️ Triage agent produced no output.';
+            const data = await res.json();
+            // Token usage + estimated cost for the audit trail (#335); never fails the run.
+            report.recordUsage({ response: data, model: runtimeModel, runtime: defaultRuntimeName || 'azure-openai' });
+            const rawContent = extractText(data) ?? '{}';
+
+            const NO_OUTPUT = '⚠️ Triage agent produced no output.';
+            let reply = NO_OUTPUT;
             let labelsToApply = [];
             try {
               const parsed = JSON.parse(rawContent);
-              reply = parsed.comment?.trim() || reply;
+              reply = report.sanitize(parsed.comment?.trim()) || reply;
               // Only allow labels that match known prefixes — guards against prompt injection
               const ALLOWED_PREFIXES = ['type:', 'priority:', 'status:', 'agent:'];
               labelsToApply = (parsed.labels ?? []).filter(
@@ -167,24 +262,19 @@ jobs:
               );
             } catch (parseErr) {
               console.warn('Triage agent response was not valid JSON — falling back to raw text:', parseErr.message);
-              reply = rawContent || reply;
+              reply = report.sanitize(rawContent) || reply;
             }
-
-            // LLM usage for the audit trail (#335); never fails the run.
-            let usageBlock = '';
-            try {
-              usageBlock = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`).usageApmBlock({
-                response: data, model: runtimeModel, agent: 'triage-agent', issueNumber,
-                runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
-              });
-            } catch (e) { core.warning(`Usage capture skipped: ${e.message}`); }
 
             await github.rest.issues.createComment({
               owner:        context.repo.owner,
               repo:         context.repo.repo,
               issue_number: issueNumber,
-              body:         reply + usageBlock,
+              body:         reply,
             });
+
+            report.verdict(reply === NO_OUTPUT
+              ? { outcome: 'needs-human', summary: 'Triage produced no output; a human must triage this issue.' }
+              : { outcome: 'success', summary: `Triaged #${issueNumber}: ${labelsToApply.join(', ') || 'no labels'}` });
 
             // Ensure all required labels exist before applying them
             const labelDefs = {
@@ -257,3 +347,65 @@ jobs:
               issue_number: issueNumber,
               labels:       ['triaged'],
             });
+
+            // Labels applied with GITHUB_TOKEN never emit `issues.labeled` workflow runs (GitHub
+            // suppresses events caused by GITHUB_TOKEN to prevent loops), and the Orchestrator also
+            // ignores bot-sent events. So the `ba-enrichment-pipeline` rule (triaged + agent:ba)
+            // can never fire from here. Dispatch the enrichment workflow directly instead —
+            // workflow_dispatch is the one event GITHUB_TOKEN is allowed to trigger. The enrichment
+            // agent is idempotent (it skips issues whose four sections are already populated), so
+            // a later Orchestrator-driven dispatch from a human-applied label is harmless.
+            if (labelsToApply.includes('agent:ba')) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  workflow_id: 'copilot-agent-ba-enrich.yml',
+                  ref:         context.payload.repository?.default_branch ?? 'main',
+                  inputs:      { issue_number: String(issueNumber) },
+                });
+                console.log(`Dispatched copilot-agent-ba-enrich.yml for issue #${issueNumber}`);
+              } catch (e) {
+                report.abort(`Could not dispatch BA enrichment for #${issueNumber}: ${e.message}`);
+              }
+            } else {
+              // Same GITHUB_TOKEN limitation applies to every other pipeline trigger
+              // (`triaged` + `type:bug|feature|release`): no `issues.labeled` run is ever emitted.
+              // Hand the issue to the Orchestrator via workflow_dispatch; the engine re-reads the
+              // issue's labels and routes it like a human-applied label. Issues with no matching
+              // pipeline (e.g. type:docs) log `no-rule-match` and nothing else happens. `agent:ba`
+              // is excluded above: the enrichment dispatch already covers it, and
+              // ba-enrichment-pipeline would otherwise route the same issue a second time.
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  workflow_id: 'orchestrator.yml',
+                  ref:         context.payload.repository?.default_branch ?? 'main',
+                  inputs:      { issue_number: String(issueNumber) },
+                });
+                console.log(`Dispatched orchestrator.yml for issue #${issueNumber}`);
+              } catch (e) {
+                report.abort(`Could not dispatch the Orchestrator for #${issueNumber}: ${e.message}`);
+              }
+            }
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || github.event.issue.number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+          USAGE: ${{ steps.agent.outputs.usage }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'triage', github, context, core });
+            await report.conclude({ env: process.env });

@@ -44,7 +44,11 @@ export function validateRegistry(parsed) {
   if (!parsed || typeof parsed !== 'object') {
     return [{ code: 'SCHEMA_INVALID', message: 'Runtime registry must be a YAML object.' }];
   }
-  if (!validateSchema(parsed)) {
+  // A key whose entries are all commented out (e.g. `agent_defaults:` followed
+  // only by comments) parses as null. Treat it as "no overrides" rather than a
+  // schema error; the loader already normalises it to {} (`?? {}`).
+  const candidate = parsed.agent_defaults === null ? { ...parsed, agent_defaults: {} } : parsed;
+  if (!validateSchema(candidate)) {
     for (const err of validateSchema.errors ?? []) {
       errors.push({ code: 'SCHEMA_INVALID', message: `${err.instancePath || '/'} ${err.message}` });
     }

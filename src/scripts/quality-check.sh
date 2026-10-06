@@ -50,6 +50,7 @@ h1 "3. Agent skills are thin wrappers (≤ 45 lines)"
 # =============================================================================
 agent_skills=(
   "src/skills/ba-agent/SKILL.md"
+  "src/skills/ba-enrich-agent/SKILL.md"
   "src/skills/dev-agent/SKILL.md"
   "src/skills/qa-agent/SKILL.md"
   "src/skills/reviewer-agent/SKILL.md"
@@ -119,6 +120,7 @@ h1 "7. All core agent definitions present"
 # =============================================================================
 required_agents=(
   "ba-product-agent.md"
+  "ba-enrich-agent.md"
   "developer-agent.md"
   "qa-test-agent.md"
   "reviewer-agent.md"
@@ -147,6 +149,7 @@ h1 "8. All core skill wrappers present"
 # =============================================================================
 required_skills=(
   "ba-agent"
+  "ba-enrich-agent"
   "dev-agent"
   "qa-agent"
   "reviewer-agent"
@@ -180,6 +183,7 @@ required_workflows=(
   "agent-architect.yml"
   "agent-security.yml"
   "agent-triage.yml"
+  # "agent-ba-enrich.yml" — ba-enrich is Copilot-only (orchestrator-invoked)
   "agent-ot-integration.yml"
   "agent-digital-twin.yml"
   "agent-compliance.yml"
@@ -193,6 +197,7 @@ required_workflows=(
   "copilot-agent-architect.yml"
   "copilot-agent-security.yml"
   "copilot-agent-triage.yml"
+  "copilot-agent-ba-enrich.yml"
   "copilot-agent-ot-integration.yml"
   "copilot-agent-digital-twin.yml"
   "copilot-agent-compliance.yml"

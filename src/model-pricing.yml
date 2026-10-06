@@ -18,6 +18,7 @@ pricing:
   gpt-4o-mini:
     prompt_per_1k_usd: 0.00015
     completion_per_1k_usd: 0.0006
+  # Claude Opus 4.5 list price: $5 / $25 per million tokens (the $15 / $75 rate is Opus 4 / 4.1).
   claude-opus-4-5:
-    prompt_per_1k_usd: 0.015
-    completion_per_1k_usd: 0.075
+    prompt_per_1k_usd: 0.005
+    completion_per_1k_usd: 0.025

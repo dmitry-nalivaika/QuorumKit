@@ -2,6 +2,9 @@
 # are kept in sync. Both use the iterative dev-agent-runner.cjs loop (Copilot runtime).
 # Do NOT replace either file with a one-shot inline script.
 name: Developer Agent (Copilot)
+# Issue number in the run title lets the Orchestrator map a finished run (workflow_run carries no inputs)
+# back to its issue (#378). The engine parses the trailing `#<n>`.
+run-name: "Developer Agent (Copilot) #${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number }}"
 
 on:
   workflow_dispatch:
@@ -37,6 +40,10 @@ on:
         description: 'Orchestrator iteration counter'
         required: false
         default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -49,12 +56,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
 
@@ -69,7 +76,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RUNTIME_KIND: copilot
-          RUNTIME_NAME: copilot-default
+          RUNTIME_NAME: ${{ github.event.inputs.runtime_name || 'copilot-default' }}
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}

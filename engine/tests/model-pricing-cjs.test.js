@@ -14,7 +14,7 @@ import { computeUsage as computeUsageEsm } from '../orchestrator/model-pricing.j
 const require = createRequire(import.meta.url);
 const REPO_ROOT = path.resolve(new URL(import.meta.url).pathname, '../../..');
 const CJS_PATH  = path.join(REPO_ROOT, '.github/scripts/model-pricing.cjs');
-const { loadPricing, computeUsage, usageApmBlock, PRICING_PATH } = require(CJS_PATH);
+const { loadPricing, computeUsage, tokensFromResponse, usageFromResponse, normalizeUsage, PRICING_PATH } = require(CJS_PATH);
 
 function makeTmpRoot(pricingYaml) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pricing-cjs-test-'));
@@ -65,41 +65,70 @@ describe('model-pricing.cjs computeUsage', () => {
   });
 });
 
-describe('model-pricing.cjs usageApmBlock (azure-openai / copilot workflow replies)', () => {
-  const pricing = { 'gpt-4o': { prompt_per_1k_usd: 0.0025, completion_per_1k_usd: 0.01 } };
-  const base = { agent: 'qa-agent', issueNumber: 42, model: 'gpt-4o', runtime: 'azure-openai', pricing };
-  const parse = block => JSON.parse(block.match(/```apm-msg\n([\s\S]*?)\n```/)[1]);
-
-  it('emits a fenced apm-msg block whose usage is computed from the chat/completions response', () => {
-    const msg = parse(usageApmBlock({ ...base, response: { usage: { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 } } }));
-    expect(msg).toMatchObject({ version: '2', agent: 'qa-agent', issue: '42', pipeline_id: '042' });
-    expect(msg.usage).toEqual({ runtime: 'azure-openai', model: 'gpt-4o', prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500, estimated_cost_usd: 0.0075 });
+describe('model-pricing.cjs tokensFromResponse', () => {
+  it('reads chat/completions counts', () => {
+    expect(tokensFromResponse({ usage: { prompt_tokens: 7, completion_tokens: 3 } })).toEqual({ promptTokens: 7, completionTokens: 3 });
   });
 
-  it('does not assert an outcome the free-text reply cannot prove', () => {
-    const msg = parse(usageApmBlock({ ...base, response: { usage: { prompt_tokens: 1, completion_tokens: 1 } } }));
-    expect(msg).not.toHaveProperty('outcome');
-    expect(msg).not.toHaveProperty('event_type');
+  it('reads Responses API counts', () => {
+    expect(tokensFromResponse({ usage: { input_tokens: 9, output_tokens: 2 } })).toEqual({ promptTokens: 9, completionTokens: 2 });
   });
 
-  it('reports tokens with null cost for a model absent from the pricing table', () => {
-    const msg = parse(usageApmBlock({ ...base, model: 'custom-deployment', response: { usage: { prompt_tokens: 10, completion_tokens: 5 } } }));
-    expect(msg.usage).toMatchObject({ total_tokens: 15, estimated_cost_usd: null });
+  it('treats one missing side as zero but still reports the other', () => {
+    expect(tokensFromResponse({ usage: { prompt_tokens: 5 } })).toEqual({ promptTokens: 5, completionTokens: 0 });
   });
 
-  it('returns an empty string when the response has no usable usage (FR-005)', () => {
-    for (const response of [undefined, null, {}, { usage: null }, { usage: {} }, { usage: { prompt_tokens: 'x' } }]) {
-      expect(usageApmBlock({ ...base, response })).toBe('');
+  it('returns null when there is no usable usage (FR-005)', () => {
+    for (const r of [undefined, null, {}, { usage: null }, { usage: {} }, { usage: 'x' }, { usage: { prompt_tokens: 'x' } }, { usage: { prompt_tokens: -1 } }]) {
+      expect(tokensFromResponse(r)).toBeNull();
     }
   });
+});
 
-  it('never throws, even on bad input', () => {
-    expect(() => usageApmBlock(undefined)).not.toThrow();
-    expect(usageApmBlock(undefined)).toBe('');
+describe('model-pricing.cjs usageFromResponse', () => {
+  const pricing = { 'gpt-4o': { prompt_per_1k_usd: 0.0025, completion_per_1k_usd: 0.01 } };
+  const base = { model: 'gpt-4o', runtime: 'azure-foundry-standard', pricing };
+
+  it('computes the schema-shaped usage object (FR-003, FR-007)', () => {
+    expect(usageFromResponse({ ...base, response: { usage: { prompt_tokens: 1000, completion_tokens: 500 } } })).toEqual({
+      runtime: 'azure-foundry-standard', model: 'gpt-4o',
+      prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500, estimated_cost_usd: 0.0075,
+    });
   });
 
-  it('carries only counts and identifiers (FR-015)', () => {
-    const block = usageApmBlock({ ...base, response: { usage: { prompt_tokens: 1, completion_tokens: 1 }, choices: [{ message: { content: 'SECRET-COMPLETION' } }] } });
-    expect(block).not.toContain('SECRET-COMPLETION');
+  it('reports tokens with null cost for an unpriced model (FR-008)', () => {
+    const u = usageFromResponse({ ...base, model: 'custom', response: { usage: { prompt_tokens: 10, completion_tokens: 5 } } });
+    expect(u).toMatchObject({ total_tokens: 15, estimated_cost_usd: null });
+  });
+
+  it('returns null without usage and never throws (FR-005)', () => {
+    expect(usageFromResponse({ ...base, response: {} })).toBeNull();
+    expect(() => usageFromResponse(undefined)).not.toThrow();
+    expect(usageFromResponse(undefined)).toBeNull();
+  });
+
+  it('does not turn a partial pricing entry into NaN', () => {
+    const u = computeUsage({ runtime: 'r', model: 'half', promptTokens: 1, completionTokens: 1, pricing: { half: { prompt_per_1k_usd: 1 } } });
+    expect(u.estimated_cost_usd).toBeNull();
+  });
+});
+
+describe('model-pricing.cjs normalizeUsage', () => {
+  const good = { runtime: 'r', model: 'm', prompt_tokens: 1, completion_tokens: 2, total_tokens: 3, estimated_cost_usd: 0.5 };
+
+  it('keeps a valid object and accepts a null cost', () => {
+    expect(normalizeUsage(good)).toEqual(good);
+    expect(normalizeUsage({ ...good, estimated_cost_usd: null })).toEqual({ ...good, estimated_cost_usd: null });
+  });
+
+  it('drops unknown fields so no content can ride along (FR-015)', () => {
+    expect(normalizeUsage({ ...good, prompt: 'SECRET' })).toEqual(good);
+  });
+
+  it('rejects anything the schema would reject', () => {
+    for (const bad of [null, 'x', {}, { ...good, runtime: '' }, { ...good, prompt_tokens: 1.5 }, { ...good, total_tokens: -1 },
+      { ...good, estimated_cost_usd: NaN }, { ...good, estimated_cost_usd: -1 }, { ...good, estimated_cost_usd: '1' }]) {
+      expect(normalizeUsage(bad)).toBeNull();
+    }
   });
 });

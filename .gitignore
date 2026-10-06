@@ -38,6 +38,10 @@ CLAUDE.md
 .vscode/
 .idea/
 
+# AI Assistant cache
+.codemie/
+.cursor/
+
 # OS
 .DS_Store
 Thumbs.db

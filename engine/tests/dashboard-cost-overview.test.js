@@ -31,8 +31,11 @@ function makeGhStub(pages) {
   return { stub, argvLog };
 }
 
+const BOT = { login: 'github-actions[bot]', type: 'Bot' };
 const apm = (id, issue, agent, usage, extra = {}) => ({
   id,
+  user: BOT,
+  author_association: 'NONE',
   issue_url: `https://api.github.com/repos/o/r/issues/${issue}`,
   html_url: `https://github.com/o/r/issues/${issue}#issuecomment-${id}`,
   created_at: '2026-05-25T10:00:00Z',
@@ -51,6 +54,9 @@ beforeAll(async () => {
   const gh = makeGhStub([
     [apm(1, 42, 'dev-agent', U(1000, 0.01)), apm(2, 42, 'qa-agent', undefined), plain(3, 42)],
     [apm(4, 7, 'dev-agent', U(500, null)), apm(5, 7, 'qa-agent', U(200, 0.002)), apm(6, 99, 'ba-agent', U(300, 0.003), { issue: '042', pipeline_id: '042' })],
+    // Forged: pasted by an outside commenter, must not count toward any total.
+    [{ ...apm(7, 42, 'dev-agent', U(999999, 99)), user: { login: 'mallory', type: 'User' }, author_association: 'NONE' },
+     { ...apm(8, 42, 'dev-agent', U(100, 0.001)), user: { login: 'maintainer', type: 'User' }, author_association: 'OWNER' }],
   ]);
   argvLog = gh.argvLog;
   proc = spawn(process.execPath, ['server.js', '--port', String(port)], {
@@ -74,7 +80,7 @@ describe('GET /api/cost-tokens', () => {
   it('rolls usage up per feature across every page of repo-wide comments', async () => {
     const body = await (await get('/api/cost-tokens')).json();
     expect(Object.keys(body.byFeature).sort()).toEqual(['42', '7']);
-    expect(body.byFeature['42']).toMatchObject({ totalTokens: 1300, estimatedCostUsd: 0.013, trackedInvocations: 2, untrackedInvocations: 1, partial: true });
+    expect(body.byFeature['42']).toMatchObject({ totalTokens: 1400, estimatedCostUsd: 0.014, trackedInvocations: 3, untrackedInvocations: 1, partial: true });
     expect(body.byFeature['7']).toMatchObject({ totalTokens: 700, estimatedCostUsd: 0.002, costUnknownInvocations: 1, partial: true });
   });
 
@@ -86,16 +92,22 @@ describe('GET /api/cost-tokens', () => {
 
   it('rolls usage up per agent across features and totals everything', async () => {
     const body = await (await get('/api/cost-tokens')).json();
-    expect(body.byAgent['dev-agent']).toMatchObject({ totalTokens: 1500, estimatedCostUsd: 0.01, trackedInvocations: 2, costUnknownInvocations: 1 });
+    expect(body.byAgent['dev-agent']).toMatchObject({ totalTokens: 1600, estimatedCostUsd: 0.011, trackedInvocations: 3, costUnknownInvocations: 1 });
     expect(body.byAgent['qa-agent']).toMatchObject({ totalTokens: 200, untrackedInvocations: 1 });
-    expect(body.total).toMatchObject({ totalTokens: 2000, partial: true });
+    expect(body.total).toMatchObject({ totalTokens: 2100, partial: true });
     expect(body.disclaimer).toMatch(/estimate/i);
   });
 
   it('ignores comments without an apm-msg block and reports scan metadata', async () => {
     const { meta } = await (await get('/api/cost-tokens')).json();
-    expect(meta).toMatchObject({ days: 90, scannedComments: 6, structuredEvents: 5 });
+    expect(meta).toMatchObject({ days: 90, scannedComments: 8, structuredEvents: 6 });
     expect(Number.isNaN(Date.parse(meta.since))).toBe(false);
+  });
+
+  it('ignores apm-msg blocks pasted by untrusted commenters (cost data cannot be forged)', async () => {
+    const body = await (await get('/api/cost-tokens')).json();
+    expect(body.total.totalTokens).toBeLessThan(999999);
+    expect(JSON.stringify(body)).not.toContain('mallory');
   });
 
   it('issues only a read request against the repo-wide comments endpoint (FR-009, FR-012)', async () => {

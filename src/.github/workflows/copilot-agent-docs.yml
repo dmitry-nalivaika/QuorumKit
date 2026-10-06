@@ -28,6 +28,22 @@ on:
       issue_number:
         description: 'Issue or PR number (used when triggered by the Orchestrator)'
         required: false
+      run_id:
+        description: 'Orchestrator run ID (traceability; echoed in the result marker)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'docs'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -39,6 +55,7 @@ jobs:
   docs:
     if: |
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (contains(github.event.comment.body, '@docs-agent') &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
@@ -49,20 +66,27 @@ jobs:
           fetch-depth: 0
 
       - name: Run Docs Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
+          # Only set when a dispatch explicitly selects the Azure key. Otherwise leave empty so the script
+          # resolves the credential from the runtime's credential_ref in src/runtimes.yml.
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || '' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/docs-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'docs', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/docs-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const trigger =
@@ -74,6 +98,8 @@ jobs:
               ? Number(context.payload.inputs.issue_number)
               : context.payload.issue?.number;
             const commentBody = context.payload.comment?.body ?? '';
+
+            await report.start({ issueNumber });
 
             // FR-005 size limits
             const MAX_PER_FILE = 20 * 1024;   // 20 KB per file patch
@@ -231,6 +257,7 @@ jobs:
                   body: errBody, labels: ['documentation', 'agent-report'],
                 });
               }
+              report.verdict({ outcome: 'blocker', summary: apiError });
               return;
             }
 
@@ -256,18 +283,46 @@ jobs:
               'If documentation updates are needed, describe them clearly so a follow-up PR can be opened.',
             ].filter(Boolean).join('\n');
 
-            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
-            // Foundry deployment when the Orchestrator's azure-openai runtime
-            // adapter supplied these inputs; otherwise fall back to the
-            // existing GitHub Models default (byte-for-byte unchanged).
-            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
-            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
-            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
-            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // ADR-332: resolve the runtime from src/runtimes.yml (default_runtime) unless a
+            // dispatch supplied explicit inputs. GitHub Models (models.inference.ai.azure.com)
+            // was retired on 2026-07-30 and no longer resolves, so there is NO hardcoded
+            // fallback host: a missing or unreachable runtime fails loudly (ADR-332 section 5).
+            const runtimesYaml = readSafe('src/runtimes.yml');
+            const defaultRuntimeName = runtimesYaml.match(/^default_runtime:\s*(\S+)/m)?.[1] || '';
+            const parseRuntime = (yaml, name) => {
+              if (!name) return null;
+              const head = new RegExp(`^\\s*${name}:\\s*$`, 'm').exec(yaml);
+              if (!head) return null;
+              const rest = yaml.slice(head.index + head[0].length);
+              const end = rest.match(/^\s*\w[\w-]*:\s*$/m);
+              const block = end ? rest.slice(0, end.index) : rest;
+              return {
+                endpoint: block.match(/^\s+endpoint:\s*(\S+)/m)?.[1] || '',
+                model: block.match(/^\s+model:\s*(\S+)/m)?.[1] || 'gpt-4o',
+                credentialRef: block.match(/^\s+credential_ref:\s*(\S+)/m)?.[1] || 'GITHUB_TOKEN',
+                apiVersion: block.match(/api_version:\s*["']([^"']+)["']/)?.[1] || '',
+              };
+            };
+            const defaultRuntime = parseRuntime(runtimesYaml, defaultRuntimeName);
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || defaultRuntime?.endpoint || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || defaultRuntime?.model || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || defaultRuntime?.apiVersion || '';
+            const runtimeCredentialRef = defaultRuntime?.credentialRef || 'GITHUB_TOKEN';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL ||
+              (runtimeCredentialRef === 'AZURE_OPENAI_API_KEY' ? process.env.AZURE_OPENAI_API_KEY : process.env.GITHUB_TOKEN);
+            console.log(`Using runtime: ${defaultRuntimeName || '(none)'}; endpoint: ${runtimeEndpoint || '(none)'}; model: ${runtimeModel}; credential: ${runtimeCredentialRef}`);
+            if (!runtimeEndpoint) {
+              report.abort('No runtime endpoint: set default_runtime in src/runtimes.yml or dispatch with runtime_endpoint.');
+              return;
+            }
+            if (!runtimeCredential) {
+              report.abort(`Runtime credential ${runtimeCredentialRef} is not available to this workflow.`);
+              return;
+            }
             // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
             // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
             // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
-            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com'];
+            const allowedRuntimeEndpointHostSuffixes = ['.openai.azure.com', '.cognitiveservices.azure.com', '.services.ai.azure.com'];
             const isAllowedRuntimeEndpoint = raw => {
               try {
                 const u = new URL(raw);
@@ -275,7 +330,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -288,15 +343,20 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
-            const requestUrl = runtimeEndpoint
-              ? `${runtimeEndpoint}/chat/completions${runtimeApiVersion ? `?api-version=${runtimeApiVersion}` : ''}`
-              : 'https://models.inference.ai.azure.com/chat/completions';
-            const authHeaders = runtimeEndpoint
-              ? { 'api-key': runtimeCredential }
-              : { 'Authorization': `Bearer ${runtimeCredential}` };
+            // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
+            // request/response shape than chat/completions; the legacy deployment-style
+            // endpoints and the GitHub Models default keep using chat/completions.
+            const useResponsesApi = !!runtimeEndpoint && /\/responses\/?$/.test(new URL(runtimeEndpoint).pathname);
+            // The /openai/v1/ surface is versionless; do not send a dated api-version there.
+            const sendApiVersion = runtimeApiVersion && !/\/openai\/v1\//.test(runtimeEndpoint);
+            const apiVersionQuery = sendApiVersion ? `?api-version=${runtimeApiVersion}` : '';
+            const requestUrl = useResponsesApi
+              ? `${runtimeEndpoint}${apiVersionQuery}`
+              : `${runtimeEndpoint}/chat/completions${apiVersionQuery}`;
+            const authHeaders = { 'api-key': runtimeCredential };
 
             const res = await fetch(requestUrl, {
               method: 'POST',
@@ -304,49 +364,80 @@ jobs:
                 ...authHeaders,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                model: runtimeModel,
-                messages: [
-                  { role: 'system', content: systemContent },
-                  { role: 'user',   content: userContent },
-                ],
-                max_tokens: 2048,
-              }),
+              body: JSON.stringify(useResponsesApi
+                ? {
+                    model: runtimeModel,
+                    instructions: systemContent,
+                    input: userContent,
+                    // Reasoning models spend output budget on reasoning tokens, so leave headroom.
+                    max_output_tokens: 8192,
+                  }
+                : {
+                    model: runtimeModel,
+                    messages: [
+                      { role: 'system', content: systemContent },
+                      { role: 'user',   content: userContent },
+                    ],
+                    max_tokens: 2048,
+                  }),
             });
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
-            const data   = await res.json();
-            const report = data.choices?.[0]?.message?.content?.trim()
-              ?? '⚠️ Docs agent produced no output.';
+            const extractText = d => (useResponsesApi
+              ? (d.output_text ?? (d.output ?? [])
+                  .filter(item => item.type === 'message')
+                  .flatMap(item => item.content ?? [])
+                  .filter(c => c.type === 'output_text')
+                  .map(c => c.text)
+                  .join(''))
+              : d.choices?.[0]?.message?.content
+            )?.trim() || undefined;
 
-            // LLM usage for the audit trail (#335); never fails the run.
-            let usageBlock = '';
-            try {
-              usageBlock = require(`${process.cwd()}/.github/scripts/model-pricing.cjs`).usageApmBlock({
-                response: data, model: runtimeModel, agent: 'docs-agent', issueNumber,
-                runtime: runtimeEndpoint ? 'azure-openai' : 'copilot-default',
-              });
-            } catch (e) { core.warning(`Usage capture skipped: ${e.message}`); }
+            const data  = await res.json();
+            // Token usage + estimated cost for the audit trail (#335); never fails the run.
+            report.recordUsage({ response: data, model: runtimeModel, runtime: defaultRuntimeName || 'azure-openai' });
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('Docs agent produced no output.');
+              return;
+            }
 
             // Post as comment if triggered by a comment, otherwise open an issue
             if (issueNumber) {
-              await github.rest.issues.createComment({
-                owner:        context.repo.owner,
-                repo:         context.repo.repo,
-                issue_number: issueNumber,
-                body:         report + usageBlock,
-              });
+              // Posts the cleaned report and records the verdict for the final step.
+              await report.reply({ issueNumber, reply });
             } else {
+              const r = report.interpret(reply);
               await github.rest.issues.create({
                 owner:  context.repo.owner,
                 repo:   context.repo.repo,
                 title:  `📄 Docs Agent Report – ${new Date().toISOString().slice(0,10)}`,
-                body:   report + usageBlock,
+                body:   r.body,
                 labels: ['documentation', 'agent-report'],
               });
             }
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+          USAGE: ${{ steps.agent.outputs.usage }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'docs', github, context, core });
+            await report.conclude({ env: process.env });

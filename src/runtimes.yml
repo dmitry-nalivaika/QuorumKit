@@ -15,18 +15,22 @@
 # secret value from `process.env` (i.e. GitHub Actions ${{ secrets.* }})
 # at invocation time. Never inline a secret value here.
 
-default_runtime: copilot-default
+default_runtime: azure-foundry-standard
 
-# Per-agent overrides (FR-008), used for cost-aware model selection. Empty by
-# default. Example assigning cheaper/stronger Azure OpenAI deployments per
-# agent (ADR-332 §4) — applies uniformly to every agent, including dev-agent
-# (dispatched via the iterative dev-agent-runner.cjs, not a one-shot script):
-#   triage-agent: azure-foundry-mini
-#   architect-agent: azure-foundry-standard
-#   dev-agent: azure-foundry-standard
+# Per-agent overrides (FR-008).
+# All agents now use azure-foundry-standard by default.
+# Override here only if specific agents need different runtimes.
+# All agents inherit azure-foundry-standard from default_runtime.
+# Add overrides here only if needed, e.g.:
+#   agent_defaults:
+#     triage-agent: copilot-default  # GitHub Models for high-frequency, low-stakes work
+# NOTE: keep `{}` (or real entries) — a bare `agent_defaults:` with only comments parses as null.
 agent_defaults: {}
 
+
 runtimes:
+  # DEPRECATED: GitHub Models was retired on 2026-07-30. models.github.ai now answers 200 "OK" (text/plain)
+  # on every path, so this runtime cannot produce a completion. Do not select it as default_runtime.
   copilot-default:
     kind: copilot
     endpoint: https://models.github.ai/inference
@@ -37,27 +41,9 @@ runtimes:
     endpoint: https://api.anthropic.com/v1
     credential_ref: ANTHROPIC_API_KEY
 
-  # Example azure-openai entries (ADR-332). Uncomment and adjust <resource>/
-  # <deployment> to enable, then reference them in `agent_defaults` above.
-  # SEC-MED-001 (PR #334 security re-review): the dispatched workflows only
-  # recognize the single literal credential_ref `AZURE_OPENAI_API_KEY` (bounded
-  # allowlist, no dynamic `secrets[]` indexing) — any other credential_ref
-  # value silently falls back to `GITHUB_TOKEN`. The `AZURE_OPENAI_API_KEY`
-  # secret must be configured as a GitHub Actions repository secret; a
-  # differently named credential_ref is NOT supported project-wide.
-  #
-  # azure-foundry-mini:
-  #   kind: azure-openai
-  #   endpoint: https://<resource>.openai.azure.com/openai/deployments/<mini-deployment>
-  #   credential_ref: AZURE_OPENAI_API_KEY
-  #   model: <mini-deployment-name>
-  #   parameters:
-  #     api_version: "2024-10-21"
-  #
-  # azure-foundry-standard:
-  #   kind: azure-openai
-  #   endpoint: https://<resource>.openai.azure.com/openai/deployments/<standard-deployment>
-  #   credential_ref: AZURE_OPENAI_API_KEY
-  #   model: <standard-deployment-name>
-  #   parameters:
-  #     api_version: "2024-10-21"
+  azure-foundry-standard:
+    kind: azure-openai
+    endpoint: https://quorum-kit-resource.services.ai.azure.com/openai/v1/responses
+    credential_ref: AZURE_OPENAI_API_KEY
+    model: gpt-5.2-codex
+    parameters: { api_version: "2026-01-14" }

@@ -185,7 +185,8 @@ close this gap without redesigning the dispatch contract:
   invocation can therefore never cause a secret other than the one this ADR
   documents to be resolved.
 - **`runtime_endpoint` is validated against a host allowlist** (must be
-  `https://` and end in `.openai.azure.com` or `.cognitiveservices.azure.com`)
+  `https://` and end in `.openai.azure.com`, `.cognitiveservices.azure.com`, or
+  `.services.ai.azure.com` — the Azure AI Foundry host)
   before it is used to build any outbound request, in every dispatched
   workflow and in `dev-agent-runner.cjs`. This closes the SSRF vector; an
   invalid endpoint fails the step loudly (§5 — no silent fallback) rather than

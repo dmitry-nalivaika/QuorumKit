@@ -28,8 +28,10 @@ function makeGhStub(comments) {
   return stub;
 }
 
-const apmComment = (id, agent, usage) => ({
+const apmComment = (id, agent, usage, user = { login: 'github-actions[bot]', type: 'Bot' }) => ({
   id,
+  user,
+  author_association: 'NONE',
   html_url: `https://github.com/o/r/issues/42#issuecomment-${id}`,
   created_at: '2026-05-25T10:00:00Z',
   body: '```apm-msg\n' + JSON.stringify({
@@ -48,6 +50,7 @@ beforeAll(async () => {
     apmComment(1, 'dev-agent', U(1000, 0.01)),
     apmComment(2, 'dev-agent', U(500, null)),
     apmComment(3, 'qa-agent', undefined),
+    apmComment(4, 'dev-agent', U(777777, 77), { login: 'mallory', type: 'User' }), // forged
   ]);
   proc = spawn(process.execPath, ['server.js', '--port', String(port)], {
     cwd: DASHBOARD_DIR,
@@ -70,6 +73,12 @@ describe('GET /api/timeline/:n costTokens', () => {
     const events = body.events.filter(e => e.source === 'apm-msg');
     expect(events[0].usage.total_tokens).toBe(1000);
     expect(events[2].usage).toBeNull();
+  });
+
+  it('keeps an untrusted comment on the timeline but out of the cost totals', async () => {
+    const { events, costTokens } = await (await fetch(`http://127.0.0.1:${port}/api/timeline/42`)).json();
+    expect(events.filter(e => e.source === 'apm-msg')).toHaveLength(4);
+    expect(costTokens.total.totalTokens).toBe(1500);
   });
 
   it('returns a per-feature and per-agent rollup with partial flags', async () => {
