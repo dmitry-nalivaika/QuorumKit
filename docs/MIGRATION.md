@@ -226,6 +226,21 @@ Also refresh the agent definitions: the Developer Agent now reports a missing sp
 Without the updated Developer Agent, a missing spec is reported as `blocker`, which is
 not routed to `ba`.
 
+**The automated agents changed too, and the installer skips these files when they already
+exist** ("already exists — skipping"). The pipeline routes above only work if the workflow
+and script that run the two agents can do what the routes assume, so delete the old copy
+and re-run `init.sh`, or copy the files from the QuorumKit release:
+
+| File | What changed |
+|------|--------------|
+| `.github/scripts/dev-agent-runner.cjs` | `signal_outcome` accepts `spec_gap`; the prompt says to report a missing spec that way; a hand-posted `agent-report.cjs` report is refused so a run reports exactly one result |
+| `.github/workflows/copilot-agent-ba.yml` | for a `type:bug` issue with no spec, asks the model for the spec and writes `specs/NNN-slug/spec.md` before the publish step (token budget 4096) |
+| `.github/scripts/ba-spec-author.cjs` | new; the logic the BA workflow uses (a new file, so the installer does add it) |
+
+Without the updated runner the Developer Agent still cannot report `spec_gap` in CI; without
+the updated BA workflow the `ba` step reports `spec_gap` for a bug with no spec and repeats
+until the loop budget is spent.
+
 Apply the change when no bug-fix run is in flight. Runs already stuck on the old
 definition (for example #376 and #377) should be re-triggered after the change merges.
 

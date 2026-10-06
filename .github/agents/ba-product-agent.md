@@ -315,6 +315,24 @@ the issue's Steps to Reproduce / Expected / Actual sections. If they are missing
 "Handling `status:needs-info` Issues" above: infer them, or stop and ask. Never invent a
 reproduction.
 
+**Automated runs (GitHub Actions workflow).** The workflow makes a single model call and cannot
+run commands, so it asks you to put the complete spec between two marker lines, each alone on
+its line, and writes the file itself:
+
+```
+=== SPEC BEGIN ===
+# Spec: [Bug Title] — Issue #NNN
+...Template C sections...
+=== SPEC END ===
+```
+
+Only text between the markers is written, to `specs/NNN-slug/spec.md`, and only if it is a
+complete Template C spec (all sections, an FR, a regression-test criterion, no clarification
+markers, Open Questions resolved). End with `OUTCOME: success` only when the spec block is
+present and complete. If the report does not let you establish what the bug is, write no spec
+block and end with `OUTCOME: needs-human`; if you cannot produce a usable spec for any other
+reason, write no spec block and end with `OUTCOME: spec_gap`. Never invent facts to fill a section.
+
 ```
 # Spec: [Bug Title] — Issue #NNN
 

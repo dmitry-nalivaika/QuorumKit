@@ -21,6 +21,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 - **Bug-fix pipeline now starts with a BA step** (#377, [ADR-377](docs/architecture/adr-377-bug-fix-pipeline-spec-gate.md)). `bug-fix-pipeline.yml` is `ba → dev → qa → reviewer`. The Developer Agent refuses to start without `specs/NNN-*/spec.md` (Constitution §III), and the old `dev → qa → reviewer` chain had nothing that wrote one, so every `type:bug` issue stopped at `dev` (seen on #376 and #377). The BA Agent gets a short bug-fix spec format (Template C) for `type:bug`. **MINOR, non-breaking.**
 - `dev` and `reviewer` `spec_gap` now route to `ba` (was a `dev` self-loop for `dev`); `ba` `spec_gap`/`needs-human` repeat `ba`, as in the feature pipeline.
 - The Developer Agent now reports a missing spec as `spec_gap` (not `blocker`) so the Orchestrator can route it. It still never writes or skips a spec.
+- **The automated runs can do what the new routes assume** (#377, review of PR #395). The Developer runner (`dev-agent-runner.cjs`) now accepts `spec_gap` in `signal_outcome`, tells the model to report a missing spec that way, and refuses a hand-posted `agent-report.cjs` report so a run reports exactly one result (the Orchestrator acts on the newest marker). The BA workflow (`copilot-agent-ba.yml`) now writes `specs/NNN-slug/spec.md` for a `type:bug` issue with no spec (new `ba-spec-author.cjs`: Template C checks, reuse of an existing spec, only the spec and `.specify/feature.json` written) and reports `spec_gap` / `needs-human` when it cannot. Before, the step could only comment, then reported `spec_gap` until the loop budget ran out.
 - Cost: every bug now pays for one BA run and a spec PR (step budget up to 60 minutes). The constitution is unchanged.
 - Upgrade note: `init.sh` does not overwrite an existing `src/pipelines/bug-fix-pipeline.yml`; projects with their own copy must apply the diff in [`docs/MIGRATION.md`](docs/MIGRATION.md).
 
@@ -33,6 +34,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 ### 🧪 Tests
 
 - `engine/tests/bug-fix-pipeline-377.test.js` covers the bug-fix chain, the `ba → dev`, `dev spec_gap → ba`, `reviewer spec_gap → ba` and `ba` self-repeat routes, validator pass, and the Developer/BA agent manifests (`src/` and `.github/` copies identical).
+- `engine/tests/dev-agent-runner-spec-gap-377.test.js` (runner accepts `spec_gap`, the report routes `dev → ba`, one result per run, prompt wording) and `engine/tests/ba-spec-author-377.test.js` (spec extraction and validation, write/reuse/skip decisions, outcomes, workflow wiring). They fail if `spec_gap` is removed from the runner's accepted results or the BA step stops writing the spec file.
 - `engine/tests/agent-workflow-runtime.test.js` guards every inline agent workflow: no executable reference to the retired host, runtime resolved from the registry, abort when no endpoint resolves, and `.github/` identical to the `src/.github/` mirror.
 
 ---

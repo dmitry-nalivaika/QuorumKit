@@ -127,6 +127,12 @@ The Orchestrator routes `spec_gap` to the BA Agent in both the feature and bug-f
 and the BA Agent is the role that writes specs (a short Template C spec for `type:bug`).
 A `blocker` is not routed there, so the missing spec would never be fixed.
 
+**Automated runs (GitHub Actions runner).** The runner posts the footprints and the result itself.
+Report the missing spec by calling `signal_outcome` with `outcome: "spec_gap"`, and do **not** run
+`agent-report.cjs` as well. A run reports exactly one result: the Orchestrator acts on the most
+recent report, so a second one (for example `blocker` after `spec_gap`) would override it.
+The `agent-report.cjs` command above is for interactive and local runs only.
+
 - MUST NOT author, draft or write a spec yourself, for any issue type including `type:bug`
 - MUST NOT skip the spec requirement because the change looks small (Constitution §III)
 

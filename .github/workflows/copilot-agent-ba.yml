@@ -84,6 +84,7 @@ jobs:
 
             let issueTitle = '';
             let issueBody  = '';
+            let issueLabels = [];
             try {
               const issue = await github.rest.issues.get({
                 owner: context.repo.owner,
@@ -92,9 +93,17 @@ jobs:
               });
               issueTitle = issue.data.title ?? '';
               issueBody  = issue.data.body  ?? '';
+              issueLabels = issue.data.labels ?? [];
             } catch (e) {
               core.warning(`Could not fetch issue #${issueNumber}: ${e.message}`);
             }
+
+            // #377: a `type:bug` issue with no spec gets a short bug-fix spec (Template C) written to
+            // specs/NNN-slug/spec.md by this step; the publish step below then pushes it and opens the PR.
+            // Every other issue keeps the requirements-summary prompt.
+            const specAuthor = require('./.github/scripts/ba-spec-author.cjs');
+            const existingSpec = specAuthor.findExistingSpec(process.cwd(), issueNumber);
+            const mustAuthorSpec = specAuthor.isBugIssue(issueLabels) && !(existingSpec && existingSpec.hasSpec);
 
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
@@ -105,8 +114,11 @@ jobs:
             const userContent = report.withOutcome(
               `You are acting as the BA / Product Agent for issue #${issueNumber}.\n` +
               `Title: ${issueTitle}\n\nBody:\n${issueBody}\n\n` +
-              `Analyse requirements, identify acceptance criteria, flag any ambiguities, ` +
-              `and post a structured requirements summary as a comment.`);
+              (mustAuthorSpec
+                ? `Analyse the report and write the bug-fix spec for this issue.\n` +
+                  specAuthor.buildSpecRequest({ issueNumber, title: issueTitle })
+                : `Analyse requirements, identify acceptance criteria, flag any ambiguities, ` +
+                  `and post a structured requirements summary as a comment.`));
 
             // ADR-332: resolve the runtime from src/runtimes.yml (default_runtime) unless a
             // dispatch supplied explicit inputs. GitHub Models (models.inference.ai.azure.com)
@@ -203,7 +215,8 @@ jobs:
                       { role: 'system', content: systemContent },
                       { role: 'user',   content: userContent },
                     ],
-                    max_tokens: 2048,
+                    // 4096: a bug-fix spec is about a page, which the old 2048 summary budget could truncate.
+                    max_tokens: 4096,
                   }),
             });
 
@@ -232,13 +245,28 @@ jobs:
               return;
             }
 
-            await report.reply({ issueNumber, reply });
+            // FR-024..FR-028: turn the reply into the spec file (or decide spec_gap / needs-human).
+            // The module returns outcome=null for issues it does not handle (not a bug, or a spec
+            // already exists) and the existing publish logic applies unchanged.
+            const modelOutcome = require('./.github/scripts/agent-report.cjs').parseReply(reply).outcome;
+            const authored = specAuthor.authorSpec({
+              root: process.cwd(), issueNumber, title: issueTitle, labels: issueLabels, reply, modelOutcome,
+            });
+            // The comment carries the reply without the spec block (the spec lives in the file/PR).
+            await report.reply({ issueNumber, reply: authored.action === 'authored' ? authored.rest : reply });
+            if (authored.outcome) {
+              // The module's verdict wins over the model's own OUTCOME line: success only with a spec on disk.
+              report.verdict({ outcome: authored.outcome, summary: authored.summary });
+              core.setOutput('authored_outcome', authored.outcome);
+              core.info(`Spec authoring: ${authored.outcome}${authored.written ? ` (${authored.specPath})` : ''}`);
+            }
 
       - name: Push spec branch and open PR
         id: publish
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTHORED_OUTCOME: ${{ steps.agent.outputs.authored_outcome }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -252,6 +280,12 @@ jobs:
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
 
+            // #377: the authoring step already settled spec_gap / needs-human (no spec was written).
+            // Keep that verdict: nothing to publish, and the report step reads the agent step's outcome.
+            if (process.env.AUTHORED_OUTCOME === 'spec_gap' || process.env.AUTHORED_OUTCOME === 'needs-human') {
+              core.info(`Spec authoring reported ${process.env.AUTHORED_OUTCOME}; nothing to publish.`);
+              return;
+            }
             // ── 1. Determine spec path and branch name ───────────────────────
             // Derive branch from the spec directory whose name starts with NNN-
             const nnn = String(issueNumber).padStart(3, '0');
@@ -276,7 +310,9 @@ jobs:
             }
 
             // ── 2. Dirty-tree guard ───────────────────────────────────────────
-            const dirty = execSync('git status --porcelain', { encoding: 'utf8' })
+            // --untracked-files=all lists the files inside a new spec directory (a bare `??` entry for the
+            // directory would not equal specPath and would trip the guard on a freshly written spec).
+            const dirty = execSync('git status --porcelain --untracked-files=all', { encoding: 'utf8' })
               .split('\n')
               .map(l => l.trim())
               .filter(l => l.length > 0)
