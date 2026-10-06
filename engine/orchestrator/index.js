@@ -24,8 +24,8 @@ import { computeDedupKey } from './dedup-key.js';
 import { resolveTransition } from './router-v2.js';
 import { evaluate as evaluateLoopBudget, mergeBudget } from './loop-budget.js';
 import { resolveRuntime, loadRuntimeRegistry } from './runtime-registry.js';
-import { parseApmMsg, validateContext as validateMsgContext } from './apm-msg-parser.js';
-import { resolveLogin, loadIdentities } from './identity-registry.js';
+import { parseApmMsg, validateContext as validateMsgContext, OUTCOMES } from './apm-msg-parser.js';
+import { resolveLogin, loginMapsToAgent, loadIdentities } from './identity-registry.js';
 
 const APPROVAL_TIMEOUT_DEFAULT_HOURS = 72;
 const STEP_TIMEOUT_DEFAULT_MINUTES = 60;     // FR-019, ADR-007 §4
@@ -423,14 +423,27 @@ async function handleV2WorkflowRunCompleted({
 
   const stepDef = pipeline.steps.find(s => s.name === state.currentStep);
   if (!stepDef) return;
-  if (event.workflowName && !event.workflowName.toLowerCase().includes(stepDef.agent.toLowerCase())) {
-    return;
-  }
+  if (!workflowMatchesAgent(event, stepDef.agent)) return;
 
   // FR-019: per-step timeout — if the awaiting window exceeded the step's
   // declared timeout_minutes, synthesize a `timeout` outcome and let the
   // pipeline's transition table decide what to do next.
   if (await maybeTimeoutStep({ client, event, pipeline, state, stepDef, owner, repo, identities, env, clock, runtimeRegistry })) {
+    return;
+  }
+
+  // #378: dispatched agent workflows report their result in a bot-authored comment carrying a
+  // machine-readable marker. Bot comments never reach handleAgentComment (the workflow skips bot
+  // senders), so the finished run is where we pick the result up and drive the transition. The
+  // marker wins over the conclusion: an agent that fails on purpose (blocker, needs-human) exits
+  // non-zero, but it did report why, and the pipeline's transition table decides what happens.
+  const reported = await findReportedOutcome({ client, owner, repo, issueNumber, state, stepDef, identities });
+  if (reported) {
+    await applyStepOutcome({
+      client, event, pipeline, state, stepDef,
+      outcome: reported.outcome, summary: reported.summary,
+      owner, repo, runtimeRegistry, identities, env, clock,
+    });
     return;
   }
 
@@ -445,6 +458,59 @@ async function handleV2WorkflowRunCompleted({
 
   // Otherwise we wait for the agent's apm-msg comment to drive the transition;
   // no state change here. The comment-handler does the work.
+}
+
+/**
+ * Does this finished workflow belong to the agent the active step is waiting on?
+ * Real workflow names ("Developer Agent (Copilot)") never contain the agent slug ("dev-agent"),
+ * so the name check alone dropped every genuine run (#378). The workflow file path is exact:
+ * `.github/workflows/copilot-agent-<slug>.yml` (or `agent-<slug>.yml` for the Claude family).
+ * The name check remains as a fallback for payloads without a path.
+ */
+function workflowMatchesAgent(event, agent) {
+  const slug = agent.replace(/-agent$/, '').toLowerCase();
+  if (event.workflowPath) {
+    const file = event.workflowPath.split('/').pop().toLowerCase();
+    return file === `copilot-agent-${slug}.yml` || file === `agent-${slug}.yml`;
+  }
+  if (event.workflowName) return event.workflowName.toLowerCase().includes(agent.toLowerCase());
+  return true;
+}
+
+const RESULT_MARKER_RE =
+  /<!--\s*apm:run_id=(\S+)\s+step=(\S+)\s+iteration=(\d+)\s+runtime=\S+\s+outcome=(\S+?)\s*-->/;
+
+/**
+ * Find the result an agent reported for the active step of this run, from the
+ * `<!-- apm:run_id=… step=… iteration=… outcome=… -->` marker its comment carries.
+ * The marker must match the run, step and iteration currently awaited (so results from earlier
+ * iterations or other runs are ignored), carry a known outcome, and come from the login mapped
+ * to the expected agent (FR-013). Returns the newest match, or null.
+ */
+async function findReportedOutcome({ client, owner, repo, issueNumber, state, stepDef, identities }) {
+  if (!identities || typeof client.listComments !== 'function') return null;
+  const comments = await client.listComments(owner, repo, issueNumber);
+  const expected = stepDef.agent;
+  const candidates = [];
+  for (const c of comments) {
+    const m = typeof c.body === 'string' ? c.body.match(RESULT_MARKER_RE) : null;
+    if (!m) continue;
+    const [, runId, step, iteration, outcome] = m;
+    if (runId !== state.runId || step !== state.currentStep) continue;
+    if (Number(iteration) !== Number(state.currentIteration)) continue;
+    if (!OUTCOMES.includes(outcome)) continue;
+    if (!loginMapsToAgent(identities, c.user?.login ?? c.user, expected)) continue;
+    candidates.push({ outcome, summary: markerSummary(c.body), at: c.created_at });
+  }
+  candidates.sort((a, b) => new Date(b.at) - new Date(a.at));
+  return candidates[0] ?? null;
+}
+
+/** First non-header line of the agent's comment, trimmed to the apm-msg summary limit. */
+function markerSummary(body) {
+  const line = body.split('\n').map(l => l.trim())
+    .find(l => l && !l.startsWith('**[QuorumKit') && !l.startsWith('<!--') && !l.startsWith('PR:'));
+  return (line ?? 'Agent reported an outcome.').slice(0, 280);
 }
 
 async function handleAgentComment({ client, event, pipelines, owner, repo, runtimeRegistry, identities, env, clock }) {
@@ -511,9 +577,25 @@ async function handleAgentComment({ client, event, pipelines, owner, repo, runti
     return;
   }
 
-  const outcome = parsed.message.outcome;
+  await applyStepOutcome({
+    client, event, pipeline, state, stepDef,
+    outcome: parsed.message.outcome, summary: parsed.message.summary,
+    owner, repo, runtimeRegistry, identities, env, clock,
+  });
+}
+
+/**
+ * Apply an agent's declared outcome to the active run: resolve the transition,
+ * enforce the loop budget, persist state, and dispatch the next step. Shared by
+ * the apm-msg comment path and the workflow_run result-marker path (#378).
+ */
+async function applyStepOutcome({
+  client, event, pipeline, state, stepDef, outcome, summary,
+  owner, repo, runtimeRegistry, identities, env, clock,
+}) {
+  const { issueNumber } = event;
   state.outcome = outcome;
-  state.lastSummary = parsed.message.summary;
+  state.lastSummary = summary;
 
   // Resolve transition for this outcome.
   const next = resolveTransition(pipeline, stepDef.name, outcome);
@@ -859,6 +941,15 @@ export async function normaliseDispatchEvent({ client, owner, repo, payload }) {
   };
 }
 
+/**
+ * workflow_run payloads carry no inputs, so agent workflows put the issue number in their
+ * `run-name` ("Developer Agent (Copilot) #376"); `display_title` is that string (#378).
+ */
+export function issueNumberFromRunTitle(title) {
+  const m = typeof title === 'string' ? title.match(/#(\d+)\s*$/) : null;
+  return m ? Number(m[1]) : null;
+}
+
 function normaliseEvent(eventName, payload) {
   const issue = payload.issue ?? payload.pull_request;
   const issueNumber = issue?.number ?? payload.number;
@@ -887,9 +978,11 @@ function normaliseEvent(eventName, payload) {
         // workflow_run carries no issue number in the event itself.
         // The orchestrator passes it as a workflow_dispatch input so the
         // agent workflow has context; recover it from there.
-        issueNumber: Number(payload.workflow_run?.inputs?.issue_number) || issueNumber || null,
+        issueNumber: issueNumberFromRunTitle(payload.workflow_run?.display_title)
+          || Number(payload.workflow_run?.inputs?.issue_number) || issueNumber || null,
         ref,
         workflowName: payload.workflow_run?.name ?? null,
+        workflowPath: payload.workflow_run?.path ?? null,
         workflowConclusion: payload.workflow_run?.conclusion ?? null,
       };
     default:

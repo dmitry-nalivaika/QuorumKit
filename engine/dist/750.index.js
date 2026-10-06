@@ -203,6 +203,7 @@ async function invoke(context) {
     run_id: context.runId ?? '',
     step: context.step ?? '',
     iteration: String(context.iteration ?? 1),
+    runtime_name: context.runtimeName ?? '',
     runtime_endpoint: context.runtime.endpoint ?? '',
     runtime_model: context.runtime.model ?? '',
     runtime_credential_ref: context.runtime.credential_ref ?? '',

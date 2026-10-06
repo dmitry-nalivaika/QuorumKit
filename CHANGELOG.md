@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Orchestrator no longer stalls in `awaiting-agent` when a dispatched agent finishes** (#378). Three defects stacked: (1) the `workflow_run` payload carries no inputs, so the issue number was never recovered and the event matched no pipeline; (2) the "is this the awaited agent" check compared the workflow's display name (`Developer Agent (Copilot)`) to the slug (`dev-agent`) and could never match; (3) agents report their result in a bot-authored comment, which the orchestrator workflow skips by design, so no transition was ever applied. Agent workflows now set `run-name` ending in `#<issue>`; the engine reads it, matches by workflow file path, and applies the outcome from the agent's `<!-- apm:run_id=… outcome=… -->` marker (run, step, iteration and author identity all verified) through the pipeline's transition table. A run that crashes without reporting still ends as `runtime-error`.
+- **Shared bot login no longer breaks result-marker authorship check** (#378). `github-actions[bot]` is listed under every agent in `src/agent-identities.yml`, but the login lookup keeps one agent per login, so the dev agent's own marker was rejected with the shipped registry. Added `loginMapsToAgent`, which honours every agent a login maps to.
+- **All orchestrator-dispatched agent workflows now declare `run_id`, `step`, `iteration` and `runtime_name` inputs** (#378). The runtime adapters send them to every agent, but only the dev workflow declared them, so GitHub would reject the dispatch of any other agent with `Unexpected inputs provided`. The dev agent's result marker now reports the runtime the Orchestrator actually resolved instead of a hardcoded `copilot-default`.
+
 ---
 
 ## [3.3.0] — 2026-10-06 · Issues #332, #359, #371

@@ -28,6 +28,9 @@ const schema = JSON.parse(await fs.readFile(schemaUrl, 'utf8'));
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(schema);
 
+/** Valid `outcome` values, straight from the schema (single source of truth). */
+export const OUTCOMES = Object.freeze([...schema.properties.outcome.enum]);
+
 const FENCE_RE = /```apm-msg\s*\n([\s\S]*?)```/g;
 const REDACT_DEFAULT = 200;
 
