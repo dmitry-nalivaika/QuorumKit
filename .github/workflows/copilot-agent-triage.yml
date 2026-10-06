@@ -30,6 +30,7 @@ permissions:
   issues: write
   pull-requests: read
   models: read
+  actions: write   # dispatch the BA enrichment workflow after labelling (see end of script)
 
 jobs:
   triage:
@@ -46,7 +47,10 @@ jobs:
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
+          # Only set when a dispatch explicitly selects the Azure key. Otherwise leave empty so the script
+          # resolves the credential from the runtime's credential_ref in src/runtimes.yml (falling back to
+          # GITHUB_TOKEN). A non-empty GITHUB_TOKEN here would always win and break issues-event runs.
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || '' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -313,3 +317,25 @@ jobs:
               issue_number: issueNumber,
               labels:       ['triaged'],
             });
+
+            // Labels applied with GITHUB_TOKEN never emit `issues.labeled` workflow runs (GitHub
+            // suppresses events caused by GITHUB_TOKEN to prevent loops), and the Orchestrator also
+            // ignores bot-sent events. So the `ba-enrichment-pipeline` rule (triaged + agent:ba)
+            // can never fire from here. Dispatch the enrichment workflow directly instead —
+            // workflow_dispatch is the one event GITHUB_TOKEN is allowed to trigger. The enrichment
+            // agent is idempotent (it skips issues whose four sections are already populated), so
+            // a later Orchestrator-driven dispatch from a human-applied label is harmless.
+            if (labelsToApply.includes('agent:ba')) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  workflow_id: 'copilot-agent-ba-enrich.yml',
+                  ref:         context.payload.repository?.default_branch ?? 'main',
+                  inputs:      { issue_number: String(issueNumber) },
+                });
+                console.log(`Dispatched copilot-agent-ba-enrich.yml for issue #${issueNumber}`);
+              } catch (e) {
+                core.setFailed(`Could not dispatch BA enrichment for #${issueNumber}: ${e.message}`);
+              }
+            }
