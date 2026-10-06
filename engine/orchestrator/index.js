@@ -30,6 +30,14 @@ import { resolveLogin, loginMapsToAgent, loadIdentities } from './identity-regis
 const APPROVAL_TIMEOUT_DEFAULT_HOURS = 72;
 const STEP_TIMEOUT_DEFAULT_MINUTES = 60;     // FR-019, ADR-007 §4
 
+// Scheduled reconciler (v3.3.2). The engine labels an issue while its run is awaiting an agent so the
+// cron scan can find those issues with one cheap query instead of reading every open issue's comments.
+export const AWAITING_LABEL = 'status:awaiting-agent';
+const RUN_LOOKUP_SKEW_MS = 10_000;           // runner vs. GitHub clock skew when matching agent runs
+const MARKER_ORPHAN_GRACE_MS = 10 * 60_000;  // result marker with no findable agent run: trust it after this
+const RECONCILE_EVENT_GRACE_MS = 2 * 60_000;  // let workflow_run delivery handle a just-finished run first
+const FAILED_RUN_CONCLUSIONS = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
+
 // ─── Exported core (fully testable with injected dependencies) ───────────────
 
 export async function runOrchestrator({
@@ -38,6 +46,12 @@ export async function runOrchestrator({
   runtimeRegistry, identities, env, clock,
 }) {
   const { issueNumber } = event;
+
+  // ── Scheduled sweep: recover runs whose agent finished (or died) without an event reaching us ──
+  if (event.type === 'schedule.reconcile') {
+    await reconcileAwaitingRuns({ client, event, pipelines, owner, repo, runtimeRegistry, identities, env, clock });
+    return;
+  }
 
   // ── FR-016/FR-026: per-event idempotency (audit-channel dedup) ──────────
   // Compute the dedup key from the raw event payload if the caller passed one.
@@ -381,6 +395,7 @@ async function advanceV2Pipeline({
   await persistV2(client, owner, repo, issueNumber, event, state,
     `⚙️ Invoking **${stepDef.agent}** (step \`${stepDef.name}\`, iteration ${state.currentIteration}, runtime \`${resolution.name}\`).`);
 
+  const dispatchStartedAt = now();
   try {
     const r = await invokeAgentV2({
       client, owner, repo, agent: stepDef.agent, ref: ref ?? 'main',
@@ -410,6 +425,8 @@ async function advanceV2Pipeline({
   state.status = 'awaiting-agent';
   state.updatedAt = now();
   state.awaitingSince = now();
+  // Taken BEFORE the dispatch call so the agent run (created after it) is never older than this.
+  state.dispatchedAt = dispatchStartedAt;
   await persistV2(client, owner, repo, issueNumber, event, state,
     `⏳ Waiting for **${stepDef.agent}** to post an apm-msg result (step \`${stepDef.name}\`, iteration ${state.currentIteration}).`);
 }
@@ -424,6 +441,15 @@ async function handleV2WorkflowRunCompleted({
   const stepDef = pipeline.steps.find(s => s.name === state.currentStep);
   if (!stepDef) return;
   if (!workflowMatchesAgent(event, stepDef.agent)) return;
+
+  // A run created before this iteration was dispatched belongs to an earlier iteration (the
+  // reconciler may already have settled it and re-dispatched). Judging it against the current
+  // iteration would wrongly end the run as `runtime-error`.
+  if (event.workflowCreatedAt && state.dispatchedAt &&
+      new Date(event.workflowCreatedAt).getTime() < new Date(state.dispatchedAt).getTime() - RUN_LOOKUP_SKEW_MS) {
+    console.log(`[orchestrator] workflow_run created ${event.workflowCreatedAt} predates dispatch ${state.dispatchedAt} — stale, ignoring`);
+    return;
+  }
 
   // FR-019: per-step timeout — if the awaiting window exceeded the step's
   // declared timeout_minutes, synthesize a `timeout` outcome and let the
@@ -448,16 +474,21 @@ async function handleV2WorkflowRunCompleted({
   }
 
   if (event.workflowConclusion === 'failure' || event.workflowConclusion === 'cancelled') {
-    state.status = 'failed';
-    state.outcome = 'runtime-error';
-    state.updatedAt = now();
-    await persistV2(client, owner, repo, issueNumber, event, state,
-      `❌ Agent workflow for **${stepDef.agent}** finished with \`${event.workflowConclusion}\` — outcome \`runtime-error\`.`);
+    await failStepWithRuntimeError({ client, owner, repo, event, state, stepDef, conclusion: event.workflowConclusion });
     return;
   }
 
   // Otherwise we wait for the agent's apm-msg comment to drive the transition;
   // no state change here. The comment-handler does the work.
+}
+
+/** The agent's workflow ended badly and reported nothing: end the run with `runtime-error`. */
+async function failStepWithRuntimeError({ client, owner, repo, event, state, stepDef, conclusion }) {
+  state.status = 'failed';
+  state.outcome = 'runtime-error';
+  state.updatedAt = now();
+  await persistV2(client, owner, repo, event.issueNumber, event, state,
+    `❌ Agent workflow for **${stepDef.agent}** finished with \`${conclusion}\` — outcome \`runtime-error\`.`);
 }
 
 /**
@@ -752,6 +783,137 @@ async function maybeTimeoutStep({
 }
 
 /**
+ * Keep the `status:awaiting-agent` label in step with the run status, so the scheduled
+ * reconciler can find waiting issues with a single query. Best-effort: the audit channel is
+ * authoritative and a label hiccup must never fail the run.
+ */
+async function syncAwaitingLabel(client, owner, repo, issueNumber, status) {
+  try {
+    if (status === 'awaiting-agent') {
+      if (typeof client.addLabels === 'function') await client.addLabels(owner, repo, issueNumber, [AWAITING_LABEL]);
+    } else if (typeof client.removeLabel === 'function') {
+      await client.removeLabel(owner, repo, issueNumber, AWAITING_LABEL);
+    }
+  } catch (err) {
+    console.warn(`[orchestrator] could not sync ${AWAITING_LABEL} label on #${issueNumber} (non-fatal): ${err.message}`);
+  }
+}
+
+/** Workflow file the runtime adapters dispatch for an agent (mirrors runtimes/*.js). */
+function agentWorkflowFile(agent, runtimeKind) {
+  const slug = agent.replace(/-agent$/, '');
+  return runtimeKind === 'claude' ? `agent-${slug}.yml` : `copilot-agent-${slug}.yml`;
+}
+
+/**
+ * Find the workflow run the Orchestrator dispatched for this step: the oldest run of the agent's
+ * workflow file, created at/after the dispatch, whose run-name ends in `#<issue>`.
+ * Returns null when there is none (yet) or the API is unavailable.
+ */
+async function findAgentRun({ client, owner, repo, issueNumber, state, stepDef, runtimeRegistry }) {
+  if (typeof client.listWorkflowRuns !== 'function') return null;
+  const since = new Date(state.dispatchedAt ?? state.awaitingSince ?? state.updatedAt).getTime() - RUN_LOOKUP_SKEW_MS;
+  if (!Number.isFinite(since)) return null;
+  const kind = runtimeRegistry?.runtimes?.[state.runtime_used]?.kind;
+  const workflow = agentWorkflowFile(stepDef.agent, kind);
+  const created = `>=${new Date(since).toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
+  const runs = await client.listWorkflowRuns(owner, repo, workflow, { created, event: 'workflow_dispatch' });
+  const mine = runs
+    .filter(r => new Date(r.created_at).getTime() >= since)
+    .filter(r => issueNumberFromRunTitle(r.display_title ?? r.name) === issueNumber)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  return mine[0] ?? null;
+}
+
+/**
+ * Scheduled sweep. Event delivery is not guaranteed (a finished agent run may never produce an
+ * orchestrator run, and a silent agent produces no event at all), so every few minutes this looks
+ * at each issue labelled `status:awaiting-agent` and settles it:
+ *   1. the agent reported a result marker and its run has finished -> apply the outcome through the
+ *      normal transition code;
+ *   2. its run ended failure/cancelled/timed_out without reporting -> `runtime-error`;
+ *   3. otherwise enforce the step's `timeout_minutes` (maybeTimeoutStep only ever ran on events).
+ * Failures are isolated per issue so one bad run cannot starve the rest.
+ */
+export async function reconcileAwaitingRuns({
+  client, event, pipelines, owner, repo, runtimeRegistry, identities, env, clock,
+}) {
+  if (typeof client.listIssuesByLabel !== 'function') {
+    console.log('[orchestrator] reconcile: client cannot list issues by label — skipping');
+    return { scanned: 0, settled: 0 };
+  }
+  const issues = await client.listIssuesByLabel(owner, repo, AWAITING_LABEL);
+  let settled = 0;
+  for (const issue of issues) {
+    try {
+      const done = await reconcileIssue({
+        client, event: { ...event, issueNumber: issue.number, labels: [] }, pipelines, owner, repo,
+        runtimeRegistry, identities, env, clock,
+      });
+      if (done) settled++;
+    } catch (err) {
+      console.error(`[orchestrator] reconcile #${issue.number} failed (continuing): ${err.message}`);
+    }
+  }
+  console.log(`[orchestrator] reconcile: scanned ${issues.length} issue(s), settled ${settled}`);
+  return { scanned: issues.length, settled };
+}
+
+/** @returns {Promise<boolean>} true when this call changed the run */
+async function reconcileIssue({ client, event, pipelines, owner, repo, runtimeRegistry, identities, env, clock }) {
+  const { issueNumber } = event;
+  const state = await loadState(client, owner, repo, issueNumber);
+
+  // Label without an awaiting run (finished by an event, or labelled by hand): heal and move on.
+  if (!state || state.status !== 'awaiting-agent') {
+    await syncAwaitingLabel(client, owner, repo, issueNumber, state?.status ?? 'none');
+    return false;
+  }
+  if (state.schemaVersion !== '2') return false;
+
+  const pipeline = pipelines.find(p => p.name === state.pipelineName);
+  const stepDef = pipeline?.steps.find(s => s.name === state.currentStep);
+  if (!pipeline || !stepDef) return false;
+
+  let run = null;
+  try {
+    run = await findAgentRun({ client, owner, repo, issueNumber, state, stepDef, runtimeRegistry });
+  } catch (err) {
+    console.warn(`[orchestrator] reconcile #${issueNumber}: run lookup failed (${err.message}); using markers/timeouts only`);
+  }
+  const runDone = run?.status === 'completed';
+  // Give the event path first go at a run that just finished, so the two never both act.
+  const runSettledAgo = runDone ? Date.now() - new Date(run.updated_at ?? run.created_at).getTime() : 0;
+  const eventPathHadItsChance = runDone && runSettledAgo >= RECONCILE_EVENT_GRACE_MS;
+
+  const reported = await findReportedOutcome({ client, owner, repo, issueNumber, state, stepDef, identities });
+  if (reported) {
+    // Applying while the agent's run is still going would let that run's later completion event be
+    // misread against the next iteration, so wait for it. With no findable run at all, trust a
+    // marker that has been sitting there past the grace period.
+    const orphanOldEnough = !run && Date.now() - new Date(reported.at).getTime() >= MARKER_ORPHAN_GRACE_MS;
+    if (eventPathHadItsChance || orphanOldEnough) {
+      await applyStepOutcome({
+        client, event, pipeline, state, stepDef,
+        outcome: reported.outcome, summary: reported.summary,
+        owner, repo, runtimeRegistry, identities, env, clock,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  if (eventPathHadItsChance && FAILED_RUN_CONCLUSIONS.has(run.conclusion)) {
+    await failStepWithRuntimeError({ client, owner, repo, event, state, stepDef, conclusion: run.conclusion });
+    return true;
+  }
+
+  return await maybeTimeoutStep({
+    client, event, pipeline, state, stepDef, owner, repo, identities, env, clock, runtimeRegistry,
+  });
+}
+
+/**
  * Persist v2 state: append audit comment, then upsert the live-status comment.
  * The audit channel is authoritative; the live-status PATCH is best-effort.
  */
@@ -761,6 +923,7 @@ async function persistV2(client, owner, repo, issueNumber, event, state, auditMe
     dedup_key: event._dedupKey ?? state.dedup_key ?? null,
   };
   await saveState(client, owner, repo, issueNumber, enriched, auditMessage);
+  await syncAwaitingLabel(client, owner, repo, issueNumber, state.status);
   if (typeof client.updateComment === 'function') {
     const summary =
       `### Pipeline \`${state.pipelineName}\` — run \`${state.runId}\`\n\n` +
@@ -950,7 +1113,7 @@ export function issueNumberFromRunTitle(title) {
   return m ? Number(m[1]) : null;
 }
 
-function normaliseEvent(eventName, payload) {
+export function normaliseEvent(eventName, payload) {
   const issue = payload.issue ?? payload.pull_request;
   const issueNumber = issue?.number ?? payload.number;
   const labels = (issue?.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
@@ -984,6 +1147,14 @@ function normaliseEvent(eventName, payload) {
         workflowName: payload.workflow_run?.name ?? null,
         workflowPath: payload.workflow_run?.path ?? null,
         workflowConclusion: payload.workflow_run?.conclusion ?? null,
+        workflowCreatedAt: payload.workflow_run?.created_at ?? null,
+      };
+    case 'schedule':
+      return {
+        type: 'schedule.reconcile',
+        labels: [],
+        issueNumber: null,
+        ref: payload.repository?.default_branch ?? process.env.GITHUB_REF_NAME ?? 'main',
       };
     default:
       return null;

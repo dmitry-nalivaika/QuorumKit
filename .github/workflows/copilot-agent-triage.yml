@@ -56,6 +56,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run Triage Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,7 +74,10 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/triage-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'triage', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/triage-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber = context.eventName === 'workflow_dispatch'
@@ -85,6 +89,8 @@ jobs:
             const issueTitle  = issueData.title  ?? '';
             const issueBody   = issueData.body   ?? '';
             const issueAuthor = issueData.user?.login ?? '';
+
+            await report.start({ issueNumber });
 
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
@@ -163,7 +169,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -176,7 +182,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -223,7 +229,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -240,11 +246,12 @@ jobs:
             const data = await res.json();
             const rawContent = extractText(data) ?? '{}';
 
-            let reply = '⚠️ Triage agent produced no output.';
+            const NO_OUTPUT = '⚠️ Triage agent produced no output.';
+            let reply = NO_OUTPUT;
             let labelsToApply = [];
             try {
               const parsed = JSON.parse(rawContent);
-              reply = parsed.comment?.trim() || reply;
+              reply = report.sanitize(parsed.comment?.trim()) || reply;
               // Only allow labels that match known prefixes — guards against prompt injection
               const ALLOWED_PREFIXES = ['type:', 'priority:', 'status:', 'agent:'];
               labelsToApply = (parsed.labels ?? []).filter(
@@ -252,7 +259,7 @@ jobs:
               );
             } catch (parseErr) {
               console.warn('Triage agent response was not valid JSON — falling back to raw text:', parseErr.message);
-              reply = rawContent || reply;
+              reply = report.sanitize(rawContent) || reply;
             }
 
             await github.rest.issues.createComment({
@@ -261,6 +268,10 @@ jobs:
               issue_number: issueNumber,
               body:         reply,
             });
+
+            report.verdict(reply === NO_OUTPUT
+              ? { outcome: 'needs-human', summary: 'Triage produced no output; a human must triage this issue.' }
+              : { outcome: 'success', summary: `Triaged #${issueNumber}: ${labelsToApply.join(', ') || 'no labels'}` });
 
             // Ensure all required labels exist before applying them
             const labelDefs = {
@@ -352,7 +363,7 @@ jobs:
                 });
                 console.log(`Dispatched copilot-agent-ba-enrich.yml for issue #${issueNumber}`);
               } catch (e) {
-                core.setFailed(`Could not dispatch BA enrichment for #${issueNumber}: ${e.message}`);
+                report.abort(`Could not dispatch BA enrichment for #${issueNumber}: ${e.message}`);
               }
             } else {
               // Same GITHUB_TOKEN limitation applies to every other pipeline trigger
@@ -372,6 +383,25 @@ jobs:
                 });
                 console.log(`Dispatched orchestrator.yml for issue #${issueNumber}`);
               } catch (e) {
-                core.setFailed(`Could not dispatch the Orchestrator for #${issueNumber}: ${e.message}`);
+                report.abort(`Could not dispatch the Orchestrator for #${issueNumber}: ${e.message}`);
               }
             }
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || github.event.issue.number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'triage', github, context, core });
+            await report.conclude({ env: process.env });

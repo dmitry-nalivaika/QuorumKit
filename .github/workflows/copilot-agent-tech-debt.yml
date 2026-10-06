@@ -27,6 +27,26 @@ on:
         type: choice
         options: [all, complexity, dead-code, dependencies, mutations]
         default: all
+      issue_number:
+        description: 'Issue or PR number (used when triggered by the Orchestrator)'
+        required: false
+        default: ''
+      run_id:
+        description: 'Orchestrator run ID (traceability; echoed in the result marker)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'tech-debt'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
   issues:
     types: [labeled]
 
@@ -50,6 +70,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Tech-Debt Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,10 +85,14 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/tech-debt-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'tech-debt', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/tech-debt-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
-            const issueNumber   = context.payload.issue?.number;   // set when triggered via 'issues: labeled'
+            // issues: labeled -> that issue; Orchestrator dispatch -> issue_number input
+            const issueNumber   = context.payload.issue?.number || Number(context.payload.inputs?.issue_number) || undefined;
             const focusArea     = process.env.FOCUS;
 
             const systemContent = [
@@ -76,13 +101,15 @@ jobs:
             ].filter(Boolean).join('\n\n---\n\n')
               || 'You are a helpful GitHub tech-debt analysis agent.';
 
-            const userContent =
+            await report.start({ issueNumber });
+
+            const userContent = report.withOutcome(
               `Trigger: ${context.eventName}.\n` +
               `Focus area: ${focusArea}.\n` +
               (issueNumber ? `Issue: #${issueNumber}\n` : '') +
               `Run a tech-debt health review for focus area "${focusArea}". ` +
               `Produce a structured report and list up to 5 items above threshold that should ` +
-              `become GitHub Issues. Be specific about files/modules involved.`;
+              `become GitHub Issues. Be specific about files/modules involved.`);
 
             // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
             // Foundry deployment when the Orchestrator's azure-openai runtime
@@ -103,7 +130,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -116,7 +143,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -161,7 +188,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -175,15 +202,40 @@ jobs:
               : d.choices?.[0]?.message?.content
             )?.trim() || undefined;
 
-            const data   = await res.json();
-            const report = extractText(data)
-              ?? '⚠️ Tech-debt agent produced no output.';
+            const data  = await res.json();
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('Tech-debt agent produced no output.');
+              return;
+            }
 
+            const r = report.interpret(reply);
             const today = new Date().toISOString().slice(0,7); // YYYY-MM
-            await github.rest.issues.create({
+            const created = await github.rest.issues.create({
               owner:  context.repo.owner,
               repo:   context.repo.repo,
               title:  `🔧 Tech-Debt Report – ${today} (${focusArea})`,
-              body:   report,
+              body:   r.body,
               labels: ['tech-debt', 'agent-report'],
             });
+            // The footprint goes on the triggering issue when there is one, else on the report issue.
+            core.setOutput('issue', issueNumber || created.data.number);
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ steps.agent.outputs.issue || github.event.inputs.issue_number || github.event.issue.number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'tech-debt', github, context, core });
+            await report.conclude({ env: process.env });

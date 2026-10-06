@@ -156,6 +156,54 @@ const manifests = {
   constitution: readSafe('.specify/memory/constitution.md'),
 };
 
+// ─── Footprints (posted by the runner, never by the model) ──────────────────
+// The manifest asks the agent to post `agent-start|complete|fail` comments with `gh issue comment`
+// through run_command. That goes through /bin/sh, where every unescaped backtick in the body
+// (`developer-agent`, `agent-start`, the ```apm-msg fence) is command substitution and expands to
+// nothing, so the stamps came out with empty fields and no apm-msg block. The runner knows every
+// value, so it posts them directly through the REST API, where there is no shell.
+const agentReport = require('./agent-report.cjs');
+
+function currentBranch() {
+  const b = exec('git rev-parse --abbrev-ref HEAD');
+  return b && !b.startsWith('ERROR:') && b !== 'HEAD' ? b : '';
+}
+
+// One builder for every agent (agent-report.cjs): the dev runner, the inline workflows and local
+// agents all produce the same footprint, apm-msg block and result marker.
+function buildFootprint(kind, { prNumber = null, ...details } = {}) {
+  return agentReport.buildFootprint(kind, {
+    pr: prNumber,
+    agent: 'dev',
+    issue: ISSUE_NUMBER,
+    runId: RUN_ID,
+    step: STEP,
+    iteration: ITERATION,
+    runtime: RUNTIME_NAME || RUNTIME_KIND,
+    ...details,
+  });
+}
+
+async function postFootprint(kind, { prNumber = null, ...details } = {}) {
+  try {
+    const body = buildFootprint(kind, { branch: currentBranch(), prNumber, ...details });
+    const r = await ghApi(`/repos/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}/comments`, {
+      method: 'POST', body: { body },
+    });
+    if (r.status < 200 || r.status >= 300) {
+      console.warn(`[runner] footprint '${kind}' not posted: HTTP ${r.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(`[runner] footprint '${kind}' not posted: ${err.message}`);
+    return false;
+  }
+}
+
+/** Remove the manifest sections that tell the model to post footprints itself (see above). */
+const stripFootprintInstructions = agentReport.stripFootprintInstructions;
+
 // ─── Tool definitions (shared shape; runtimes adapt to API differences) ─────
 const toolDefs = [
   {
@@ -358,19 +406,16 @@ async function executeTool(name, input) {
     }
     case 'signal_outcome': {
       finalOutcome = input.outcome;
-      const apmMsg = [
-        `**[QuorumKit Orchestrator]** Developer Agent (${RUNTIME_KIND}) -- outcome: \`${input.outcome}\``,
-        '',
-        input.summary,
-        input.pr_url || prUrl ? `\nPR: ${input.pr_url || prUrl}` : '',
-        RUN_ID
-          ? `\n<!-- apm:run_id=${RUN_ID} step=${STEP} iteration=${ITERATION} runtime=${RUNTIME_NAME || RUNTIME_KIND} outcome=${input.outcome} -->`
-          : '',
-      ].join('\n').trim();
-      const r = await ghApi(`/repos/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}/comments`, {
-        method: 'POST', body: { body: apmMsg },
+      const finalPr = input.pr_url || prUrl;
+      const prRef = (finalPr || '').match(/\/pull\/(\d+)/);
+      // One message: footprint + apm-msg + the result marker the Orchestrator acts on.
+      const ok = await postFootprint(input.outcome === 'success' ? 'complete' : 'fail', {
+        outcome: input.outcome,
+        summary: finalPr ? `${input.summary} PR: ${finalPr}` : input.summary,
+        prNumber: prRef ? prRef[1] : null,
+        nextAction: input.outcome === 'success' ? 'QA Agent review requested' : '',
       });
-      return r.status >= 200 && r.status < 300 ? `Outcome ${input.outcome} signalled.` : `ERROR: ${r.status}`;
+      return ok ? `Outcome ${input.outcome} signalled.` : 'ERROR: could not post the outcome comment';
     }
     default:
       return `Unknown tool: ${name}`;
@@ -415,7 +460,7 @@ function detectRepoTopology() {
 function buildSystemPrompt() {
   const topology = detectRepoTopology();
   return [
-    manifests.agent        && `## Developer Agent Manifest\n${manifests.agent}`,
+    manifests.agent        && `## Developer Agent Manifest\n${stripFootprintInstructions(manifests.agent)}`,
     manifests.skill        && `## Activation Skill\n${manifests.skill}`,
     manifests.constitution && `## Project Constitution\n${manifests.constitution}`,
     `## Runtime Context`,
@@ -432,6 +477,12 @@ function buildSystemPrompt() {
     ``,
     `Branch naming: zero-pad the issue number to 3 digits (e.g. issue 78 -> "078-short-slug").`,
     `MUST NOT commit to \`main\`. MUST NOT open a PR while tests are failing.`,
+    ``,
+    `## Footprints and shell safety`,
+    `The runner posts the agent-start / agent-complete / agent-fail footprint comments for you.`,
+    `Do NOT post them yourself. Report your result only by calling \`signal_outcome\`.`,
+    `\`run_command\` runs through /bin/sh: never put backticks or \`$(...)\` in a command, they are`,
+    `executed as command substitution. To comment on the issue use the \`post_issue_comment\` tool, not \`gh issue comment\`.`,
     ``,
     `## Working strategy — minimum viable change`,
     `Always prefer the **smallest diff that resolves the issue**. Before writing any`,
@@ -680,6 +731,8 @@ if (require.main === module) {
     exec('git config user.name  "github-actions[bot]"');
     exec('git config user.email "github-actions[bot]@users.noreply.github.com"');
 
+    await postFootprint('start');
+
     const system = buildSystemPrompt();
     const user   = await buildUserMessage();
 
@@ -700,11 +753,16 @@ if (require.main === module) {
 
     console.log(`[runner] final outcome: ${finalOutcome}`);
     process.exitCode = finalOutcome === 'success' ? 0 : 1;
-  })().catch(err => {
+  })().catch(async err => {
     console.error('[runner] FATAL:', err && err.stack || err);
+    // Crashed before signalling: leave a visible stamp (no result marker, so the orchestrator
+    // treats the finished run as a crash and ends it with runtime-error).
+    if (finalOutcome === null) {
+      await postFootprint('fail', { outcome: 'fail', marker: false, summary: `Runner crashed: ${(err && err.message) || err}` });
+    }
     process.exit(1);
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
+  module.exports = { executeTool, toolDefs, buildFootprint, stripFootprintInstructions, buildSystemPrompt, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
 }

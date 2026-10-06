@@ -27,6 +27,26 @@ on:
         type: choice
         options: [auto, patch, minor, major]
         default: auto
+      issue_number:
+        description: 'Issue or PR number (used when triggered by the Orchestrator)'
+        required: false
+        default: ''
+      run_id:
+        description: 'Orchestrator run ID (traceability; echoed in the result marker)'
+        required: false
+        default: ''
+      step:
+        description: 'Orchestrator pipeline step name'
+        required: false
+        default: 'release'
+      iteration:
+        description: 'Orchestrator iteration counter'
+        required: false
+        default: '1'
+      runtime_name:
+        description: 'Named runtime entry from src/runtimes.yml that the Orchestrator resolved (reported back in the result marker)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -44,6 +64,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Release Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,7 +80,10 @@ jobs:
             const {execSync} = require('child_process');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/release-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'release', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/release-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             // Collect recent commit log for context
@@ -72,12 +96,15 @@ jobs:
             ].filter(Boolean).join('\n\n---\n\n')
               || 'You are a helpful GitHub release agent.';
 
-            const userContent =
+            const dispatchedIssue = Number(context.payload.inputs?.issue_number) || undefined;
+            await report.start({ issueNumber: dispatchedIssue });
+
+            const userContent = report.withOutcome(
               `Bump override: ${process.env.BUMP_OVERRIDE}\n\n` +
               `Recent commits (last 50):\n${commitLog}\n\n` +
               `Determine the correct semver bump from commits since the last Git tag, ` +
               `generate the CHANGELOG delta, and describe the exact changes needed to ` +
-              `update the version file and CHANGELOG.md so a Version Bump PR can be opened.`;
+              `update the version file and CHANGELOG.md so a Version Bump PR can be opened.`);
 
             // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
             // Foundry deployment when the Orchestrator's azure-openai runtime
@@ -98,7 +125,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -111,7 +138,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -156,7 +183,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -170,14 +197,39 @@ jobs:
               : d.choices?.[0]?.message?.content
             )?.trim() || undefined;
 
-            const data   = await res.json();
-            const report = extractText(data)
-              ?? '⚠️ Release agent produced no output.';
+            const data  = await res.json();
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('Release agent produced no output.');
+              return;
+            }
 
-            await github.rest.issues.create({
+            const r = report.interpret(reply);
+            const created = await github.rest.issues.create({
               owner:  context.repo.owner,
               repo:   context.repo.repo,
               title:  `🚀 Release Agent Report – ${new Date().toISOString().slice(0,10)}`,
-              body:   report,
+              body:   r.body,
               labels: ['release', 'agent-report'],
             });
+            // The footprint goes on the issue the Orchestrator asked about, else on the report issue.
+            core.setOutput('issue', dispatchedIssue || created.data.number);
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ steps.agent.outputs.issue || github.event.inputs.issue_number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'release', github, context, core });
+            await report.conclude({ env: process.env });

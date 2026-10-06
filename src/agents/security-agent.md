@@ -10,90 +10,35 @@ The Security Agent audits Pull Requests against the OWASP Top 10 and the project
 
 > **Non-negotiable. Silent termination is prohibited (FR-013).**
 
-### Step 1 — Post `agent-start` BEFORE any work begins
+1. Post `agent-start` BEFORE any work begins (before reading any file or running anything).
+2. Post `agent-complete` as the FINAL action of every successful session.
+3. Post `agent-fail` instead of prose on any unrecoverable error.
 
-**Immediately when your session begins** — before reading any file, before running any security scan, before any other action — run:
-
-```bash
-gh pr comment <PR_NUMBER> --body "<!-- agent-footprint: start -->
-**Agent started:** \`security-agent\`
-- **Event type:** \`agent-start\`
-- **PR:** #<PR_NUMBER>
-- **Issue:** #<ISSUE_NUMBER>
-- **Branch:** \`<NNN-slug>\`
-- **Timestamp:** \`<UTC timestamp ISO-8601>\`"
-```
-
-Also post to the linked issue when HIGH or CRITICAL findings are expected: `gh issue comment <ISSUE_NUMBER>`.
-
-### Step 2 — Post `agent-complete` as the FINAL action on success
-
-**As the very last step of every successful session**, run `gh pr comment <PR_NUMBER>` with this body (fill all `<placeholder>` values). Also post to `gh issue comment <ISSUE_NUMBER>` if any HIGH or CRITICAL findings exist:
-
-```markdown
-<!-- agent-footprint: complete -->
-**Agent complete:** `security-agent`
-- **Event type:** `agent-complete`
-- **PR:** #<PR_NUMBER>
-- **Issue:** #<ISSUE_NUMBER> (HIGH/CRITICAL only)
-- **Branch:** `<NNN-slug>`
-- **Timestamp:** `<UTC timestamp ISO-8601>`
-- **Summary:** Security review complete — N findings (X CRITICAL, Y HIGH, Z MEDIUM/LOW).
-- **Next recommended action:** Resolve blockers before merge.
-
-\`\`\`apm-msg
-{
-  "version": "2",
-  "runId": "<uuid>",
-  "step": "security-review",
-  "agent": "security-agent",
-  "iteration": 1,
-  "outcome": "success",
-  "summary": "<summary \u2264 280 chars>",
-  "event_type": "complete",
-  "pipeline_id": "<NNN or null>",
-  "issue": "<issue-number-string or null>",
-  "pr": "<pr-number-string>",
-  "branch": "<NNN-slug>",
-  "timestamp": "<ISO-8601>"
-}
-\`\`\`
-```
-
-### Step 3 — Post `agent-fail` instead of prose on any unrecoverable error
-
-**If an unrecoverable error occurs at any point**, do NOT post plain-text prose. Run `gh pr comment <PR_NUMBER>` with this body instead (fill all `<placeholder>` values):
-
-```markdown
-<!-- agent-footprint: fail -->
-**Agent failed:** `security-agent`
-- **Event type:** `agent-fail`
-- **PR:** #<PR_NUMBER>
-- **Branch:** `<NNN-slug>`
-- **Timestamp:** `<UTC timestamp ISO-8601>`
-- **Error:** <error message — no raw stack trace>
-- **Recommended recovery:** Re-run the security review workflow; if problem persists, check Actions log.
-
-\`\`\`apm-msg
-{
-  "version": "2",
-  "runId": "<uuid>",
-  "step": "security-review",
-  "agent": "security-agent",
-  "iteration": 1,
-  "outcome": "fail",
-  "summary": "<error summary \u2264 280 chars>",
-  "event_type": "fail",
-  "pipeline_id": "<NNN or null>",
-  "issue": "<issue-number-string or null>",
-  "pr": "<pr-number-string>",
-  "branch": "<NNN-slug>",
-  "timestamp": "<ISO-8601>"
-}
-\`\`\`
-```
-
-If `gh` is unavailable (e.g., no network access), log the failure explicitly in the session output. Do NOT silently terminate.
+> **How to post footprints — same output from every trigger source.** Do not write these comments by
+> hand and do not pass them through `gh issue comment "..."`: a shell treats every backtick in the body as
+> command substitution and drops it, and hand-filled templates ship placeholder values (`runId` of
+> zeros, a midnight timestamp). Use the shared reporter instead. It fills every field from the real run
+> (run id, step, iteration, branch, timestamp) and produces the exact message the GitHub workflows post.
+>
+> ```bash
+> node .github/scripts/agent-report.cjs start    --agent security --issue <ISSUE_NUMBER> [--pr <PR_NUMBER>]
+> node .github/scripts/agent-report.cjs complete --agent security --issue <ISSUE_NUMBER> [--pr <PR_NUMBER>] \
+>     --outcome <success|fail|blocker|spec_gap|needs-human> --summary-stdin <<'EOF'
+> <one-sentence summary, at most 280 characters>
+> EOF
+> node .github/scripts/agent-report.cjs fail     --agent security --issue <ISSUE_NUMBER> --summary-stdin <<'EOF'
+> <error message, no raw stack trace>
+> EOF
+> ```
+>
+> - Run `start` before any other action, and exactly one of `complete` / `fail` as the last action.
+> - `--outcome` is your verdict. `success` posts the complete footprint; any other verdict posts the fail
+>   footprint with that outcome. Both carry the `apm-msg` block and the result marker the Orchestrator reads.
+> - When the Orchestrator started you, `RUN_ID`, `STEP` and `ITERATION` are set in the environment; the
+>   reporter uses them. Run locally, they are unset and the footprint says `unassigned`.
+> - If the reporter is unavailable, say so in your session output. Never end silently.
+>
+> The templates below describe the format the reporter produces. They are a reference, not text to copy.
 
 ---
 
@@ -359,6 +304,32 @@ Decision: BLOCK
 ---
 
 ## Agent Footprint
+
+> **How to post footprints — same output from every trigger source.** Do not write these comments by
+> hand and do not pass them through `gh issue comment "..."`: a shell treats every backtick in the body as
+> command substitution and drops it, and hand-filled templates ship placeholder values (`runId` of
+> zeros, a midnight timestamp). Use the shared reporter instead. It fills every field from the real run
+> (run id, step, iteration, branch, timestamp) and produces the exact message the GitHub workflows post.
+>
+> ```bash
+> node .github/scripts/agent-report.cjs start    --agent security --issue <ISSUE_NUMBER> [--pr <PR_NUMBER>]
+> node .github/scripts/agent-report.cjs complete --agent security --issue <ISSUE_NUMBER> [--pr <PR_NUMBER>] \
+>     --outcome <success|fail|blocker|spec_gap|needs-human> --summary-stdin <<'EOF'
+> <one-sentence summary, at most 280 characters>
+> EOF
+> node .github/scripts/agent-report.cjs fail     --agent security --issue <ISSUE_NUMBER> --summary-stdin <<'EOF'
+> <error message, no raw stack trace>
+> EOF
+> ```
+>
+> - Run `start` before any other action, and exactly one of `complete` / `fail` as the last action.
+> - `--outcome` is your verdict. `success` posts the complete footprint; any other verdict posts the fail
+>   footprint with that outcome. Both carry the `apm-msg` block and the result marker the Orchestrator reads.
+> - When the Orchestrator started you, `RUN_ID`, `STEP` and `ITERATION` are set in the environment; the
+>   reporter uses them. Run locally, they are unset and the footprint says `unassigned`.
+> - If the reporter is unavailable, say so in your session output. Never end silently.
+>
+> The templates below describe the format the reporter produces. They are a reference, not text to copy.
 
 All invocations MUST post structured GitHub comments (FR-001, FR-007).
 

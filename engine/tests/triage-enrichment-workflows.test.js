@@ -60,7 +60,8 @@ describe('triage dispatches BA enrichment directly', () => {
     const dispatchIdx = triage.indexOf('createWorkflowDispatch');
     expect(triagedIdx).toBeGreaterThan(-1);
     expect(dispatchIdx).toBeGreaterThan(triagedIdx);
-    expect(triage).toMatch(/core\.setFailed\(`Could not dispatch BA enrichment/);
+    // report.abort() fails the job (core.setFailed) and records the error for the failure footprint.
+    expect(triage).toMatch(/report\.abort\(`Could not dispatch BA enrichment/);
   });
 
   it('target workflow exists and accepts issue_number via workflow_dispatch', () => {

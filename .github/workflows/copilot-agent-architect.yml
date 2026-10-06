@@ -55,17 +55,19 @@ permissions:
 jobs:
   architect:
     if: |
-      contains(github.event.comment.body, '@architect-agent') &&
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.comment.body, '@architect-agent') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (github.event.issue.pull_request != null ||
        github.event_name == 'pull_request_review_comment' ||
-       github.event.issue.pull_request == null)
+       github.event.issue.pull_request == null))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run Architect Agent via GitHub Models
+        id: agent
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,7 +81,10 @@ jobs:
             const fs = require('fs');
             const readSafe = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
-            const agentInstructions = readSafe('.github/agents/architect-agent.md');
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'architect', github, context, core });
+
+            const agentInstructions = report.stripFootprintInstructions(readSafe('.github/agents/architect-agent.md'));
             const constitution      = readSafe('.specify/memory/constitution.md');
 
             const issueNumber   = context.eventName === 'workflow_dispatch'
@@ -88,15 +93,21 @@ jobs:
             const commentBody   = context.payload.comment?.body ?? '';
             const commentAuthor = context.payload.comment?.user?.login ?? '';
 
+            await report.start({ issueNumber });
+
             const systemContent = [
               constitution      && `## Project Constitution\n${constitution}`,
               agentInstructions && `## Agent Instructions\n${agentInstructions}`,
             ].filter(Boolean).join('\n\n---\n\n')
               || 'You are a helpful GitHub architect agent.';
 
-            const userContent =
-              `@${commentAuthor} asked you (via comment on #${issueNumber}) to perform an architectural review.\n` +
-              `Comment:\n${commentBody}`;
+            const prDiff = await report.prContext(issueNumber);
+            const userContent = report.withOutcome(
+              (commentAuthor
+                ? `@${commentAuthor} asked you (via comment on #${issueNumber}) to perform an architectural review.\n`
+                : `The Orchestrator asked you to perform an architectural review for #${issueNumber}.\n`) +
+              (commentBody ? `Comment:\n${commentBody}\n` : '') +
+              (prDiff ? `\n${prDiff}\n` : ''));
 
             // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
             // Foundry deployment when the Orchestrator's azure-openai runtime
@@ -117,7 +128,7 @@ jobs:
               } catch { return false; }
             };
             if (runtimeEndpoint && !isAllowedRuntimeEndpoint(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT host is not on the allowlist (must be an https URL ending in ${allowedRuntimeEndpointHostSuffixes.join(' or ')}): ${runtimeEndpoint}`);
               return;
             }
             // SEC-HIGH-001 (Security re-review, PR #334): a host-suffix allowlist alone
@@ -130,7 +141,7 @@ jobs:
               [...readSafe('src/runtimes.yml').matchAll(/^\s+endpoint:\s*(\S+)\s*$/gm)].map(m => m[1])
             );
             if (runtimeEndpoint && !declaredRuntimeEndpoints.has(runtimeEndpoint)) {
-              core.setFailed(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
+              report.abort(`RUNTIME_ENDPOINT is not declared in src/runtimes.yml: ${runtimeEndpoint}`);
               return;
             }
             // Foundry v1 "Responses" endpoints (…/openai/v1/responses) use a different
@@ -175,7 +186,7 @@ jobs:
 
             if (!res.ok) {
               const txt = await res.text();
-              core.setFailed(`Runtime API error ${res.status}: ${txt}`);
+              report.abort(`Runtime API error ${res.status}: ${txt}`);
               return;
             }
 
@@ -190,12 +201,30 @@ jobs:
             )?.trim() || undefined;
 
             const data  = await res.json();
-            const reply = extractText(data)
-              ?? '⚠️ Architect agent produced no output.';
+            const reply = extractText(data);
+            if (!reply) {
+              report.abort('Architect agent produced no output.');
+              return;
+            }
 
-            await github.rest.issues.createComment({
-              owner:        context.repo.owner,
-              repo:         context.repo.repo,
-              issue_number: issueNumber,
-              body:         reply,
-            });
+            // Posts the cleaned report and records the verdict for the final step.
+            await report.reply({ issueNumber, reply });
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.agent.outputs.outcome }}
+          SUMMARY: ${{ steps.agent.outputs.summary }}
+          ERROR: ${{ steps.agent.outputs.error }}
+          PR_NUMBER: ${{ steps.agent.outputs.pr }}
+          BRANCH: ${{ steps.agent.outputs.branch }}
+          PAYLOAD: ${{ steps.agent.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const report = require('./.github/scripts/agent-report.cjs')
+              .forGithubScript({ agent: 'architect', github, context, core });
+            await report.conclude({ env: process.env });
