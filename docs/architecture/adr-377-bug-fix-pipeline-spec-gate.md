@@ -4,7 +4,7 @@
 |---|---|
 | **ADR Number** | 377 |
 | **Issue** | #377 — Dev agent blocks bug-fix pipeline: "Spec for issue not found at specs/NNN-*/spec.md" |
-| **Status** | Proposed |
+| **Status** | Approved |
 | **Date** | 2026-10-06 |
 | **Deciders** | Architect Agent |
 | **Supersedes** | — |
