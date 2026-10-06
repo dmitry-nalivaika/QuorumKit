@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- **Orchestrator no longer stalls in `awaiting-agent` when a dispatched agent finishes** (#378). Three defects stacked: (1) the `workflow_run` payload carries no inputs, so the issue number was never recovered and the event matched no pipeline; (2) the "is this the awaited agent" check compared the workflow's display name (`Developer Agent (Copilot)`) to the slug (`dev-agent`) and could never match; (3) agents report their result in a bot-authored comment, which the orchestrator workflow skips by design, so no transition was ever applied. Agent workflows now set `run-name` ending in `#<issue>`; the engine reads it, matches by workflow file path, and applies the outcome from the agent's `<!-- apm:run_id=… outcome=… -->` marker (run, step, iteration and author identity all verified) through the pipeline's transition table. A run that crashes without reporting still ends as `runtime-error`.
+
 ---
 
 ## [3.3.0] — 2026-10-06 · Issues #332, #359, #371

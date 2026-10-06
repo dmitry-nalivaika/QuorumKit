@@ -1,4 +1,7 @@
 name: BA Issue Enrichment Agent (Copilot)
+# Issue number in the run title lets the Orchestrator map a finished run (workflow_run carries no inputs)
+# back to its issue (#378). The engine parses the trailing `#<n>`.
+run-name: "BA Issue Enrichment Agent (Copilot) #${{ github.event.inputs.issue_number || github.event.issue.number || github.event.pull_request.number }}"
 # Triggered automatically by the Orchestrator (ba-enrichment-pipeline, FR-001)
 # when the Triage Agent applies the `triaged` label to an issue that already
 # carries `agent:ba`.
