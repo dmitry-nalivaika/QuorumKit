@@ -15,6 +15,16 @@ describe('runtime-registry.validateRegistry', () => {
     expect(validateRegistry(goodRegistry)).toEqual([]);
   });
 
+  it('treats a null agent_defaults (key present, all entries commented out) as empty', () => {
+    const r = { ...goodRegistry, agent_defaults: null };
+    expect(validateRegistry(r)).toEqual([]);
+  });
+
+  it('still rejects a non-object, non-null agent_defaults', () => {
+    const r = { ...goodRegistry, agent_defaults: 'copilot-default' };
+    expect(validateRegistry(r).some(e => e.code === 'SCHEMA_INVALID')).toBe(true);
+  });
+
   it('rejects every reserved kind with RUNTIME_KIND_NOT_ENABLED', () => {
     for (const kind of RESERVED_KINDS) {
       const r = {

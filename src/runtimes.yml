@@ -20,10 +20,12 @@ default_runtime: azure-foundry-standard
 # Per-agent overrides (FR-008).
 # All agents now use azure-foundry-standard by default.
 # Override here only if specific agents need different runtimes.
-agent_defaults:
-  # All agents inherit azure-foundry-standard from default_runtime
-  # Add overrides here only if needed, e.g.:
-  #   triage-agent: copilot-default  # Use GitHub Models for high-frequency, low-stakes work
+# All agents inherit azure-foundry-standard from default_runtime.
+# Add overrides here only if needed, e.g.:
+#   agent_defaults:
+#     triage-agent: copilot-default  # GitHub Models for high-frequency, low-stakes work
+# NOTE: keep `{}` (or real entries) — a bare `agent_defaults:` with only comments parses as null.
+agent_defaults: {}
 
 
 runtimes:
