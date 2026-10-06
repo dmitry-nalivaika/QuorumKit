@@ -168,11 +168,26 @@ describe('T004/T005 collectFacts and version findings', () => {
     expect(facts.skipped.map(s => s.nnn).sort()).toEqual(['030']);
   });
 
-  it('drops a candidate whose issue state cannot be determined instead of guessing', async () => {
-    makeRepo({ 'specs/040-x/spec.md': '# X\n' });
-    const facts = await audit.collectFacts(dir, { getIssueState: async () => null });
+  it('records a lookup that failed as unchecked, never as a skip (FR-016)', async () => {
+    makeRepo({ 'specs/040-x/spec.md': '# X\n', 'specs/050-y/spec.md': '# Y\n' });
+    const states = { 50: 'open' };
+    const facts = await audit.collectFacts(dir, { getIssueState: async n => states[n] ?? null });
     expect(facts.adrCandidates).toEqual([]);
-    expect(facts.skipped[0]).toMatchObject({ nnn: '040', reason: 'issue state unknown' });
+    expect(facts.unchecked).toEqual([{ nnn: '040', reason: 'issue state lookup failed' }]);
+    expect(facts.skipped.map(s => s.nnn)).toEqual(['050']);
+  });
+
+  it('records every spec as unchecked when no lookup is available at all', async () => {
+    makeRepo({ 'specs/040-x/spec.md': '# X\n' });
+    const facts = await audit.collectFacts(dir, {});
+    expect(facts.unchecked.map(s => s.nnn)).toEqual(['040']);
+  });
+
+  it('any state other than open or closed (including an unexpected value) is unchecked, never a silent skip', async () => {
+    makeRepo({ 'specs/040-x/spec.md': '# X\n' });
+    const facts = await audit.collectFacts(dir, { getIssueState: async () => 'missing' });
+    expect(facts.skipped).toEqual([]);
+    expect(facts.unchecked.map(s => s.nnn)).toEqual(['040']);
   });
 
   it('reads versions from package.json, quorumkit.yml and the latest CHANGELOG release', async () => {
@@ -285,6 +300,67 @@ describe('T006 validateFindings', () => {
     expect(out).toContain('[REDACTED]');
     expect(out).not.toMatch(/@someone/);
     expect(out).not.toContain('\n');
+  });
+
+  describe('judge text cannot plant remote content or links in the tracking issue', () => {
+    const clean = d => audit.validateFindings([finding({ description: d })], ctx()).valid[0].description;
+
+    it('removes images entirely, so no tracking pixel is fetched when the issue renders', () => {
+      const out = clean('Stale. ![pixel](https://evil.example/p.gif?u=1) done.');
+      expect(out).not.toMatch(/!\[|evil\.example|\]\(/);
+      expect(out).toContain('Stale.');
+    });
+
+    it('turns a markdown link into its visible text plus an inert, non-clickable host', () => {
+      const out = clean('See [the migration guide](https://phish.example/login) for details.');
+      expect(out).toContain('the migration guide');
+      expect(out).not.toMatch(/\]\(|https?:\/\//);
+    });
+
+    it('does not leave a bare http(s) URL that GitHub would auto-link', () => {
+      const out = clean('Visit https://phish.example/login now, or http://x.example.');
+      expect(out).not.toMatch(/https?:\/\//);
+      expect(out).toContain('phish.example');
+    });
+
+    it('strips raw HTML tags and their attributes, keeping surrounding words', () => {
+      const out = clean('Outdated <img src="https://evil.example/x.png" onerror="alert(1)"> and <a href="https://phish.example">click</a> <script>x()</script>.');
+      expect(out).not.toMatch(/<|>|onerror|href=|src=/);
+      expect(out).toContain('Outdated');
+      expect(out).toContain('click');
+    });
+
+    it('also neutralises reference-style links and autolinks', () => {
+      const out = clean('Read [guide][1] or <https://phish.example/a>.\n\n[1]: https://phish.example/b');
+      expect(out).not.toMatch(/https?:\/\/|\]:/);
+    });
+
+    it('keeps inline code that names a path or a command', () => {
+      expect(clean('Run `npm test` and see `docs/guide.md`.')).toContain('`npm test`');
+    });
+
+    it('leaves a URL inside a code span alone, because GitHub does not link code', () => {
+      expect(clean('External link `https://example.com/a` was unreachable.')).toContain('`https://example.com/a`');
+    });
+
+    it('an unbalanced backtick cannot be used to hide a link from the filter', () => {
+      const out = clean('Odd ` then [click](https://phish.example/x) here.');
+      expect(out).not.toMatch(/\]\(|https?:\/\//);
+      expect(out).not.toContain('`');
+    });
+
+    it('an escaped backtick does not open a code span that would hide a link', () => {
+      const out = clean('Start \\`[click](https://phish.example/x)\\` end.');
+      expect(out).not.toMatch(/\]\(|https?:\/\//);
+    });
+
+    it('the external-link finding names the URL in a code span so it stays readable but is not clickable', async () => {
+      const [f] = await audit.checkExternalLinks(
+        [{ url: 'https://example.com/x', file: 'README.md', section: 'R', line: 2 }],
+        { fetchImpl: async () => ({ status: 404 }), sleep: async () => {}, ignorePatterns: [], retries: 3 },
+      );
+      expect(f.description).toContain('`https://example.com/x`');
+    });
   });
 
   it('caps the description length', () => {
@@ -584,6 +660,40 @@ describe('T010/T011 publish', () => {
     expect(gh.calls.close).toEqual([]);
   });
 
+  it('#335: the complete footprint carries the judge usage when the run recorded some, and omits it otherwise', async () => {
+    const usage = { runtime: 'azure-foundry-standard', model: 'gpt-5.2-codex', prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, estimated_cost_usd: null };
+    const withUsage = makeGh();
+    await run(withUsage, [fp(1)], { usage });
+    const done = withUsage.calls.comment.map(c => c.body).find(b => b.includes('agent-footprint: complete'));
+    expect(done).toContain('"usage"');
+    expect(done).toContain('"total_tokens": 120');
+
+    const without = makeGh();
+    await run(without, [fp(1)]);
+    const done2 = without.calls.comment.map(c => c.body).find(b => b.includes('agent-footprint: complete'));
+    expect(done2).not.toContain('"usage"');
+  });
+
+  it('#335: a malformed usage value is ignored rather than breaking the report', async () => {
+    const gh = makeGh();
+    const r = await run(gh, [fp(1)], { usage: { total_tokens: 'lots' } });
+    expect(r.action).toBe('created');
+    expect(gh.calls.comment.map(c => c.body).join('\n')).not.toContain('"usage"');
+  });
+
+  it('#335: publishFromFiles passes usage through to the footprint', async () => {
+    makeRepo({ 'README.md': '# Proj\n\n## Features\n\nText.\n' });
+    const out = path.join(dir, '..', path.basename(dir) + '-usage-out');
+    await audit.collect({ root: dir, out, getIssueState: async () => null, fetchImpl: async () => ({ status: 200 }), sleep: async () => {}, log: { info() {}, warn() {} } });
+    const judge = path.join(out, 'judge.json');
+    fs.writeFileSync(judge, JSON.stringify([finding()]));
+    const gh = makeGh();
+    const usage = { runtime: 'r', model: 'm', prompt_tokens: 1, completion_tokens: 2, total_tokens: 3, estimated_cost_usd: null };
+    await audit.publishFromFiles({ github: gh, owner: 'o', repo: 'r', dir: out, judgeFile: judge, root: dir, runUrl: 'u', log: { info() {}, warn() {} }, summary: async () => {}, usage });
+    fs.rmSync(out, { recursive: true, force: true });
+    expect(gh.calls.comment.map(c => c.body).join('\n')).toContain('"total_tokens": 3');
+  });
+
   it('US-2: posts a very large first report as an issue plus continuation comments, saying so', async () => {
     const gh = makeGh();
     const many = Array.from({ length: 500 }, (_, i) => fp(i + 1, { description: 'x'.repeat(300) }));
@@ -661,6 +771,47 @@ describe('T014 parseJudgeOutput', () => {
 
   it.each(['', 'no drift found', '{"a":1}', '[1,2', 'OUTCOME: success'])('throws on %j rather than treating it as clean', text => {
     expect(() => audit.parseJudgeOutput(text)).toThrow();
+  });
+});
+
+describe('FR-016 a check that could not run must not look like "no drift"', () => {
+  const quiet = { info: vi.fn(), warn: vi.fn() };
+
+  it('collect throws when an ADR candidate lookup failed, and says which specs were not checked', async () => {
+    makeRepo({ 'README.md': '# R\n', 'specs/040-x/spec.md': '# X\n' });
+    await expect(audit.collect({
+      root: dir, getIssueState: async () => null, fetchImpl: async () => ({ status: 200 }), sleep: async () => {}, log: quiet,
+    })).rejects.toThrow(/040/);
+  });
+
+  it('collect writes no output files when it fails, so a later step cannot publish a clean record', async () => {
+    makeRepo({ 'README.md': '# R\n', 'specs/040-x/spec.md': '# X\n' });
+    const out = path.join(dir, '..', path.basename(dir) + '-failed-out');
+    await expect(audit.collect({
+      root: dir, out, getIssueState: async () => null, fetchImpl: async () => ({ status: 200 }), sleep: async () => {}, log: quiet,
+    })).rejects.toThrow();
+    const wrote = fs.existsSync(out);
+    fs.rmSync(out, { recursive: true, force: true });
+    expect(wrote).toBe(false);
+  });
+
+  it('the CLI fails with no GITHUB_TOKEN when specs need a lookup, and never reports clean', async () => {
+    makeRepo({ 'README.md': '# R\n', 'specs/040-x/spec.md': '# X\n' });
+    const out = path.join(dir, '..', path.basename(dir) + '-cli-out');
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await expect(audit.main(['collect', '--root', dir, '--out', out], {})).rejects.toThrow(/could not be checked/i);
+    const printed = logSpy.mock.calls.flat().join('\n');
+    logSpy.mockRestore();
+    fs.rmSync(out, { recursive: true, force: true });
+    expect(printed).not.toMatch(/clean/i);
+  });
+
+  it('a repository where every spec has an ADR needs no lookup and still collects', async () => {
+    makeRepo({ 'README.md': '# R\n', 'specs/010-a/spec.md': '# A\n', 'docs/architecture/adr-010-a.md': '# ADR\n' });
+    const r = await audit.collect({
+      root: dir, getIssueState: async () => null, fetchImpl: async () => ({ status: 200 }), sleep: async () => {}, log: quiet,
+    });
+    expect(r.facts.unchecked).toEqual([]);
   });
 });
 

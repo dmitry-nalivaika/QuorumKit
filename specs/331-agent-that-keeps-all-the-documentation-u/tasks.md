@@ -40,7 +40,18 @@
 ## Phase 5: Handoff
 
 - [ ] T023 Dual-AI smoke test notes, Security Agent review request, PR description from template, `agent-complete` footprint
+  - Done: Security Agent review (approved), PR #394, footprints. Open: the Dual-AI smoke test can only run after merge (both workflows are `workflow_dispatch`); compare the Claude and Copilot findings, see "Known limits" in `docs/PIPELINES.md`.
+
+## Phase 6: Review rework (PR #394, REQUEST_CHANGES)
+
+- [x] T024 [US1] BLOCKER (FR-016): tests first, then `collectFacts` records a failed issue-state lookup in `facts.unchecked` (not `skipped`); `collect` throws naming the specs before writing any file; no token / repository counts as a failed lookup. Replaced the test that pinned the silent skip
+- [x] T025 Process: `.specify/feature.json` restored to the merge-base version, so the PR no longer touches it and no longer conflicts with `main`
+- [x] T026 [US2] Suggestion: `cleanText` neutralises images, markdown and reference links, autolinks, bare URLs and raw HTML (code spans kept); the external-link finding puts the URL in a code span
+- [x] T027 Suggestion: Claude judge `Write` scoped to `judge.json`; the unchanged check compares `git status --porcelain --ignored` before and after the judge
+- [x] T028 Suggestion (#335): Copilot judge calls `report.recordUsage`; `USAGE` goes to the publish step and into the complete footprint; wiring test added (the audit is not in `SLUGS` because it has no "Report result" step)
+- [x] T029 Suggestion: "Known limits" in `docs/PIPELINES.md` document the runtime evidence difference, one model finding per category/file/section, and the plain-text rule; failure table and CHANGELOG updated
+- [ ] T030 Not done, left for a follow-up: reconcile the pre-existing workflow count mismatch (README 28, `quorumkit.yml` 27, 36 files in `src/.github/workflows/`)
 
 ## Dependencies
 
-T001-T005 -> T006-T008 -> T009-T014 -> T015-T018 -> T019-T022 -> T023.
+T001-T005 -> T006-T008 -> T009-T014 -> T015-T018 -> T019-T022 -> T023 -> T024-T029.

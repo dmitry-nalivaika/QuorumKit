@@ -102,9 +102,32 @@ describe('T016 Claude judge is confined', () => {
   const doc = load(CLAUDE);
   const judge = steps(doc).find(s => String(s.uses).startsWith('anthropics/claude-code-action'));
 
-  it('may only read and write the findings file, with no shell', () => {
-    expect(judge.with.claude_args).toMatch(/--allowedTools Read,Glob,Grep,Write\b/);
-    expect(judge.with.claude_args).not.toMatch(/Bash|Edit/);
+  it('may only read, and write only the findings file, with no shell', () => {
+    const args = judge.with.claude_args;
+    expect(args).toMatch(/--allowedTools\s+"?Read,Glob,Grep,Write\(/);
+    // Write is scoped to the one findings file under the runner temp dir, never granted bare.
+    expect(args).not.toMatch(/\bWrite(?!\()/);
+    expect(args).toContain('docs-audit/judge.json)');
+    expect(args).toContain('${{ runner.temp }}');
+    expect(args).not.toMatch(/Bash|Edit|MultiEdit|NotebookEdit/);
+  });
+
+  it('records the work tree, ignored files included, before the judge runs', () => {
+    const names = steps(doc).map(s => s.name);
+    const snap = steps(doc).find(s => /snapshot/i.test(s.name || ''));
+    expect(snap).toBeDefined();
+    expect(names.indexOf(snap.name)).toBeLessThan(names.indexOf(judge.name));
+    expect(snap.run).toContain('git status --porcelain --ignored');
+    expect(snap.run).toContain('$RUNNER_TEMP');
+  });
+
+  it('compares against that snapshot right after the judge, so a gitignored file cannot be written unnoticed', () => {
+    const names = steps(doc).map(s => s.name);
+    const check = steps(doc)[names.indexOf(judge.name) + 1];
+    expect(check.name).toBe('Confirm the working tree is unchanged (read-only audit)');
+    expect(check.run).toContain('git status --porcelain --ignored');
+    expect(check.run).toMatch(/diff\b/);
+    expect(check.run).toContain('exit 1');
   });
 
   it('is followed by a check that the work tree is unchanged', () => {

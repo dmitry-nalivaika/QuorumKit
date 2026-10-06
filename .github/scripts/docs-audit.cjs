@@ -271,7 +271,7 @@ async function checkExternalLinks(links, o = {}) {
       seen.add(key);
       findings.push({
         category: 'cross-reference', severity: 'DOCS-SUGGESTION', file: l.file, section, rule: `link:${u}`,
-        description: `External link ${u} (line ${l.line}) was unreachable on ${retries} attempts.`,
+        description: `External link \`${u}\` (line ${l.line}) was unreachable on ${retries} attempts.`,
       });
     }
   }
@@ -294,7 +294,7 @@ const cmpVersion = (a, b) => {
 function listDir(root, rel) { try { return fs.readdirSync(path.join(root, rel)); } catch { return []; } }
 
 async function collectFacts(root, { getIssueState } = {}) {
-  const facts = { versions: {}, changelogLatestLine: null, adrs: [], adrCandidates: [], skipped: [], counts: {} };
+  const facts = { versions: {}, changelogLatestLine: null, adrs: [], adrCandidates: [], skipped: [], unchecked: [], counts: {} };
 
   const yml = readText(root, 'quorumkit.yml');
   const ymlVersion = yml && /^version:\s*["']?([0-9][^\s"']*)/m.exec(yml);
@@ -323,13 +323,16 @@ async function collectFacts(root, { getIssueState } = {}) {
     const num = Number(m[1]);
     if (adrNumbers.has(num)) continue; // matched by issue number, never by slug
     const state = getIssueState ? await getIssueState(num) : null;
-    if (state !== 'closed') {
-      facts.skipped.push({ nnn: m[1], reason: state === 'open' ? 'issue still open' : 'issue state unknown' });
-      continue;
+    if (state === 'closed') {
+      const text = readText(root, specFile) || '';
+      const h = parseDoc(text).headings[0];
+      facts.adrCandidates.push({ nnn: m[1], specFile, title: h ? h.text : name, excerpt: text.slice(0, 1500) });
+    } else if (state === 'open') {
+      facts.skipped.push({ nnn: m[1], reason: 'issue still open' });
+    } else {
+      // FR-016: no answer is not "no ADR needed". It means this check did not run.
+      facts.unchecked.push({ nnn: m[1], reason: 'issue state lookup failed' });
     }
-    const text = readText(root, specFile) || '';
-    const h = parseDoc(text).headings[0];
-    facts.adrCandidates.push({ nnn: m[1], specFile, title: h ? h.text : name, excerpt: text.slice(0, 1500) });
   }
 
   facts.counts = {
@@ -367,10 +370,43 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
 ];
 
-/** One line of plain text that is safe to publish: no protocol markers, comments, mentions or secrets. */
+/**
+ * Make text inert when GitHub renders it. Judge text comes from a model that has read untrusted
+ * documentation, so an image would be fetched when the issue is viewed (tracking pixel), and a link
+ * or HTML would be clickable from a bot-authored issue (phishing). Code spans are rendered literally
+ * by GitHub, so they are kept; everything outside them loses images, links, autolinks, bare URLs and
+ * HTML. Stray backticks and brackets are removed too, since they are how a link would be hidden from
+ * a filter or rebuilt from the pieces left behind.
+ */
+function neutraliseMarkup(text) {
+  const spans = [];
+  const NUL = '\u0000';
+  let s = String(text).split(NUL).join('');
+  // Only a well-formed, unescaped single-backtick pair with something inside is protected as code.
+  s = s.replace(/(?<![\\`])`([^`\n]+)`(?!`)/g, (_, code) => { spans.push(code); return `${NUL}${spans.length - 1}${NUL}`; });
+
+  s = s
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')                       // inline image
+    .replace(/!\[[^\]]*\]\[[^\]]*\]/g, ' ')                      // reference image
+    .replace(/^[ \t]*\[[^\]\n]+\]:[ \t]*\S.*$/gm, ' ')           // reference definition
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                     // inline link keeps only its text
+    .replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')                    // reference link keeps only its text
+    .replace(/<((?:https?|ftp|mailto):[^>\s]*)>/gi, '$1')        // autolink becomes a bare URL, handled next
+    .replace(/<\/?[A-Za-z][^>]*>/g, ' ')                         // HTML tag with its attributes
+    .replace(/<(?=[A-Za-z\/!?])/g, '')                           // an unclosed tag opener
+    .replace(/\b(?:https?|ftp):\/\//gi, '')                      // no scheme, so GitHub does not auto-link it
+    .replace(/\bwww\./gi, 'www[.]')                              // GitHub also auto-links www. hosts
+    .replace(/`/g, '')                                           // stray or escaped backticks
+    .replace(/\[/g, '(').replace(/\]/g, ')');                    // what is left cannot form a link
+
+  return s.split(NUL).map((part, i) => (i % 2 === 0 ? part : `\`${spans[Number(part)]}\``)).join('');
+}
+
+/** One line of plain text that is safe to publish: no protocol markers, comments, mentions, secrets or live markup. */
 function cleanText(text, max = DESCRIPTION_MAX) {
   let s = report.sanitizeModelText(String(text ?? ''));
   s = s.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<!--|-->/g, ' ');
+  s = neutraliseMarkup(s);
   for (const re of SECRET_PATTERNS) s = s.replace(re, '[REDACTED]');
   s = s.replace(/@(?=[A-Za-z0-9_])/g, '').replace(/\s+/g, ' ').trim();
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}\u2026` : s;
@@ -677,7 +713,8 @@ async function publish(o) {
   });
   const done = `Scheduled documentation audit reported ${fresh.length} new finding(s) over ${scanned} files.`;
   await reporter.start({ issueNumber: issue });
-  await reporter.finish({ issueNumber: issue, outcome: 'success', summary: done });
+  // #335: the judge's token usage rides in the complete footprint. agent-report validates it and drops a malformed value.
+  await reporter.finish({ issueNumber: issue, outcome: 'success', summary: done, usage: o.usage });
 
   const msg = `Documentation audit: ${fresh.length} new finding(s) ${action === 'created' ? 'in new tracking issue' : 'added to tracking issue'} #${issue}.`;
   log.info(msg);
@@ -735,6 +772,12 @@ async function collect({ root, out, getIssueState, fetchImpl, sleep, log = conso
     fetchImpl, sleep, ignorePatterns: cfg.ignorePatterns, aliveStatusCodes: cfg.aliveStatusCodes,
   });
   const facts = await collectFacts(root, { getIssueState });
+  if (facts.unchecked.length) {
+    // FR-016: a check that could not run must never end as "0 findings". Fail before any file is
+    // written so the publish step has nothing to turn into a clean record.
+    const list = facts.unchecked.map(u => u.nnn).join(', ');
+    throw new Error(`The ADR check could not be checked for ${facts.unchecked.length} spec(s) (${list}): the issue state lookup failed. Check GITHUB_TOKEN, GITHUB_REPOSITORY and API availability.`);
+  }
   const findings = finalizeFindings([...links.findings, ...external, ...versionFindings(facts)]);
   if (out) {
     fs.mkdirSync(out, { recursive: true });
@@ -747,7 +790,7 @@ async function collect({ root, out, getIssueState, fetchImpl, sleep, log = conso
 }
 
 /** Validate the judge's file, merge with the deterministic findings and publish. Any problem throws. */
-async function publishFromFiles({ github, owner, repo, dir, judgeFile, root, runUrl, log = console, summary, runtime }) {
+async function publishFromFiles({ github, owner, repo, dir, judgeFile, root, runUrl, log = console, summary, runtime, usage }) {
   const readJson = f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
   const facts = readJson('facts.json');
   const deterministic = readJson('deterministic-findings.json');
@@ -758,7 +801,7 @@ async function publishFromFiles({ github, owner, repo, dir, judgeFile, root, run
   for (const r of rejected) log.warn(`Dropped a judge finding: ${r.reason}`);
   const byFp = new Map();
   for (const f of [...finalizeFindings(deterministic), ...valid]) if (!byFp.has(f.fingerprint)) byFp.set(f.fingerprint, f);
-  return publish({ github, owner, repo, findings: [...byFp.values()], scanned: meta.scanned, runUrl, log, summary, runtime });
+  return publish({ github, owner, repo, findings: [...byFp.values()], scanned: meta.scanned, runUrl, log, summary, runtime, usage });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -780,7 +823,7 @@ async function main(argv, env = process.env) {
       const res = await fetch(`https://api.github.com/repos/${repository}/issues/${n}`, {
         headers: { authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: 'application/vnd.github+json' },
       });
-      return res.ok ? (await res.json()).state : null;
+      return res.ok ? (await res.json()).state : null; // any non-OK answer (404 included: GitHub returns it for a bad token on a private repo) is "unchecked"
     } catch { return null; }
   };
   await collect({ root: path.resolve(args.root || '.'), out: path.resolve(args.out), getIssueState });

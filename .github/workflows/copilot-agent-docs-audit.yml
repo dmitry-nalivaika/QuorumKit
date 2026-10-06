@@ -239,6 +239,8 @@ jobs:
             )?.trim() || undefined;
 
             const data  = await res.json();
+            // Token usage + estimated cost for the audit trail (#335); never fails the run.
+            report.recordUsage({ response: data, model: runtimeModel, runtime: defaultRuntimeName || 'azure-openai' });
             const reply = extractText(data);
             if (!reply) {
               report.abort('The docs audit judge produced no output.');
@@ -252,6 +254,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RUNTIME_NAME: ${{ steps.agent.outputs.runtime }}
+          USAGE: ${{ steps.agent.outputs.usage }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -261,12 +264,15 @@ jobs:
             const log = { info: m => core.info(m), warn: m => core.warning(m) };
             const summary = text => core.summary.addRaw(text + '\n', true).write();
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            // Judge token usage (#335). Optional: absent or unparsable usage must never fail the audit.
+            let usage;
+            try { usage = process.env.USAGE ? JSON.parse(process.env.USAGE) : undefined; } catch { usage = undefined; }
             await audit.runAudit({
               log, summary,
               steps: () => audit.publishFromFiles({
                 github, owner: context.repo.owner, repo: context.repo.repo, dir,
                 judgeFile: path.join(dir, 'judge.json'), root: process.cwd(), runUrl, log, summary,
-                runtime: process.env.RUNTIME_NAME,
+                runtime: process.env.RUNTIME_NAME, usage,
               }),
             });
 

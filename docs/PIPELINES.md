@@ -330,10 +330,15 @@ The Docs Agent normally reviews one merged change. The scheduled audit complemen
 | Same drift as last time | Nothing is posted |
 | Very large first report | Grouped by category and split across comments marked "Part i of n"; nothing is dropped |
 | The audit cannot complete | The run fails (red) and its summary says `AUDIT FAILED - this is not a clean result` |
+| A check cannot run (for example the issue-state lookup for the missing-ADR check fails because of a rate limit, an outage or a missing token) | Same: the run fails and names the specs that were not checked. It is never reported as "0 findings" |
 
 **Acting on a report.** Confirm each finding, fix it in a normal PR (or ask `@docs-agent`), and close the tracking issue when you are done. The audit never closes it for you. If drift remains after you close it, the next run opens a new one.
 
 **Known limits.** A run that only finds *fixed* items posts nothing, so the "No longer detected" list appears in the next comment that has something new. README and CHANGELOG judgements are the model's: they are checked for form, not truth, so confirm before acting. The first run on a long-neglected repository can be large.
+
+- *The two runtimes see different evidence.* The Claude judge can read the whole repository. The Copilot judge sees the facts packet, the first 30,000 characters of `README.md` and the first 12,000 of `CHANGELOG.md`. The checklist, the validation and the publishing are identical, but the model findings can differ between runtimes. Compare them when you change runtime.
+- *One model finding per category, file and section.* A model finding is identified by those three values, not by its wording. A second, different problem in a section that already has a reported finding is treated as already reported until the first one is fixed or the tracking issue is closed. Findings from the code checks (links, version lag) are identified individually and are not affected.
+- *Model text is published as plain text.* Images, links, raw HTML and bare URLs in a finding are removed or made inert, so a poisoned document cannot plant a tracking pixel or a clickable link in the tracking issue. Paths and commands in `backticks` are kept.
 
 ## CI gates
 

@@ -45,6 +45,46 @@ describe.each(SLUGS)('copilot-agent-%s.yml usage wiring', slug => {
   }
 });
 
+// The docs audit (#331) is not in SLUGS: its publish step posts its own footprint (only when a report is
+// posted), so there is no "Report result" step. It still records the judge call and hands it to publish.
+describe('copilot-agent-docs-audit.yml usage wiring', () => {
+  const rel = '.github/workflows/copilot-agent-docs-audit.yml';
+  const wf = read(rel);
+  const steps = Object.values(yaml.load(wf).jobs)[0].steps;
+  const agentStep = steps.find(s => s.id === 'agent');
+  const publishStep = steps.find(s => s.name === 'Validate findings and report only what is new');
+
+  it('records the parsed LLM response with the reporter, labelled with the resolved runtime and model', () => {
+    const script = agentStep.with.script;
+    expect(script).toMatch(/report\.recordUsage\(\{ response: data, model: runtimeModel, runtime: defaultRuntimeName \|\| 'azure-openai' \}\)/);
+    expect(script.indexOf('recordUsage')).toBeGreaterThan(script.indexOf('await res.json()'));
+  });
+
+  it('records usage before the reply is checked, so a judge that returns nothing is still counted', () => {
+    const script = agentStep.with.script;
+    expect(script.indexOf('recordUsage')).toBeLessThan(script.indexOf("report.abort('The docs audit judge produced no output.')"));
+  });
+
+  it('passes the usage step output to the publish step, which hands it to publishFromFiles', () => {
+    expect(publishStep.env.USAGE).toBe('${{ steps.agent.outputs.usage }}');
+    expect(publishStep.with.script).toContain('usage');
+    expect(publishStep.with.script).toMatch(/process\.env\.USAGE/);
+  });
+
+  it('a missing or unparsable USAGE never fails the audit', () => {
+    expect(publishStep.with.script).toMatch(/try\s*\{[^}]*JSON\.parse\(process\.env\.USAGE\)/);
+  });
+
+  it('never writes its own apm-msg block (the reporter owns the protocol)', () => {
+    expect(wf).not.toContain('usageApmBlock');
+    expect(wf).not.toMatch(/```apm-msg/);
+  });
+
+  it('keeps the src/ distribution copy byte-identical (verify-mirror M5)', () => {
+    expect(read(`src/${rel}`)).toBe(wf);
+  });
+});
+
 describe('dev-agent-runner.cjs usage capture', () => {
   const runner = read('.github/scripts/dev-agent-runner.cjs');
 
