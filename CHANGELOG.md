@@ -9,9 +9,25 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+---
+
+## [3.3.0] — 2026-10-06 · Issues #332, #359, #371
+
 ### ✨ Added
 
 - **`azure-openai` runtime kind enabled** (Issue #332, ADR-332): maintainers can register their own Azure AI Foundry / Azure OpenAI deployment as a named runtime in `src/runtimes.yml` and assign it per-agent via `agent_defaults`, alongside the existing `claude` and `copilot` kinds. Credentials are referenced by name (e.g. `AZURE_OPENAI_API_KEY`) and resolved from GitHub Actions secrets at dispatch time; a missing/invalid credential or unreachable endpoint fails the run visibly with no silent fallback to another provider. See `docs/architecture/adr-332-enable-azure-openai-runtime-kind.md` and the new step-by-step `docs/AZURE_FOUNDRY_GUIDE.md` (includes creating models in Azure AI Foundry).
+- **Orchestrator `workflow_dispatch` support** (#370): the engine re-reads the issue's live labels and routes it like `issues.labeled`, so issues labelled by the Triage Agent (via `GITHUB_TOKEN`, which emits no label events) now enter the bug-fix / feature pipelines. Triage dispatches `orchestrator.yml` after labelling.
+- **Agent inventory and invocation docs** (#359): generated `docs/AGENT_INVENTORY.md`, `docs/AGENT_INVOCATION.md`, CI drift check, and the `ba-enrich-agent` definition.
+
+### 🐛 Fixed
+
+- Runtime registry no longer rejects `agent_defaults: null` (a key with only commented-out entries) with `SCHEMA_INVALID`; it is treated as empty (#372). `src/runtimes.yml` now uses `agent_defaults: {}`.
+- Azure AI Foundry host allowed and Responses API supported in agent runtimes.
+- Bug-fix pipeline `dev` step uses the default runtime instead of a pinned one.
+
+### 🔧 Changed
+
+- Package version bumped to `3.3.0` in `engine/package.json` and `quorumkit.yml` — additive MINOR release.
 
 ---
 
