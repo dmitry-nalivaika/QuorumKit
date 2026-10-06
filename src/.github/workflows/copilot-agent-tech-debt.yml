@@ -75,10 +75,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FOCUS: ${{ github.event.inputs.focus || 'all' }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           RUNTIME_ENDPOINT: ${{ github.event.inputs.runtime_endpoint }}
           RUNTIME_MODEL: ${{ github.event.inputs.runtime_model }}
           RUNTIME_API_VERSION: ${{ github.event.inputs.runtime_api_version }}
-          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || secrets.GITHUB_TOKEN }}
+          # Only set when a dispatch explicitly selects the Azure key. Otherwise leave empty so the script
+          # resolves the credential from the runtime's credential_ref in src/runtimes.yml.
+          RUNTIME_CREDENTIAL: ${{ github.event.inputs.runtime_credential_ref == 'AZURE_OPENAI_API_KEY' && secrets.AZURE_OPENAI_API_KEY || '' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -111,14 +114,42 @@ jobs:
               `Produce a structured report and list up to 5 items above threshold that should ` +
               `become GitHub Issues. Be specific about files/modules involved.`);
 
-            // ADR-332: route to the maintainer's own Azure OpenAI / Azure AI
-            // Foundry deployment when the Orchestrator's azure-openai runtime
-            // adapter supplied these inputs; otherwise fall back to the
-            // existing GitHub Models default (byte-for-byte unchanged).
-            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || '';
-            const runtimeModel      = process.env.RUNTIME_MODEL || 'gpt-4o';
-            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || '';
-            const runtimeCredential = process.env.RUNTIME_CREDENTIAL || process.env.GITHUB_TOKEN;
+            // ADR-332: resolve the runtime from src/runtimes.yml (default_runtime) unless a
+            // dispatch supplied explicit inputs. GitHub Models (models.inference.ai.azure.com)
+            // was retired on 2026-07-30 and no longer resolves, so there is NO hardcoded
+            // fallback host: a missing or unreachable runtime fails loudly (ADR-332 section 5).
+            const runtimesYaml = readSafe('src/runtimes.yml');
+            const defaultRuntimeName = runtimesYaml.match(/^default_runtime:\s*(\S+)/m)?.[1] || '';
+            const parseRuntime = (yaml, name) => {
+              if (!name) return null;
+              const head = new RegExp(`^\\s*${name}:\\s*$`, 'm').exec(yaml);
+              if (!head) return null;
+              const rest = yaml.slice(head.index + head[0].length);
+              const end = rest.match(/^\s*\w[\w-]*:\s*$/m);
+              const block = end ? rest.slice(0, end.index) : rest;
+              return {
+                endpoint: block.match(/^\s+endpoint:\s*(\S+)/m)?.[1] || '',
+                model: block.match(/^\s+model:\s*(\S+)/m)?.[1] || 'gpt-4o',
+                credentialRef: block.match(/^\s+credential_ref:\s*(\S+)/m)?.[1] || 'GITHUB_TOKEN',
+                apiVersion: block.match(/api_version:\s*["']([^"']+)["']/)?.[1] || '',
+              };
+            };
+            const defaultRuntime = parseRuntime(runtimesYaml, defaultRuntimeName);
+            const runtimeEndpoint   = process.env.RUNTIME_ENDPOINT || defaultRuntime?.endpoint || '';
+            const runtimeModel      = process.env.RUNTIME_MODEL || defaultRuntime?.model || 'gpt-4o';
+            const runtimeApiVersion = process.env.RUNTIME_API_VERSION || defaultRuntime?.apiVersion || '';
+            const runtimeCredentialRef = defaultRuntime?.credentialRef || 'GITHUB_TOKEN';
+            const runtimeCredential = process.env.RUNTIME_CREDENTIAL ||
+              (runtimeCredentialRef === 'AZURE_OPENAI_API_KEY' ? process.env.AZURE_OPENAI_API_KEY : process.env.GITHUB_TOKEN);
+            console.log(`Using runtime: ${defaultRuntimeName || '(none)'}; endpoint: ${runtimeEndpoint || '(none)'}; model: ${runtimeModel}; credential: ${runtimeCredentialRef}`);
+            if (!runtimeEndpoint) {
+              report.abort('No runtime endpoint: set default_runtime in src/runtimes.yml or dispatch with runtime_endpoint.');
+              return;
+            }
+            if (!runtimeCredential) {
+              report.abort(`Runtime credential ${runtimeCredentialRef} is not available to this workflow.`);
+              return;
+            }
             // SEC-CRIT-002 (Security Agent review, PR #334): restrict RUNTIME_ENDPOINT to
             // known Azure OpenAI / Azure AI Foundry hosts so it cannot be used as an SSRF
             // primitive if this workflow is ever dispatched directly (bypassing the Orchestrator).
@@ -153,14 +184,10 @@ jobs:
             // The /openai/v1/ surface is versionless; do not send a dated api-version there.
             const sendApiVersion = runtimeApiVersion && !/\/openai\/v1\//.test(runtimeEndpoint);
             const apiVersionQuery = sendApiVersion ? `?api-version=${runtimeApiVersion}` : '';
-            const requestUrl = !runtimeEndpoint
-              ? 'https://models.inference.ai.azure.com/chat/completions'
-              : useResponsesApi
-                ? `${runtimeEndpoint}${apiVersionQuery}`
-                : `${runtimeEndpoint}/chat/completions${apiVersionQuery}`;
-            const authHeaders = runtimeEndpoint
-              ? { 'api-key': runtimeCredential }
-              : { 'Authorization': `Bearer ${runtimeCredential}` };
+            const requestUrl = useResponsesApi
+              ? `${runtimeEndpoint}${apiVersionQuery}`
+              : `${runtimeEndpoint}/chat/completions${apiVersionQuery}`;
+            const authHeaders = { 'api-key': runtimeCredential };
 
             const res = await fetch(requestUrl, {
               method: 'POST',
