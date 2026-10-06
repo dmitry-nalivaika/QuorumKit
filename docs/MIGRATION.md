@@ -174,6 +174,63 @@ dedicated section in this guide.
 
 ---
 
+## Bug-fix pipeline now starts with a BA step — Issue #377 (MINOR, manual edit if you customised the file)
+
+`bug-fix-pipeline.yml` was `dev → qa → reviewer`. The Developer Agent refuses to start
+without `specs/NNN-*/spec.md` (Constitution §III, Spec-Before-Code), so every `type:bug`
+issue stopped at `dev`. The shipped pipeline is now `ba → dev → qa → reviewer`: the BA
+Agent writes a short bug-fix spec (Template C) first, and a missing or inadequate spec
+(`spec_gap`) is routed back to `ba` instead of looping on `dev`. See
+[ADR-377](architecture/adr-377-bug-fix-pipeline-spec-gate.md).
+
+This is a **MINOR** change: no files were renamed or removed.
+
+**`init.sh` does not overwrite an existing pipeline file.** It only copies a template
+when `src/pipelines/<name>.yml` is absent, and prints "already exists — skipping" otherwise.
+If your project already has `src/pipelines/bug-fix-pipeline.yml`, re-running the installer
+leaves it untouched and you must apply the change by hand. This is the exact difference:
+
+```diff
+-# Chain: dev → qa → reviewer
++# Chain: ba → dev → qa → reviewer
+@@
+-entry: dev
++entry: ba
+@@
+ steps:
++  - name: ba
++    agent: ba-agent
++    timeout_minutes: 60
++
+   - name: dev
+@@
+ transitions:
+   # ── happy path forward ──
++  - { from: ba,       outcome: success,     to: dev }
+   - { from: dev,      outcome: success,     to: qa }
+   - { from: qa,       outcome: success,     to: reviewer }
++
++  # ── BA reworks its own spec / waits for a person ──
++  - { from: ba,       outcome: spec_gap,    to: ba }
++  - { from: ba,       outcome: needs-human, to: ba }
+@@
+   - { from: reviewer, outcome: blocker,     to: dev }
++  - { from: reviewer, outcome: spec_gap,    to: ba }
+@@
+-  - { from: dev,      outcome: spec_gap,    to: dev }
++  - { from: dev,      outcome: spec_gap,    to: ba }
+```
+
+Also refresh the agent definitions: the Developer Agent now reports a missing spec as
+`spec_gap` (not `blocker`), and the BA Agent gains Template C for `type:bug` issues.
+Without the updated Developer Agent, a missing spec is reported as `blocker`, which is
+not routed to `ba`.
+
+Apply the change when no bug-fix run is in flight. Runs already stuck on the old
+definition (for example #376 and #377) should be re-triggered after the change merges.
+
+---
+
 ## Further help
 
 - Open an Issue at `github.com/dmitry-nalivaika/quorumkit/issues`
