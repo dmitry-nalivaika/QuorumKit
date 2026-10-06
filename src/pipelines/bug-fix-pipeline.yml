@@ -1,6 +1,10 @@
 # Bug Fix Pipeline (v2)
 # Triggered when a new issue is labelled `triaged` + `type:bug`.
-# Chain: dev → qa → reviewer
+# Chain: ba → dev → qa → reviewer
+#
+# The `ba` entry step writes a short bug-fix spec (Template C) at
+# specs/NNN-slug/spec.md, because the Developer Agent refuses to start without
+# one (Constitution §III, Spec-Before-Code). See ADR-377.
 #
 # Customise this file freely — changes take effect on the next Orchestrator run.
 name: bug-fix-pipeline
@@ -12,7 +16,7 @@ trigger:
     - triaged
     - type:bug
 
-entry: dev
+entry: ba
 
 loop_budget:
   max_iterations_per_edge: 3
@@ -20,6 +24,10 @@ loop_budget:
   max_wallclock_minutes: 480
 
 steps:
+  - name: ba
+    agent: ba-agent
+    timeout_minutes: 60
+
   - name: dev
     agent: dev-agent
     timeout_minutes: 90
@@ -34,19 +42,25 @@ steps:
 
 transitions:
   # ── happy path forward ──
+  - { from: ba,       outcome: success,     to: dev }
   - { from: dev,      outcome: success,     to: qa }
   - { from: qa,       outcome: success,     to: reviewer }
+
+  # ── BA reworks its own spec / waits for a person ──
+  - { from: ba,       outcome: spec_gap,    to: ba }
+  - { from: ba,       outcome: needs-human, to: ba }
 
   # ── QA bounces back to dev ──
   - { from: qa,       outcome: fail,        to: dev }
   - { from: qa,       outcome: blocker,     to: dev }
   - { from: qa,       outcome: timeout,     to: dev }
 
-  # ── Reviewer bounces back to dev ──
+  # ── Reviewer bounces back to dev, or to ba when the spec is inadequate ──
   - { from: reviewer, outcome: fail,        to: dev }
   - { from: reviewer, outcome: blocker,     to: dev }
+  - { from: reviewer, outcome: spec_gap,    to: ba }
 
-  # ── Dev needs-human / spec gap surfaces back to humans ──
+  # ── Dev: a missing/inadequate spec goes to ba (the role that writes specs) ──
+  - { from: dev,      outcome: spec_gap,    to: ba }
   - { from: dev,      outcome: blocker,     to: dev }
   - { from: dev,      outcome: needs-human, to: dev }
-  - { from: dev,      outcome: spec_gap,    to: dev }

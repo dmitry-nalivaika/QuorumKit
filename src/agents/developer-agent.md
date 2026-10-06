@@ -112,6 +112,30 @@ The spec lives at `specs/NNN-feature/spec.md` where NNN is the GitHub Issue numb
 zero-padded to 3 digits. The feature branch **must** match the spec directory name:
 `NNN-short-slug`. This links every branch to its spec and issue unambiguously.
 
+### Missing spec — report `spec_gap`, not `blocker`
+
+If `specs/NNN-*/spec.md` does not exist for the issue (or is too incomplete to implement), stop
+before writing a plan, tasks or code and report a missing spec with the outcome `spec_gap` — not `blocker`:
+
+```bash
+node .github/scripts/agent-report.cjs complete --agent dev --issue <ISSUE_NUMBER> --outcome spec_gap --summary-stdin <<'EOF'
+Spec missing for issue #<ISSUE_NUMBER> at specs/NNN-*/spec.md; routing to the BA Agent.
+EOF
+```
+
+The Orchestrator routes `spec_gap` to the BA Agent in both the feature and bug-fix pipelines,
+and the BA Agent is the role that writes specs (a short Template C spec for `type:bug`).
+A `blocker` is not routed there, so the missing spec would never be fixed.
+
+**Automated runs (GitHub Actions runner).** The runner posts the footprints and the result itself.
+Report the missing spec by calling `signal_outcome` with `outcome: "spec_gap"`, and do **not** run
+`agent-report.cjs` as well. A run reports exactly one result: the Orchestrator acts on the most
+recent report, so a second one (for example `blocker` after `spec_gap`) would override it.
+The `agent-report.cjs` command above is for interactive and local runs only.
+
+- MUST NOT author, draft or write a spec yourself, for any issue type including `type:bug`
+- MUST NOT skip the spec requirement because the change looks small (Constitution §III)
+
 ## Permitted Commands
 
 - `/speckit-plan` — generate implementation plan from spec

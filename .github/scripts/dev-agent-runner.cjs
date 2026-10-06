@@ -235,6 +235,11 @@ async function postFootprint(kind, { prNumber = null, ...details } = {}) {
 /** Remove the manifest sections that tell the model to post footprints itself (see above). */
 const stripFootprintInstructions = agentReport.stripFootprintInstructions;
 
+// Results the Developer Agent may report (#377, FR-029). `spec_gap` is how a missing spec reaches
+// the BA step: the bug-fix and feature pipelines route dev + spec_gap to ba, whereas blocker and
+// needs-human route back to dev. Keep in sync with the "call signal_outcome with one of" prompt line.
+const SIGNAL_OUTCOMES = ['success', 'fail', 'needs-human', 'blocker', 'spec_gap'];
+
 // ─── Tool definitions (shared shape; runtimes adapt to API differences) ─────
 const toolDefs = [
   {
@@ -310,11 +315,13 @@ const toolDefs = [
   },
   {
     name: 'signal_outcome',
-    description: 'Signal the final outcome to the orchestrator and end the agent loop.',
+    description: 'Signal the final outcome to the orchestrator and end the agent loop. Call it exactly once. ' +
+      'Use spec_gap when specs/NNN-*/spec.md for the issue is missing or too incomplete to implement ' +
+      '(the Orchestrator routes it to the BA Agent); blocker and needs-human are routed back to you.',
     schema: {
       type: 'object',
       properties: {
-        outcome: { type: 'string', enum: ['success', 'fail', 'needs-human', 'blocker'] },
+        outcome: { type: 'string', enum: SIGNAL_OUTCOMES },
         summary: { type: 'string' },
         pr_url:  { type: 'string' },
       },
@@ -378,6 +385,12 @@ async function executeTool(name, input) {
     case 'run_command': {
       const blocked = /(rm\s+-rf\s+\/|drop\s+table|format\s+c:|mkfs|:\s*\(\)\s*\{)/i;
       if (blocked.test(input.command)) return 'ERROR: command blocked by safety guard.';
+      // FR-030: one result per run. The manifest shows `agent-report.cjs complete --outcome spec_gap`
+      // for local runs; here the runner owns reporting, and a hand-posted report followed by
+      // signal_outcome would leave two markers (the Orchestrator acts on the newest one).
+      if (/agent-report\.cjs\s+(?:start|complete|fail)\b/.test(input.command)) {
+        return 'ERROR: do not post footprints or results by hand in this run. Report your result by calling signal_outcome (use outcome "spec_gap" for a missing spec).';
+      }
       let runCwd = repoRoot;
       if (input.cwd) {
         const resolved = path.resolve(input.cwd);
@@ -436,6 +449,13 @@ async function executeTool(name, input) {
       return r.status >= 200 && r.status < 300 ? 'Comment posted.' : `ERROR: ${r.status}`;
     }
     case 'signal_outcome': {
+      if (!SIGNAL_OUTCOMES.includes(input.outcome)) {
+        return `ERROR: unknown outcome "${input.outcome}" (allowed: ${SIGNAL_OUTCOMES.join(', ')}).`;
+      }
+      // FR-030: exactly one reported result per run.
+      if (finalOutcome !== null) {
+        return `ERROR: outcome already signalled (${finalOutcome}); a run reports exactly one result.`;
+      }
       finalOutcome = input.outcome;
       const finalPr = input.pr_url || prUrl;
       const prRef = (finalPr || '').match(/\/pull\/(\d+)/);
@@ -514,6 +534,15 @@ function buildSystemPrompt() {
     `Do NOT post them yourself. Report your result only by calling \`signal_outcome\`.`,
     `\`run_command\` runs through /bin/sh: never put backticks or \`$(...)\` in a command, they are`,
     `executed as command substitution. To comment on the issue use the \`post_issue_comment\` tool, not \`gh issue comment\`.`,
+    `Ignore any manifest instruction to run \`agent-report.cjs\`: in this run \`signal_outcome\` is the only way to report,`,
+    `and a run reports exactly one result.`,
+    ``,
+    `## Missing spec`,
+    `Before planning or writing code, check that \`specs/NNN-*/spec.md\` exists for this issue (NNN = issue number,`,
+    `zero-padded to 3 digits) and is complete enough to implement. If it is missing, report the missing spec by calling`,
+    `\`signal_outcome(outcome="spec_gap")\` with a one-sentence summary, not \`blocker\` or \`needs-human\`: only`,
+    `\`spec_gap\` is routed to the BA Agent, which writes specs. You MUST NOT author, draft or skip the spec`,
+    `yourself, for any issue type including bugs.`,
     ``,
     `## Working strategy — minimum viable change`,
     `Always prefer the **smallest diff that resolves the issue**. Before writing any`,
@@ -544,7 +573,7 @@ function buildSystemPrompt() {
     ``,
     `If a command fails because of missing files in the wrong directory, retry`,
     `from a different cwd rather than signalling blocker.`,
-    `When done, call \`signal_outcome\` with one of: success, fail, needs-human, blocker.`,
+    `When done, call \`signal_outcome\` with one of: ${SIGNAL_OUTCOMES.join(', ')}.`,
     `If the task is complete and PR is open, call signal_outcome(outcome="success").`,
   ].filter(Boolean).join('\n\n');
 }
@@ -560,7 +589,9 @@ async function buildUserMessage() {
     `**Body:**`,
     issue.body || '(no body)',
     ``,
-    `Start by reading the relevant files referenced in the issue, write a failing test,`,
+    `First confirm the spec exists at specs/${String(ISSUE_NUMBER).padStart(3, '0')}-*/spec.md; if it does not,`,
+    `call signal_outcome with outcome "spec_gap" and stop (do not write the spec yourself).`,
+    `Otherwise start by reading the relevant files referenced in the issue, write a failing test,`,
     `implement the fix, verify tests pass, then open a PR. Finally call signal_outcome.`,
   ].join('\n');
 }
@@ -803,5 +834,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing
-  module.exports = { executeTool, toolDefs, recordUsage, currentUsage, buildFootprint, stripFootprintInstructions, buildSystemPrompt, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
+  module.exports = { executeTool, toolDefs, SIGNAL_OUTCOMES, recordUsage, currentUsage, buildFootprint, stripFootprintInstructions, buildSystemPrompt, buildUserMessage, isAllowedRuntimeEndpoint, getDeclaredRuntimeEndpoints };
 }

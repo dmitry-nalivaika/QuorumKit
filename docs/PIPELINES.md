@@ -101,12 +101,12 @@ Orchestrator synthesises a `timeout` outcome and transitions accordingly.
 | Pipeline file | Trigger labels | Step chain |
 |---------------|----------------|------------|
 | `feature-pipeline.yml` | `triaged` + `type:feature` | `ba → architect¹ → dev → qa → reviewer → release` ² |
-| `bug-fix-pipeline.yml` | `triaged` + `type:bug`     | `dev → qa → reviewer` ³ |
+| `bug-fix-pipeline.yml` | `triaged` + `type:bug`     | `ba → dev → qa → reviewer` ³ |
 | `release-pipeline.yml` | `triaged` + `type:release` | `qa → security → reviewer → release` ⁴ |
 
 ¹ The `architect` step runs only when the issue also carries `needs:adr` (`condition` field).  
 ² `release` requires `/approve`. QA and Reviewer can loop back to Dev; Reviewer can loop back to BA.  
-³ QA and Reviewer can loop back to Dev.  
+³ The `ba` step writes a short bug-fix spec (Template C) before `dev` starts (ADR-377). QA and Reviewer can loop back to Dev; Dev and Reviewer can loop back to BA on `spec_gap`.  
 ⁴ `release` requires `/approve`. All steps self-loop on failure.
 
 ---

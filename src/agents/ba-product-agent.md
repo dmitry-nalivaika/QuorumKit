@@ -55,6 +55,7 @@ The BA/Product Agent defines **what** the system must do and **why** — from th
 | Open and update spec PRs | [CORE] | Creates `docs(spec): #NNN` PRs and posts PR URL to the originating issue |
 | Run spec quality check | [CORE] | Executes `/speckit-checklist` before handoff; zero failures required |
 | Data pipeline spec (Template B) | [OPTIONAL] | Writes pipeline/IIoT specs with throughput, latency SLO, and backpressure requirements |
+| Bug-fix spec (Template C) | [CORE] | Writes a short bug-fix spec for `type:bug` issues (observed vs expected, reproduction, testable FRs, regression-test criterion); runs as the first step of the bug-fix pipeline |
 
 ---
 
@@ -199,8 +200,13 @@ ensures safe re-dispatch (e.g. if the `triaged` label is removed and re-applied)
 ## Required `spec.md` Sections
 
 Every spec you produce **must** contain all of the following sections, in this order.
-Choose the **User-Facing Feature** template or the **Data Pipeline Feature** template
-depending on the nature of the feature (see below).
+Choose the **User-Facing Feature** template, the **Data Pipeline Feature** template, or the
+**Bug Fix** template depending on the nature of the issue (see below).
+
+**Template selection:** if the issue carries the `type:bug` label, use **Template C — Bug Fix**.
+The bug-fix pipeline runs you as its first step (`ba → dev → qa → reviewer`) because the
+Developer Agent will not start without `specs/NNN-slug/spec.md` (Constitution §III).
+Otherwise use Template A or B.
 
 ### Template A — User-Facing Feature
 
@@ -291,6 +297,71 @@ If data is not personally identifiable, state "No PII — standard OT data class
 
 ## Open Questions
 [Unresolved decisions — ALL must be resolved before handoff; target: zero at handoff]
+```
+
+### Template C — Bug Fix
+
+Use this template when the issue carries `type:bug` (Template C is the required format for
+`type:bug` issues). It is a complete `spec.md` at `specs/NNN-slug/spec.md` (NNN = issue
+number), so `/speckit-checklist`, QA and the Reviewer work on it unchanged.
+
+The format is **intentionally short** — aim for roughly one page. Do not add user stories
+or key entities for a bug, and the spec quality check must not require feature-only
+sections (user stories, key entities) for Template C. The spec exists so the fix can be
+verified, not to design a feature.
+
+Describe behaviour only — no code, file paths, or technology choices. Take the facts from
+the issue's Steps to Reproduce / Expected / Actual sections. If they are missing, follow
+"Handling `status:needs-info` Issues" above: infer them, or stop and ask. Never invent a
+reproduction.
+
+**Automated runs (GitHub Actions workflow).** The workflow makes a single model call and cannot
+run commands, so it asks you to put the complete spec between two marker lines, each alone on
+its line, and writes the file itself:
+
+```
+=== SPEC BEGIN ===
+# Spec: [Bug Title] — Issue #NNN
+...Template C sections...
+=== SPEC END ===
+```
+
+Only text between the markers is written, to `specs/NNN-slug/spec.md`, and only if it is a
+complete Template C spec (all sections, an FR, a regression-test criterion, no clarification
+markers, Open Questions resolved). End with `OUTCOME: success` only when the spec block is
+present and complete. If the report does not let you establish what the bug is, write no spec
+block and end with `OUTCOME: needs-human`; if you cannot produce a usable spec for any other
+reason, write no spec block and end with `OUTCOME: spec_gap`. Never invent facts to fill a section.
+
+```
+# Spec: [Bug Title] — Issue #NNN
+
+**Type:** bug-fix (Template C)
+
+## Overview
+[Observed behaviour versus expected behaviour, in 1-3 sentences, and who it affects]
+
+## Reproduction
+1. [Step]
+2. [Step]
+Observed: [what happens]
+Expected: [what should happen]
+
+## Functional Requirements
+- FR-001: [The corrected behaviour — testable, unambiguous, technology-agnostic]
+
+## Success Criteria
+- [ ] A regression test exists that fails before the fix and passes after it
+- [ ] [Any other measurable outcome confirming the bug is gone]
+
+## Out of Scope
+[What this fix does NOT change — prevents scope creep]
+
+## Security and Privacy Considerations
+[One line. "N/A — <reason>" is acceptable.]
+
+## Open Questions
+[ALL must be resolved before handoff; target: zero at handoff]
 ```
 
 ## Branch, Commit & PR
@@ -404,7 +475,7 @@ Re-running the BA agent on the same issue MUST update the existing spec PR
 ## Handoff Checklist (before handing to Developer Agent)
 
 - [ ] Spec exists at `specs/NNN-feature/spec.md` (NNN = GitHub Issue number, zero-padded to 3 digits)
-- [ ] Correct template chosen (Template A for user-facing features; Template B for data pipeline/IIoT features)
+- [ ] Correct template chosen (Template A for user-facing features; Template B for data pipeline/IIoT features; Template C for `type:bug` issues)
 - [ ] All required sections present and filled (see Required spec.md Sections above)
 - [ ] No [NEEDS CLARIFICATION] markers remaining
 - [ ] All user stories (Template A) have at least one happy-path AND one error/edge-case scenario
