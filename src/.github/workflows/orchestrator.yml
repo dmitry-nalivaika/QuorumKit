@@ -20,17 +20,20 @@ on:
   pull_request_review_comment:
     types: [created]
   workflow_run:
-    # Only watch agent workflows completing — not the orchestrator itself
+    # Only watch agent workflows completing — not the orchestrator itself.
+    # `workflows:` is matched against the RUN name, not the workflow name. Agent workflows that set
+    # `run-name: "<name> #<issue>"` (#378) therefore need a trailing `*`; without it the trigger
+    # silently never fires. engine/tests/workflow-run-trigger.test.js guards this.
     workflows:
       - "Triage Agent (Copilot)"
-      - "BA / Product Agent (Copilot)"
-      - "BA Issue Enrichment Agent (Copilot)"
-      - "Architect Agent (Copilot)"
-      - "Developer Agent (Copilot)"
-      - "QA/Test Agent (Copilot)"
-      - "Reviewer Agent (Copilot)"
+      - "BA / Product Agent (Copilot)*"
+      - "BA Issue Enrichment Agent (Copilot)*"
+      - "Architect Agent (Copilot)*"
+      - "Developer Agent (Copilot)*"
+      - "QA/Test Agent (Copilot)*"
+      - "Reviewer Agent (Copilot)*"
       - "Release Agent (Copilot)"
-      - "Security Agent (Copilot)"
+      - "Security Agent (Copilot)*"
       - "Triage Agent (Claude)"
       - "BA/Product Agent (Claude)"
       - "Architect Agent (Claude)"
