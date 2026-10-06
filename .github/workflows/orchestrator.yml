@@ -1,6 +1,14 @@
 name: QuorumKit Orchestrator
 
 on:
+  # schedule: reconciler sweep (engine >= v3.3.2). Event delivery is best-effort: a finished agent run
+  # can fail to produce an orchestrator run, and a silent agent produces no event at all, so its
+  # `timeout_minutes` would never fire. Every 5 minutes the engine settles issues labelled
+  # `status:awaiting-agent` (reported outcome, crashed run, or timeout). GitHub's cron is best-effort,
+  # so expect 5-10 minutes of latency; the sweep is a no-op when nothing is awaiting. Older engines
+  # log "Unsupported event type" and skip harmlessly.
+  schedule:
+    - cron: '*/5 * * * *'
   # workflow_dispatch: the Triage Agent applies `triaged` with GITHUB_TOKEN, which GitHub
   # never turns into an `issues.labeled` run. It dispatches this workflow instead (the one
   # event GITHUB_TOKEN may trigger); the engine re-reads the issue's labels and routes it
@@ -56,7 +64,7 @@ permissions:
 # parallel deliveries (e.g. label spam) race on the audit channel and can
 # produce two state comments for the same transition.
 concurrency:
-  group: apm-orchestrator-${{ github.event.issue.number || github.event.pull_request.number || github.event.inputs.issue_number || github.event.workflow_run.id || 'global' }}
+  group: apm-orchestrator-${{ github.event_name == 'schedule' && 'reconcile' || github.event.issue.number || github.event.pull_request.number || github.event.inputs.issue_number || github.event.workflow_run.id || 'global' }}
   cancel-in-progress: false
 
 jobs:
@@ -81,7 +89,7 @@ jobs:
         # Pin to a major-version tag for automatic patch + minor updates;
         # rotate to a SHA pin if your org's policy requires it (Dependabot
         # `github-actions` ecosystem opens the rotation PRs).
-        uses: dmitry-nalivaika/quorumkit/engine@v3.3.1 # apm-allow: third-party — first-party QuorumKit engine
+        uses: dmitry-nalivaika/quorumkit/engine@v3.3.2 # apm-allow: third-party — first-party QuorumKit engine
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
