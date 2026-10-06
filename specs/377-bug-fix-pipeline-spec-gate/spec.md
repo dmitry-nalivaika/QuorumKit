@@ -57,8 +57,9 @@ specs by hand.
 - Given the BA/Product Agent finishes successfully, When the pipeline advances,
   Then the next step is the Developer Agent and a spec for the issue exists.
 - Given the BA/Product Agent cannot establish what the bug is from the report,
-  When it finishes, Then the pipeline stops for a person (`needs-human`) rather than
-  starting development against an invented description.
+  When it finishes with `needs-human`, Then the pipeline does not advance to development
+  against an invented description: it repeats the BA step (FR-004) and, once the existing
+  per-route iteration limit is reached, stops and flags the issue for a person.
 
 ### US-2: A missing spec is routed to the role that can fix it (Priority: P1)
 
@@ -115,7 +116,9 @@ exactly what changed, so that I can update my copy by hand and my bug issues sto
 ### Routing
 
 - **FR-004:** When the BA/Product Agent step reports `spec_gap` or `needs-human`, the pipeline
-  MUST repeat the BA/Product Agent step, as the feature pipeline does.
+  MUST repeat the BA/Product Agent step, as the feature pipeline does. Repetition is bounded
+  by the existing per-route iteration limit; when it is exhausted the run stops and the
+  issue is flagged for a person (existing loop-budget behaviour, unchanged).
 - **FR-005:** When the Developer step reports `spec_gap`, the pipeline MUST route to the
   BA/Product Agent step. This replaces the current route back to the Developer step.
 - **FR-006:** When the Reviewer step reports `spec_gap`, the pipeline MUST route to the
@@ -243,6 +246,10 @@ workflow permission grants are unchanged. No personal data is involved.
   format.
 - The existing 20-step budget for the bug-fix pipeline leaves enough headroom for one extra
   step; no budget change is needed.
+- When the BA/Product Agent runs as a pipeline step, it reports `success` after publishing a
+  spec (as in the feature pipeline), so the BA `success` route is the one that fires. The
+  `spec-ready` outcome in the agent definition applies to the spec pull request hand-off, not
+  to pipeline routing.
 - The installer leaves an existing project pipeline file untouched, so adopters with their own
   copy must update it by hand (FR-021). Verified in the installer's pipeline-install routine.
 - Runs that are in flight when the change merges may reference the old step order. The change
